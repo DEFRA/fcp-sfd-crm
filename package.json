@@ -9,9 +9,9 @@
   },
   "scripts": {
     "pretest": "npm run test:lint",
-    "docker:debug": "docker compose -f compose.yaml -f compose.debug.yaml -p 'fcp-sfd-crm' up",
-    "docker:test": "docker compose down -v && docker compose -f compose.yaml -f compose.test.yaml run  --build --rm 'fcp-sfd-crm'",
-    "docker:test:watch": "docker compose down -v && docker compose -f compose.yaml -f compose.test.yaml -f compose.test.watch.yaml run  --build --rm 'fcp-sfd-crm'",
+    "docker:debug": "docker compose -f compose.yml -f compose.debug.yml -p 'fcp-sfd-crm' up",
+    "docker:test": "docker compose down -v && docker compose -f compose.yml -f compose.test.yml run  --build --rm 'fcp-sfd-crm'",
+    "docker:test:watch": "docker compose down -v && docker compose -f compose.yml -f compose.test.yml -f compose.test.watch.yml run  --build --rm 'fcp-sfd-crm'",
     "test": "rm -rf ./coverage/** && vitest run --coverage",
     "test:watch": "vitest watch",
     "test:lint": "npx eslint",

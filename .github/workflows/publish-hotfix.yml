@@ -34,7 +34,7 @@ jobs:
         run: |
           mkdir -p coverage
           chmod -R a+rw ./coverage
-          docker compose -f compose.yaml -f compose.test.yaml run --rm "fcp-sfd-crm"
+          docker compose -f compose.yml -f compose.test.yml run --rm "fcp-sfd-crm"
 
       - name: Publish Hot Fix
         uses: DEFRA/cdp-build-action/build-hotfix@main
@@ -43,5 +43,5 @@ jobs:
 
       - name: SonarQubeScan
         uses: SonarSource/sonarqube-scan-action@v5
-        env: 
+        env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
