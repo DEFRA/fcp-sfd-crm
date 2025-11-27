@@ -1,0 +1,3 @@
+services:
+  fcp-sfd-accelerator:
+    command: npm run test:watch

@@ -1,30 +1,45 @@
-# fcp-sfd-crm
+# fcp-sfd-accelerator
 
-Core delivery platform Node.js Backend Template.
+The accelerator repository is designed to streamline the setup of GitHub repositories (specifically backend microservices) for the Single Front Door (SFD) team to deploy on CDP (Core Delivery Platform).
 
-- [Requirements](#requirements)
-  - [Node.js](#nodejs)
-- [Local development](#local-development)
-  - [Setup](#setup)
-  - [Development](#development)
-  - [Testing](#testing)
-  - [Production](#production)
-  - [Npm scripts](#npm-scripts)
-  - [Update dependencies](#update-dependencies)
-  - [Formatting](#formatting)
-    - [Windows prettier issue](#windows-prettier-issue)
-- [API endpoints](#api-endpoints)
-- [Development helpers](#development-helpers)
-  - [MongoDB Locks](#mongodb-locks)
-  - [Proxy](#proxy)
-- [Docker](#docker)
-  - [Development image](#development-image)
-  - [Production image](#production-image)
-  - [Docker Compose](#docker-compose)
-  - [Dependabot](#dependabot)
-  - [SonarCloud](#sonarcloud)
-- [Licence](#licence)
-  - [About the licence](#about-the-licence)
+## Initial setup
+
+### Pushing the accelerator
+
+As CDP repositories _must_ be created via the CDP portal, setting up a template GitHub repository in the traditional sense (similar to what is/was done on the Farming and Countryside Platform) is not possible. Instead this repository has been created with the specific project layout that meets the needs of the SFD development team and differs from the default [CDP Node.js backend template](https://github.com/DEFRA/cdp-node-backend-template). A Bash script is provided in this repo to automate applying the accelerator template onto a CDP generated repository. The following steps detail what needs to be done:
+1. Create a new repo on the [CDP portal](https://portal.cdp-int.defra.cloud) with the parameters `Microservice` and `Node.js Backend`.
+2. Once the repo has been created, ensure you have a copy of the [`accelerator`](./accelerator.sh) script to hand.
+3. Execute the `accelerator` script by running the following command:
+```Bash
+./accelerator.sh <template-repo-url> <target-repo-url> [target-branch]
+```
+E.g.:
+```bash
+./accelerator.sh https://github.com/DEFRA/fcp-sfd-accelerator.git https://github.com/DEFRA/fcp-sfd-example.git template-setup
+```
+**All 3 arguments must be provided to run the script successfully.**
+
+4. The following confirmation should appear in the terminal output if successful:
+```bash
+fcp-sfd-accelerator has been pushed to branch 'test-branch' on https://github.com/DEFRA/fcp-sfd-example.git
+```
+
+### Renaming
+
+This repo comes with a [`rename`](./rename.js) script that will update the project name, package description, and port for local development.
+
+To execute the script, run the following command:
+```
+./rename.js fcp-sfd-example 'this is an example repo' 3001
+```
+Note the project description must be wrapped in quotes.
+
+### Deleting setup scripts
+
+Once both the `accelerator.sh` and `rename.js` scripts have served their purpose, they should be deleted:
+```bash
+rm accelerator.sh rename.js
+```
 
 ## Requirements
 
@@ -36,7 +51,7 @@ easier to use the Node Version Manager [nvm](https://github.com/creationix/nvm)
 To use the correct version of Node.js for this application, via nvm:
 
 ```bash
-cd fcp-sfd-crm
+cd fcp-sfd-accelerator
 nvm use
 ```
 
@@ -74,9 +89,9 @@ To mimic the application running in `production` mode locally run:
 npm start
 ```
 
-### Npm scripts
+### NPM scripts
 
-All available Npm scripts can be seen in [package.json](./package.json).
+All available NPM scripts can be seen in [package.json](./package.json).
 To view them in your command line run:
 
 ```bash
@@ -94,91 +109,6 @@ To update dependencies use [npm-check-updates](https://github.com/raineorshine/n
 ncu --interactive --format group
 ```
 
-### Formatting
-
-#### Windows prettier issue
-
-If you are having issues with formatting of line breaks on Windows update your global git config by running:
-
-```bash
-git config --global core.autocrlf false
-```
-
-## API endpoints
-
-| Endpoint             | Description                    |
-| :------------------- | :----------------------------- |
-| `GET: /health`       | Health                         |
-| `GET: /example    `  | Example API (remove as needed) |
-| `GET: /example/<id>` | Example API (remove as needed) |
-
-## Development helpers
-
-### MongoDB Locks
-
-If you require a write lock for Mongo you can acquire it via `server.locker` or `request.locker`:
-
-```javascript
-async function doStuff(server) {
-  const lock = await server.locker.lock('unique-resource-name')
-
-  if (!lock) {
-    // Lock unavailable
-    return
-  }
-
-  try {
-    // do stuff
-  } finally {
-    await lock.free()
-  }
-}
-```
-
-Keep it small and atomic.
-
-You may use **using** for the lock resource management.
-Note test coverage reports do not like that syntax.
-
-```javascript
-async function doStuff(server) {
-  await using lock = await server.locker.lock('unique-resource-name')
-
-  if (!lock) {
-    // Lock unavailable
-    return
-  }
-
-  // do stuff
-
-  // lock automatically released
-}
-```
-
-Helper methods are also available in `/src/helpers/mongo-lock.js`.
-
-### Proxy
-
-We are using forward-proxy which is set up by default. To make use of this: `import { fetch } from 'undici'` then
-because of the `setGlobalDispatcher(new ProxyAgent(proxyUrl))` calls will use the ProxyAgent Dispatcher
-
-If you are not using Wreck, Axios or Undici or a similar http that uses `Request`. Then you may have to provide the
-proxy dispatcher:
-
-To add the dispatcher to your own client:
-
-```javascript
-import { ProxyAgent } from 'undici'
-
-return await fetch(url, {
-  dispatcher: new ProxyAgent({
-    uri: proxyUrl,
-    keepAliveTimeout: 10,
-    keepAliveMaxTimeout: 10
-  })
-})
-```
-
 ## Docker
 
 ### Development image
@@ -186,13 +116,13 @@ return await fetch(url, {
 Build:
 
 ```bash
-docker build --target development --no-cache --tag fcp-sfd-crm:development .
+docker build --target development --no-cache --tag fcp-sfd-accelerator:development .
 ```
 
 Run:
 
 ```bash
-docker run -e PORT=3001 -p 3001:3001 fcp-sfd-crm:development
+docker run -e PORT=3000 -p 3000:3000 fcp-sfd-accelerator:development
 ```
 
 ### Production image
@@ -200,13 +130,13 @@ docker run -e PORT=3001 -p 3001:3001 fcp-sfd-crm:development
 Build:
 
 ```bash
-docker build --no-cache --tag fcp-sfd-crm .
+docker build --no-cache --tag fcp-sfd-accelerator .
 ```
 
 Run:
 
 ```bash
-docker run -e PORT=3001 -p 3001:3001 fcp-sfd-crm
+docker run -e PORT=3000 -p 3000:3000 fcp-sfd-accelerator
 ```
 
 ### Docker Compose
@@ -222,11 +152,6 @@ A local environment with:
 ```bash
 docker compose up --build -d
 ```
-
-### Dependabot
-
-We have added an example dependabot configuration file to the repository. You can enable it by renaming
-the [.github/example.dependabot.yml](.github/example.dependabot.yml) to `.github/dependabot.yml`
 
 ### SonarCloud
 
@@ -244,7 +169,7 @@ The following attribution statement MUST be cited in your products and applicati
 
 ### About the licence
 
-The Open Government Licence (OGL) was developed by the Controller of Her Majesty's Stationery Office (HMSO) to enable
+The Open Government Licence (OGL) was developed by the Controller of His Majesty's Stationery Office (HMSO) to enable
 information providers in the public sector to license the use and re-use of their information under a common open
 licence.
 

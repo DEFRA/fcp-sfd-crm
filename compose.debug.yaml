@@ -1,0 +1,8 @@
+
+services:
+  fcp-sfd-accelerator:
+    command: npm run start:debug
+
+networks:
+  cdp-tenant:
+    driver: bridge
