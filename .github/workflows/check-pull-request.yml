@@ -1,17 +1,16 @@
 name: Check Pull Request
 
 on:
+  schedule:
+    - cron: '0 7 * * 1'
   pull_request:
     branches:
       - main
     types:
       - opened
-      - edited
       - reopened
       - synchronize
       - ready_for_review
-
-  workflow_dispatch:
 
 jobs:
   pr-validator:
@@ -20,32 +19,25 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Test code and Create Test Coverage Reports
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: |
-          npm ci
-
-      - name: Build Docker Image
-        run: |
-          set +e
-          docker build --no-cache --tag fcp-sfd-crm .
-          exit $?
+      - name: Create Coverage Directory
+        run: mkdir -p -m 777 coverage
 
       - name: Run Tests
         run: |
-          mkdir -p coverage
-          chmod -R a+rw ./coverage
-          docker compose -f compose.yml -f compose.test.yml run --rm "fcp-sfd-crm"
+          npm run docker:test
 
-      - name: SonarQubeScan
-        uses: SonarSource/sonarqube-scan-action@v5
+      - name: Test Docker Image Build
+        run: |
+          set +e
+          docker build --no-cache --tag cdp-node-frontend-template .
+          exit $?
+
+      - name: SonarQube Cloud scan
+        if: github.actor != 'dependabot[bot]'
+        uses: SonarSource/sonarcloud-github-action@master
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
       - name: Snyk Scan
