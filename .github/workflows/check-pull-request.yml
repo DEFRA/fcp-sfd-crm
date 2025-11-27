@@ -47,4 +47,10 @@ jobs:
         uses: SonarSource/sonarqube-scan-action@v5
         env: 
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          
+
+      - name: Snyk Scan
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=medium
