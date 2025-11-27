@@ -24,7 +24,7 @@ export const serverConfig = {
   port: {
     doc: 'The port to bind',
     format: 'port',
-    default: 3000,
+    default: 3009,
     env: 'PORT'
   },
   serviceName: {

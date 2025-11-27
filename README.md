@@ -1,4 +1,4 @@
-# fcp-sfd-accelerator
+# fcp-sfd-crm
 
 The accelerator repository is designed to streamline the setup of GitHub repositories (specifically backend microservices) for the Single Front Door (SFD) team to deploy on CDP (Core Delivery Platform).
 
@@ -15,13 +15,13 @@ As CDP repositories _must_ be created via the CDP portal, setting up a template 
 ```
 E.g.:
 ```bash
-./accelerator.sh https://github.com/DEFRA/fcp-sfd-accelerator.git https://github.com/DEFRA/fcp-sfd-example.git template-setup
+./accelerator.sh https://github.com/DEFRA/fcp-sfd-crm.git https://github.com/DEFRA/fcp-sfd-example.git template-setup
 ```
 **All 3 arguments must be provided to run the script successfully.**
 
 4. The following confirmation should appear in the terminal output if successful:
 ```bash
-fcp-sfd-accelerator has been pushed to branch 'test-branch' on https://github.com/DEFRA/fcp-sfd-example.git
+fcp-sfd-crm has been pushed to branch 'test-branch' on https://github.com/DEFRA/fcp-sfd-example.git
 ```
 
 ### Renaming
@@ -51,7 +51,7 @@ easier to use the Node Version Manager [nvm](https://github.com/creationix/nvm)
 To use the correct version of Node.js for this application, via nvm:
 
 ```bash
-cd fcp-sfd-accelerator
+cd fcp-sfd-crm
 nvm use
 ```
 
@@ -116,13 +116,13 @@ ncu --interactive --format group
 Build:
 
 ```bash
-docker build --target development --no-cache --tag fcp-sfd-accelerator:development .
+docker build --target development --no-cache --tag fcp-sfd-crm:development .
 ```
 
 Run:
 
 ```bash
-docker run -e PORT=3000 -p 3000:3000 fcp-sfd-accelerator:development
+docker run -e PORT=3009 -p 3009:3009 fcp-sfd-crm:development
 ```
 
 ### Production image
@@ -130,13 +130,13 @@ docker run -e PORT=3000 -p 3000:3000 fcp-sfd-accelerator:development
 Build:
 
 ```bash
-docker build --no-cache --tag fcp-sfd-accelerator .
+docker build --no-cache --tag fcp-sfd-crm .
 ```
 
 Run:
 
 ```bash
-docker run -e PORT=3000 -p 3000:3000 fcp-sfd-accelerator
+docker run -e PORT=3009 -p 3009:3009 fcp-sfd-crm
 ```
 
 ### Docker Compose

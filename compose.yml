@@ -1,11 +1,11 @@
 services:
-  fcp-sfd-accelerator:
+  fcp-sfd-crm:
     build:
       target: development
-    image: fcp-sfd-accelerator-development
-    container_name: fcp-sfd-accelerator-development
+    image: fcp-sfd-crm-development
+    container_name: fcp-sfd-crm-development
     ports:
-      - '3000:3000'
+      - '3009:3009'
       - '9232:9232'
     links:
       - 'localstack:localstack'
@@ -21,7 +21,7 @@ services:
     env_file:
       - .env
     environment:
-      PORT: 3000
+      PORT: 3009
       PORT_DEBUG: 9232
       NODE_ENV: development
       LOCALSTACK_ENDPOINT: http://localstack:4566

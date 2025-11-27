@@ -1,50 +1,50 @@
-# name: Check Pull Request
+name: Check Pull Request
 
-# on:
-#   pull_request:
-#     branches:
-#       - main
-#     types:
-#       - opened
-#       - edited
-#       - reopened
-#       - synchronize
-#       - ready_for_review
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+      - ready_for_review
 
-#   workflow_dispatch:
+  workflow_dispatch:
 
-# jobs:
-#   pr-validator:
-#     name: Run Pull Request Checks
-#     runs-on: ubuntu-latest
-#     steps:
-#       - name: Checkout code
-#         uses: actions/checkout@v4
-#         with:
-#           fetch-depth: 0
+jobs:
+  pr-validator:
+    name: Run Pull Request Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-#       - name: Test code and Create Test Coverage Reports
-#         uses: actions/setup-node@v4
-#         with:
-#           node-version: 22
-#           cache: npm
-#       - run: |
-#           npm ci
+      - name: Test code and Create Test Coverage Reports
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: |
+          npm ci
 
-#       - name: Build Docker Image
-#         run: |
-#           set +e
-#           docker build --no-cache --tag fcp-sfd-accelerator .
-#           exit $?
+      - name: Build Docker Image
+        run: |
+          set +e
+          docker build --no-cache --tag fcp-sfd-crm .
+          exit $?
 
-#       - name: Run Tests
-#         run: |
-#           mkdir -p coverage
-#           chmod -R a+rw ./coverage
-#           docker compose -f compose.yaml -f compose.test.yaml run --rm "fcp-sfd-accelerator"
+      - name: Run Tests
+        run: |
+          mkdir -p coverage
+          chmod -R a+rw ./coverage
+          docker compose -f compose.yaml -f compose.test.yaml run --rm "fcp-sfd-crm"
 
-#       - name: SonarQubeScan
-#         uses: SonarSource/sonarqube-scan-action@v5
-#         env: 
-#           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      - name: SonarQubeScan
+        uses: SonarSource/sonarqube-scan-action@v5
+        env: 
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           

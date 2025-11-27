@@ -54,10 +54,10 @@ const confirmRename = async (projectName, description, port) => {
 
 const getRootFiles = () => {
   return [
-    'compose.yaml',
-    'compose.debug.yaml',
-    'compose.test.yaml',
-    'compose.test.watch.yaml',
+    'compose.yml',
+    'compose.debug.yml',
+    'compose.test.yml',
+    'compose.test.watch.yml',
     'Dockerfile',
     'package.json',
     'package-lock.json',
@@ -70,9 +70,9 @@ const getGitHubActions = () => {
   const dir = '.github/workflows'
 
   const files = [
-    'check-pull-request.yaml',
-    'publish.yaml',
-    'publish-hotfix.yaml'
+    'check-pull-request.yml',
+    'publish.yml',
+    'publish-hotfix.yml'
   ]
 
   return files.map(file => `${dir}/${file}`)
@@ -94,8 +94,8 @@ const getConfigFiles = () => {
 
 const getPortSpecificFiles = () => {
   return [
-    'compose.yaml',
-    'compose.test.yaml',
+    'compose.yml',
+    'compose.test.yml',
     'Dockerfile',
     'README.md'
   ]

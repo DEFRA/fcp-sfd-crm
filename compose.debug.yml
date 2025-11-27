@@ -1,6 +1,6 @@
 
 services:
-  fcp-sfd-accelerator:
+  fcp-sfd-crm:
     command: npm run start:debug
 
 networks:

@@ -1,15 +1,15 @@
 services:
-  fcp-sfd-accelerator:
+  fcp-sfd-crm:
     build:
       target: development
-    image: fcp-sfd-accelerator-development
-    container_name: fcp-sfd-accelerator-test
+    image: fcp-sfd-crm-development
+    container_name: fcp-sfd-crm-test
     command: npm run test
     env_file:
       - path: .env
         required: false
     environment:
-      PORT: 3000
+      PORT: 3009
       NODE_ENV: development
       LOCALSTACK_ENDPOINT: http://localstack:4566
       MONGO_URI: mongodb://mongodb:27017/
