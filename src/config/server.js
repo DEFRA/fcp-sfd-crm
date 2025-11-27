@@ -30,7 +30,7 @@ export const serverConfig = {
   serviceName: {
     doc: 'Api Service Name',
     format: String,
-    default: 'fcp-sfd-accelerator'
+    default: 'fcp-sfd-crm'
   },
   root: {
     doc: 'Project root',
@@ -89,7 +89,7 @@ export const serverConfig = {
     databaseName: {
       doc: 'Database name for mongodb',
       format: String,
-      default: 'fcp-sfd-accelerator',
+      default: 'fcp-sfd-crm',
       env: 'MONGO_DATABASE'
     }
   },

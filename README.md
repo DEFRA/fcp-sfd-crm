@@ -1,21 +1,21 @@
 # fcp-sfd-crm
 
-The accelerator repository is designed to streamline the setup of GitHub repositories (specifically backend microservices) for the Single Front Door (SFD) team to deploy on CDP (Core Delivery Platform).
+The crm repository is designed to streamline the setup of GitHub repositories (specifically backend microservices) for the Single Front Door (SFD) team to deploy on CDP (Core Delivery Platform).
 
 ## Initial setup
 
-### Pushing the accelerator
+### Pushing the crm
 
-As CDP repositories _must_ be created via the CDP portal, setting up a template GitHub repository in the traditional sense (similar to what is/was done on the Farming and Countryside Platform) is not possible. Instead this repository has been created with the specific project layout that meets the needs of the SFD development team and differs from the default [CDP Node.js backend template](https://github.com/DEFRA/cdp-node-backend-template). A Bash script is provided in this repo to automate applying the accelerator template onto a CDP generated repository. The following steps detail what needs to be done:
+As CDP repositories _must_ be created via the CDP portal, setting up a template GitHub repository in the traditional sense (similar to what is/was done on the Farming and Countryside Platform) is not possible. Instead this repository has been created with the specific project layout that meets the needs of the SFD development team and differs from the default [CDP Node.js backend template](https://github.com/DEFRA/cdp-node-backend-template). A Bash script is provided in this repo to automate applying the crm template onto a CDP generated repository. The following steps detail what needs to be done:
 1. Create a new repo on the [CDP portal](https://portal.cdp-int.defra.cloud) with the parameters `Microservice` and `Node.js Backend`.
-2. Once the repo has been created, ensure you have a copy of the [`accelerator`](./accelerator.sh) script to hand.
-3. Execute the `accelerator` script by running the following command:
+2. Once the repo has been created, ensure you have a copy of the [`crm`](./crm.sh) script to hand.
+3. Execute the `crm` script by running the following command:
 ```Bash
-./accelerator.sh <template-repo-url> <target-repo-url> [target-branch]
+./crm.sh <template-repo-url> <target-repo-url> [target-branch]
 ```
 E.g.:
 ```bash
-./accelerator.sh https://github.com/DEFRA/fcp-sfd-crm.git https://github.com/DEFRA/fcp-sfd-example.git template-setup
+./crm.sh https://github.com/DEFRA/fcp-sfd-crm.git https://github.com/DEFRA/fcp-sfd-example.git template-setup
 ```
 **All 3 arguments must be provided to run the script successfully.**
 
@@ -36,9 +36,9 @@ Note the project description must be wrapped in quotes.
 
 ### Deleting setup scripts
 
-Once both the `accelerator.sh` and `rename.js` scripts have served their purpose, they should be deleted:
+Once both the `crm.sh` and `rename.js` scripts have served their purpose, they should be deleted:
 ```bash
-rm accelerator.sh rename.js
+rm crm.sh rename.js
 ```
 
 ## Requirements

@@ -22,20 +22,26 @@ jobs:
         with:
           fetch-depth: 0 # Depth 0 is required for branch-based versioning
 
-      - name: Create Coverage Directory
-        run: mkdir -p -m 777 coverage
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Ensure tests pass. Add more checks if required
+      - run: npm ci
 
       - name: Run Tests
         run: |
-          npm run docker:test
+          mkdir -p coverage
+          chmod -R a+rw ./coverage
+          docker compose -f compose.yml -f compose.test.yml run --rm "fcp-sfd-crm"
 
       - name: Publish Hot Fix
         uses: DEFRA/cdp-build-action/build-hotfix@main
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: SonarQube Cloud scan
-        uses: SonarSource/sonarcloud-github-action@master
+      - name: SonarQubeScan
+        uses: SonarSource/sonarqube-scan-action@v5
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

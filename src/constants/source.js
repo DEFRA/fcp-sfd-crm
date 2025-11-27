@@ -1,1 +1,1 @@
-export const SOURCE = 'fcp-sfd-accelerator'
+export const SOURCE = 'fcp-sfd-crm'
