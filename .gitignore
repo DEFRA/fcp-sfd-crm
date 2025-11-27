@@ -9,3 +9,8 @@ coverage
 .cache
 .eslintcache
 .env
+
+# @shelf/jest-mongodb generated file
+globalConfig.json
+
+tsconfig.tsbuildinfo
