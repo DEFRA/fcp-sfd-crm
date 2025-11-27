@@ -33,7 +33,7 @@ jobs:
           chmod -R a+rw ./coverage
           docker compose -f compose.yml -f compose.test.yml run --rm "fcp-sfd-crm"
 
-      - name: SonarQubeScan
+      - name: SonarQube Cloud Scan
         uses: SonarSource/sonarqube-scan-action@v5
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
