@@ -15,6 +15,6 @@ export const setupProxy = () => {
     setGlobalDispatcher(new ProxyAgent(proxyUrl))
 
     bootstrap()
-    global.GLOBAL_AGENT.HTTP_PROXY = proxyUrl
+    globalThis.GLOBAL_AGENT.HTTP_PROXY = proxyUrl
   }
 }
