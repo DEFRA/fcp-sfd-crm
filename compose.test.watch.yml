@@ -1,0 +1,3 @@
+services:
+  fcp-sfd-crm:
+    command: npm run test:watch
