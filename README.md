@@ -10,7 +10,6 @@ This service is part of the [Single Front Door (SFD)](https://github.com/defra/f
 
 ## Local development
 
-
 ## Building and starting the service 
 
 This service has been configured to run in a Docker container and it is recommended to utilise Docker and Docker Compose for local development.
