@@ -30,6 +30,11 @@ export const authConfig = {
       format: String,
       default: null,
       env: 'CRM_AUTH_SCOPE'
+    },
+    tokenId: {
+      doc: 'Identifier for the stored token in the database.',
+      format: String,
+      default: 'crmAuthToken',
     }
   }
 }
