@@ -12,7 +12,7 @@ const client = await MongoClient.connect(config.get('mongo.uri'), {
   ...(createSecureContext && { secureContext: createSecureContext(logger) })
 })
 
-const db = client.db(config.get('mongo.database'))
+const db = client.db(config.get('mongo.databaseName'))
 
 logger.info('Connected to MongoDB')
 
