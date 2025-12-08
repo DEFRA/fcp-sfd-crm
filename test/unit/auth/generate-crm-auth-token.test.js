@@ -1,7 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
 
 // Thing under test
-import { getCrmAuthToken } from '../../../src/auth/get-crm-auth-token.js'
+import { generateCrmAuthToken } from '../../../src/auth/generate-crm-auth-token.js'
 
 // Mock dependencies
 import { config } from '../../../src/config/index.js'
@@ -15,7 +15,7 @@ vi.mock('../../../src/config/index.js', () => ({
   }
 }))
 
-describe('getCrmAuthToken', () => {
+describe('generateCrmAuthToken', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     config.get.mockReturnValue({
@@ -38,7 +38,7 @@ describe('getCrmAuthToken', () => {
   test('should use tenantId value from config in fetch URL', async () => {
     global.fetch.mockResolvedValue(mockSuccessResponse)
 
-    await getCrmAuthToken()
+    await generateCrmAuthToken()
 
     expect(global.fetch).toHaveBeenCalledWith(
       'https://login.microsoftonline.com/fake-tenant/oauth2/v2.0/token',
@@ -57,7 +57,7 @@ describe('getCrmAuthToken', () => {
     }
     global.fetch.mockResolvedValue(mockFailResponse)
 
-    await expect(getCrmAuthToken()).rejects.toThrow(
+    await expect(generateCrmAuthToken()).rejects.toThrow(
       'Auth failed: 401 Unauthorized - Invalid credentials'
     )
   })
@@ -65,7 +65,7 @@ describe('getCrmAuthToken', () => {
   test('should return object with token and expiresAt property', async () => {
     global.fetch.mockResolvedValue(mockSuccessResponse)
 
-    const result = await getCrmAuthToken()
+    const result = await generateCrmAuthToken()
 
     expect(result).toEqual({
       token: 'Bearer test-token',
@@ -78,7 +78,7 @@ describe('getCrmAuthToken', () => {
   test('should send correct form data with URL encoding', async () => {
     global.fetch.mockResolvedValue(mockSuccessResponse)
 
-    await getCrmAuthToken()
+    await generateCrmAuthToken()
 
     const fetchCall = global.fetch.mock.calls[0]
     const requestOptions = fetchCall[1]

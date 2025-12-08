@@ -1,9 +1,8 @@
 import { config } from '../config/index.js'
 
-
 const generateCrmAuthToken = async () => {
   const { tenantId, clientId, clientSecret, scope } = config.get('auth')
-  
+
   const form = new URLSearchParams({
     client_id: clientId,
     client_secret: clientSecret,

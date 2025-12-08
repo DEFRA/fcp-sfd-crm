@@ -34,7 +34,7 @@ export const authConfig = {
     tokenId: {
       doc: 'Identifier for the stored token in the database.',
       format: String,
-      default: 'crmAuthToken',
+      default: 'crmAuthToken'
     }
   }
 }
