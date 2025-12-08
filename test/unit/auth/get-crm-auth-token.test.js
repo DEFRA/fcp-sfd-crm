@@ -27,14 +27,13 @@ describe('getCrmAuthToken', () => {
   })
 
   const mockSuccessResponse = {
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        token_type: 'Bearer',
-        access_token: 'test-token',
-        expires_in: 3600
-      })
-    }
-  
+    ok: true,
+    json: vi.fn().mockResolvedValue({
+      token_type: 'Bearer',
+      access_token: 'test-token',
+      expires_in: 3600
+    })
+  }
 
   test('should use tenantId value from config in fetch URL', async () => {
     global.fetch.mockResolvedValue(mockSuccessResponse)
