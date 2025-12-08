@@ -1,43 +1,36 @@
 import { config } from '../config/index.js'
 const getCrmAuthToken = async () => {
-    const { tenantId, clientId, clientSecret, scope } = config.get('auth')
+  const { tenantId, clientId, clientSecret, scope } = config.get('auth')
 
-    const form = new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        grant_type: 'client_credentials',
-        scope
-    })
-    let payload
-    try {
-        const response = await fetch(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: form.toString()
-        })
+  const form = new URLSearchParams({
+    client_id: clientId,
+    client_secret: clientSecret,
+    grant_type: 'client_credentials',
+    scope
+  })
 
-        if (!response.ok) {
-            const errorText = await response.text()
-            throw new Error(`Auth failed: ${response.status} ${response.statusText} - ${errorText}`)
-        }
+  const response = await fetch(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: form.toString()
+  })
 
-        payload = await response.json()
-        console.log('&&&&&&&&&&&&&', payload)
-    } catch (err) {
-        console.log('this is the error: ', err)
-        throw err
-    }
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Auth failed: ${response.status} ${response.statusText} - ${errorText}`)
+  }
 
+  const payload = await response.json()
 
-    // Combine token type and access token to create the full Authorization header value
-    // e.g., "Bearer abc123xyz"
-    // Return token and its expiry time (in ms) for caching
-    return {
-        token: `${payload.token_type} ${payload.access_token}`,
-        expiresAt: payload.expires_in
-    }
+  // Combine token type and access token to create the full Authorization header value
+  // e.g., "Bearer abc123xyz"
+  // Return token and its expiry time (in ms) for caching
+  return {
+    token: `${payload.token_type} ${payload.access_token}`,
+    expiresAt: payload.expires_in
+  }
 }
 
 export {
-    getCrmAuthToken
+  getCrmAuthToken
 }
