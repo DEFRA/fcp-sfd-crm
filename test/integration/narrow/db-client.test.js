@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest'
-import db from '../../../../src/data/db.js'
+import db from '../../../src/data/db.js'
 
 describe('Create Mongo client', () => {
   test('should return an instance of database client', async () => {
