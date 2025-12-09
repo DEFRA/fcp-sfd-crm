@@ -26,6 +26,11 @@ services:
       NODE_ENV: development
       LOCALSTACK_ENDPOINT: http://localstack:4566
       MONGO_URI: mongodb://mongodb:27017/
+      CRM_AUTH_ENDPOINT: ${CRM_AUTH_ENDPOINT}
+      CRM_AUTH_TENANT_ID: ${CRM_AUTH_TENANT_ID}
+      CRM_AUTH_CLIENT_ID: ${CRM_AUTH_CLIENT_ID}
+      CRM_AUTH_CLIENT_SECRET: ${CRM_AUTH_CLIENT_SECRET}
+      CRM_AUTH_SCOPE: ${CRM_AUTH_SCOPE}
     networks:
       - cdp-tenant
 
