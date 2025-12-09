@@ -59,11 +59,13 @@ const createCase = async (authToken, crn, sbi) => {
         })
 
         console.log(response.headers.get('location'), '*******')
+
+        return {
+            caseId: 'test'
+        }
+
     } catch (err) {
         console.error(err)
-    }
-    return {
-        caseId: 'test'
     }
 }
 
