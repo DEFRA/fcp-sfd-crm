@@ -1,3 +1,7 @@
+// this file can be used to test the functionality of the repos/crm operations
+// rename this file to include '.test.js' so the test runner pick it up
+// When ran this will create a case in the DEV CRM instance and can also be used to verify functionality of contact and account functions.
+
 import { describe, test, expect } from 'vitest'
 import { getCrmAuthToken } from '../../src/auth/get-crm-auth-token'
 import { getContactIdFromCrn, getAccountIdFromSbi, createCase } from '../../src/repos/crm'
