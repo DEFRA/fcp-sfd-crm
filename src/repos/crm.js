@@ -1,9 +1,7 @@
 import { config } from '../config/index.js'
-// inputs CRN, SBI, CRM Queue, some metadata
 
 const baseUrl = config.get('crm.baseUrl')
 
-// get contact from CRN
 const getContactIdFromCrn = async (authToken, crn) => {
   const query = `/contacts?%24select=contactid&%24filter=rpa_capcustomerid%20eq%20'${crn}'`
 
@@ -34,8 +32,6 @@ const getAccountIdFromSbi = async (authToken, sbi) => {
   }
 }
 
-// create case
-
 const createCase = async (authToken, contactId, accountId) => {
   try {
     const payload = {
@@ -58,14 +54,18 @@ const createCase = async (authToken, contactId, accountId) => {
     const caseId = response.headers.get('location').split('(')[1].split(')')[0]
 
     return {
-      caseId
+      caseId,
+      error: null
     }
   } catch (err) {
-    console.error(err)
+    return {
+      caseId: null,
+      error: err.message
+    }
   }
 }
 
-// get document type - what is this?
-// create online submission (params dictate type)
+// Future: get document type
+// Future: create online submission (params dictate type)
 
 export { getContactIdFromCrn, getAccountIdFromSbi, createCase }

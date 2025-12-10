@@ -111,7 +111,7 @@ describe('CRM repository', () => {
       }
       global.fetch.mockResolvedValue(mockResponse)
 
-      const result = await createCase('Bearer token', 'contact-123', 'account-456')
+      const { caseId, error } = await createCase('Bearer token', 'contact-123', 'account-456')
 
       expect(global.fetch).toHaveBeenCalledWith(
         'https://crm.example.com/api/incidents',
@@ -133,7 +133,8 @@ describe('CRM repository', () => {
           })
         }
       )
-      expect(result).toEqual({ caseId: '8bb8b45b-aba2-f011-bbd2-7ced8d4645a2' })
+      expect(caseId).toBe('8bb8b45b-aba2-f011-bbd2-7ced8d4645a2')
+      expect(error).toBeNull()
     })
 
     test('should extract caseId from location header', async () => {
@@ -145,23 +146,21 @@ describe('CRM repository', () => {
       }
       global.fetch.mockResolvedValue(mockResponse)
 
-      const result = await createCase('Bearer token', 'contact-id', 'account-id')
+      const { caseId, error } = await createCase('Bearer token', 'contact-id', 'account-id')
 
       expect(mockResponse.headers.get).toHaveBeenCalledWith('location')
-      expect(result).toEqual({ caseId: 'abc-def-ghi-123' })
+      expect(caseId).toBe('abc-def-ghi-123')
+      expect(error).toBeNull()
     })
 
     test('should handle error and log to console', async () => {
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
       const mockError = new Error('Network error')
       global.fetch.mockRejectedValue(mockError)
 
-      const result = await createCase('Bearer token', 'contact-id', 'account-id')
+      const { caseId, error } = await createCase('Bearer token', 'contact-id', 'account-id')
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(mockError)
-      expect(result).toBeUndefined()
-
-      consoleErrorSpy.mockRestore()
+      expect(caseId).toBeNull()
+      expect(error).toBe('Network error')
     })
   })
 })
