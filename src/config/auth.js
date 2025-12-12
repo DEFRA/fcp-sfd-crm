@@ -6,12 +6,13 @@ export const authConfig = {
       default: null,
       env: 'CRM_AUTH_ENDPOINT'
     },
-    tenantId: {
-      doc: 'Unique ID of the Azure Active Directory the application uses to sign in and get tokens.',
+    endpoint: {
+      doc: 'Auth URL representing the Azure Active Directory the application uses to sign in and get tokens.',
       format: String,
       default: null,
-      env: 'CRM_AUTH_TENANT_ID'
+      env: 'CRM_AUTH_ENDPOINT'
     },
+
     clientId: {
       doc: 'Client ID for authenticating with CRM.',
       format: String,
