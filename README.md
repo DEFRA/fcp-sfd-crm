@@ -10,7 +10,15 @@ This service is part of the [Single Front Door (SFD)](https://github.com/defra/f
 
 ## Environment variables
 
-TBC
+Create a `.env` file in the root of the project with the required environment variables.
+The following DEFRA_ID variables are need to be added onto the `.env` file, values for some of the variables are in Bitwarden.
+```bash
+CRM_AUTH_TENANT_ID
+CRM_AUTH_CLIENT_ID
+CRM_AUTH_CLIENT_SECRET
+CRM_AUTH_SCOPE
+CRM_API_BASE_URL
+```
 
 ## Local development
 
