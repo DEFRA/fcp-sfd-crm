@@ -8,6 +8,10 @@
 CRM orchestration service for Single Front Door.  
 This service is part of the [Single Front Door (SFD)](https://github.com/defra/fcp-sfd-core) service.
 
+## Environment variables
+
+TBC
+
 ## Local development
 
 ## Building and starting the service 
