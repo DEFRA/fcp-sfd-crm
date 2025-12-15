@@ -1,11 +1,11 @@
+import { logger } from '../logging/logger.js'
 import {
   getContactIdFromCrn,
   getAccountIdFromSbi,
   createCase
 } from '../repos/crm.js'
-import { logger } from '../logging/logger.js'
 
-export const createCaseInCrm = async ({authToken, crn, sbi }) => {
+export const createCaseInCrm = async ({ authToken, crn, sbi }) => {
   const contactId = await getContactIdFromCrn(authToken, crn)
 
   if (!contactId) {
