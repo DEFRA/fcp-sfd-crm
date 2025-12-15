@@ -1,9 +1,11 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
 
+const mockLogger = {
+  error: vi.fn()
+}
+
 vi.mock('../../../src/logging/logger.js', () => ({
-  createLogger: () => ({
-    error: vi.fn()
-  })
+  createLogger: () => mockLogger
 }))
 
 vi.mock('../../../src/repos/crm.js', () => ({
@@ -14,9 +16,6 @@ vi.mock('../../../src/repos/crm.js', () => ({
 
 const { createCaseInCrm } = await import('../../../src/services/create-case-in-crm.js')
 const { getContactIdFromCrn, getAccountIdFromSbi, createCase } = await import('../../../src/repos/crm.js')
-const { createLogger } = await import('../../../src/logging/logger.js')
-
-const mockLogger = createLogger()
 
 describe('createCaseInCrm service', () => {
   beforeEach(() => {
@@ -37,6 +36,7 @@ describe('createCaseInCrm service', () => {
     expect(getContactIdFromCrn).toHaveBeenCalledWith('mock-bearer-token', 'mock-crn')
     expect(getAccountIdFromSbi).toHaveBeenCalledWith('mock-bearer-token', 'mock-sbi')
     expect(createCase).toHaveBeenCalledWith('mock-bearer-token', 'mock-contact-id', 'mock-account-id')
+
     expect(result).toEqual({
       contactId: 'mock-contact-id',
       accountId: 'mock-account-id',
