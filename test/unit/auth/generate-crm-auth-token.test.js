@@ -22,7 +22,7 @@ describe('generateCrmAuthToken', () => {
       clientId: 'fake-client',
       clientSecret: 'fake-secret',
       scope: 'fake-scope',
-      tenantId: 'fake-tenant'
+      tokenEndpoint: 'https://login.microsoftonline.com/fake-tenant/oauth2/v2.0/token'
     })
   })
 
@@ -35,7 +35,7 @@ describe('generateCrmAuthToken', () => {
     })
   }
 
-  test('should use tenantId value from config in fetch URL', async () => {
+  test('should use token endpoint value from config in fetch URL', async () => {
     global.fetch.mockResolvedValue(mockSuccessResponse)
 
     await generateCrmAuthToken()

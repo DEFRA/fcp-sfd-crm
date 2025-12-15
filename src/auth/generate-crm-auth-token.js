@@ -1,7 +1,7 @@
 import { config } from '../config/index.js'
 
 const generateCrmAuthToken = async () => {
-  const { endpoint, clientId, clientSecret, scope } = config.get('auth')
+  const { tokenEndpoint, clientId, clientSecret, scope } = config.get('auth')
 
   const form = new URLSearchParams({
     client_id: clientId,
@@ -10,7 +10,7 @@ const generateCrmAuthToken = async () => {
     scope
   })
 
-  const response = await fetch(endpoint, {
+  const response = await fetch(tokenEndpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: form.toString()
