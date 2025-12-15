@@ -12,7 +12,7 @@ const getContactIdFromCrn = async (authToken, crn) => {
   const responseJson = await response.json()
   // Future: handle no results - get status code 200 whether it finds it or not
   return {
-    contactId: responseJson.value[0].contactid
+    contactId: responseJson.value[0]?.contactid
   }
 }
 
@@ -28,7 +28,7 @@ const getAccountIdFromSbi = async (authToken, sbi) => {
   const responseJson = await response.json()
   // Future: handle no results - get status code 200 whether it finds it or not
   return {
-    accountId: responseJson.value[0].accountid
+    accountId: responseJson.value[0]?.accountid
   }
 }
 
@@ -51,7 +51,8 @@ const createCase = async (authToken, contactId, accountId) => {
       body: JSON.stringify(payload)
     })
 
-    const caseId = response.headers.get('location').split('(')[1].split(')')[0]
+    const location = response.headers.get('location')
+    const caseId = location?.split('(')[1]?.split(')')[0]
 
     return {
       caseId,
