@@ -92,4 +92,10 @@ describe('generateCrmAuthToken', () => {
     expect(requestOptions.body).toContain('grant_type=client_credentials')
     expect(requestOptions.body).toContain('scope=fake-scope')
   })
+
+  test('show throw error when tokenEndpoint cannot be reached', async () => {
+    global.fetch.mockRejectedValue(new Error('Network error'))
+
+    await expect(generateCrmAuthToken().rejects.toThrow('Network error'))
+  })
 })
