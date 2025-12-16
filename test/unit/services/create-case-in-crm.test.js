@@ -44,6 +44,22 @@ describe('createCaseInCrm service', () => {
     })
   })
 
+  test('throws error if authentication token is missing', async () => {
+    await expect(
+      createCaseInCrm({
+        authToken: null,
+        crn: 'mock-crn',
+        sbi: 'mock-sbi'
+      })
+    ).rejects.toThrow('Auth token is missing')
+
+    expect(mockLogger.error).toHaveBeenCalledWith('Auth token is missing')
+
+    expect(getContactIdFromCrn).not.toHaveBeenCalled()
+    expect(getAccountIdFromSbi).not.toHaveBeenCalled()
+    expect(createCase).not.toHaveBeenCalled()
+  })
+
   test('throws error if contact not found', async () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: null })
 

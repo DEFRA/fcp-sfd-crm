@@ -8,6 +8,11 @@ import {
 const logger = createLogger()
 
 export const createCaseInCrm = async ({ authToken, crn, sbi }) => {
+  if (!authToken) {
+    logger.error('Auth token is missing')
+    throw new Error('Auth token is missing')
+  }
+
   const contactObj = await getContactIdFromCrn(authToken, crn)
   const contactId = contactObj?.contactId
 
