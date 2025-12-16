@@ -14,7 +14,6 @@ Create a `.env` file in the root of the project with the required environment va
 The following variables need to be added into the `.env` file, values for some of the variables may be stored in Bitwarden.
 ```bash
 CRM_AUTH_ENDPOINT
-CRM_AUTH_TENANT_ID
 CRM_AUTH_CLIENT_ID
 CRM_AUTH_CLIENT_SECRET
 CRM_AUTH_SCOPE
