@@ -93,11 +93,11 @@ describe('generateCrmAuthToken', () => {
     expect(requestOptions.body).toContain('scope=fake-scope')
   })
 
-  test('should throw a friendly error when the token endpoint is down', async () => {
-    global.fetch.mockRejectedValue(new Error('getaddrinfo ENOTFOUND'))
+  test('should throw error when token endpoint is down', async () => {
+    global.fetch.mockRejectedValue(new Error('Network error'))
 
     await expect(generateCrmAuthToken()).rejects.toThrow(
-      'Auth failed: unable to reach token endpoint'
+      'Unable to reach token endpoint: Network error'
     )
   })
 })
