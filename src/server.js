@@ -45,6 +45,29 @@ const createServer = async () => {
     pulse
   ])
 
+  if (config.get('cdpEnvironment') !== 'prod') {
+    server.route([
+      {
+        method: 'POST',
+        path: '/create-case',
+        options: {
+          handler: async (request, h) => {
+            const apiKey = request.headers['x-api-key']
+            const expectedApiKey = config.get('apiKey')
+            if (!apiKey || apiKey !== expectedApiKey) {
+              return h.response({ error: 'Invalid or missing API key' }).code(401)
+            }
+            const { getCrmAuthToken } = await import('./auth/get-crm-auth-token.js')
+            const { createCaseInCrm } = await import('./services/create-case-in-crm.js')
+            const authToken = await getCrmAuthToken()
+            const caseResult = await createCaseInCrm({ authToken, caseData: request.payload })
+            return { caseResult }
+          }
+        }
+      }
+    ])
+  }
+
   return server
 }
 

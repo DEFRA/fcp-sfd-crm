@@ -119,5 +119,11 @@ export const serverConfig = {
       default: 'x-cdp-request-id',
       env: 'TRACING_HEADER'
     }
+  },
+  apiKey: {
+    doc: 'API key for authenticating requests for testing purposes',
+    format: String,
+    default: 'change-me',
+    env: 'API_KEY'
   }
 }
