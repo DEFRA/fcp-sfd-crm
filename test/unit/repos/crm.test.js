@@ -59,6 +59,33 @@ describe('CRM repository', () => {
 
       expect(result).toEqual({ contactId: '6ff3f89f-efe6-f455-fff6-bfff1f808e6' })
     })
+
+    test('should handle fetch error for SBI and return error message', async () => {
+      const mockError = new Error('Network error')
+      global.fetch.mockRejectedValue(mockError)
+
+      const result = await getContactIdFromCrn('Bearer token', '1234567890')
+
+      expect(result).toEqual({
+        contactId: null,
+        error: 'Network error'
+      })
+    })
+
+    test('should handle JSON parsing error for SBI and return error message', async () => {
+      const mockResponse = {
+        ok: true,
+        json: vi.fn().mockRejectedValue(new Error('Invalid JSON'))
+      }
+      global.fetch.mockResolvedValue(mockResponse)
+
+      const result = await getContactIdFromCrn('Bearer token', '1234567890')
+
+      expect(result).toEqual({
+        contactId: null,
+        error: 'Invalid JSON'
+      })
+    })
   })
 
   describe('getAccountIdFromSbi', () => {
@@ -98,6 +125,33 @@ describe('CRM repository', () => {
       const result = await getAccountIdFromSbi('Bearer token', '987654321')
 
       expect(result).toEqual({ accountId: '7dd1d67d-cdc4-f233-ddf4-9efe9e686c4' })
+    })
+
+    test('should handle fetch error for CRN and return error message', async () => {
+      const mockError = new Error('Network error')
+      global.fetch.mockRejectedValue(mockError)
+
+      const result = await getAccountIdFromSbi('Bearer token', '987654321')
+
+      expect(result).toEqual({
+        accountId: null,
+        error: 'Network error'
+      })
+    })
+
+    test('should handle JSON parsing error for CRN and return error message', async () => {
+      const mockResponse = {
+        ok: true,
+        json: vi.fn().mockRejectedValue(new Error('Invalid JSON'))
+      }
+      global.fetch.mockResolvedValue(mockResponse)
+
+      const result = await getAccountIdFromSbi('Bearer token', '987654321')
+
+      expect(result).toEqual({
+        accountId: null,
+        error: 'Invalid JSON'
+      })
     })
   })
 
