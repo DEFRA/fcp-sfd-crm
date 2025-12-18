@@ -5,14 +5,21 @@ const baseUrl = config.get('crm.baseUrl')
 const getContactIdFromCrn = async (authToken, crn) => {
   const query = `/contacts?%24select=contactid&%24filter=rpa_capcustomerid%20eq%20'${crn}'`
 
-  const response = await fetch(`${baseUrl}${query}`, {
-    method: 'GET',
-    headers: { Authorization: authToken }
-  })
-  const responseJson = await response.json()
-  // Future: handle no results - get status code 200 whether it finds it or not
-  return {
-    contactId: responseJson.value[0]?.contactid
+  try {
+    const response = await fetch(`${baseUrl}${query}`, {
+      method: 'GET',
+      headers: { Authorization: authToken }
+    })
+    const responseJson = await response.json()
+    // Future: handle no results - get status code 200 whether it finds it or not
+    return {
+      contactId: responseJson.value[0]?.contactid
+    }
+  } catch (err) {
+    return {
+      contactId: null,
+      error: err.message
+    }
   }
 }
 
@@ -20,15 +27,22 @@ const getContactIdFromCrn = async (authToken, crn) => {
 const getAccountIdFromSbi = async (authToken, sbi) => {
   const query = `/accounts?%24select=accountid&%24filter=rpa_sbinumber%20eq%20'${sbi}'`
 
-  const response = await fetch(`${baseUrl}${query}`, {
-    method: 'GET',
-    headers: { Authorization: authToken }
-  })
+  try {
+    const response = await fetch(`${baseUrl}${query}`, {
+      method: 'GET',
+      headers: { Authorization: authToken }
+    })
 
-  const responseJson = await response.json()
-  // Future: handle no results - get status code 200 whether it finds it or not
-  return {
-    accountId: responseJson.value[0]?.accountid
+    const responseJson = await response.json()
+    // Future: handle no results - get status code 200 whether it finds it or not
+    return {
+      accountId: responseJson.value[0]?.accountid
+    }
+  } catch (err) {
+    return {
+      accountId: null,
+      error: err.message
+    }
   }
 }
 
