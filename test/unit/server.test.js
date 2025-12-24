@@ -61,7 +61,7 @@ describe('POST /create-case', () => {
         payload: { foo: 'bar' }
       })
       expect(res.statusCode).toBe(401)
-      expect(JSON.parse(res.payload)).toEqual({ error: 'Invalid or missing API key' })
+      expect(JSON.parse(res.payload)).toEqual({ error: 'Missing or invalid QA-specific x-api-key header' })
     })
 
     it('returns 401 if API key is invalid', async () => {
@@ -72,7 +72,7 @@ describe('POST /create-case', () => {
         payload: { foo: 'bar' }
       })
       expect(res.statusCode).toBe(401)
-      expect(JSON.parse(res.payload)).toEqual({ error: 'Invalid or missing API key' })
+      expect(JSON.parse(res.payload)).toEqual({ error: 'Missing or invalid QA-specific x-api-key header' })
     })
 
     it('calls createCaseInCrm and returns result if API key is valid', async () => {

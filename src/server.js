@@ -1,12 +1,15 @@
 import path from 'node:path'
 import hapi from '@hapi/hapi'
-
+import http2 from 'node:http2'
+import Joi from 'joi'
 import { config } from './config/index.js'
 import { requestLogger } from './logging/request-logger.js'
 import { secureContext } from './api/common/helpers/secure-context/secure-context.js'
 import { pulse } from './api/common/helpers/pulse.js'
 import { requestTracing } from './api/common/helpers/request-tracing.js'
 import { setupProxy } from './api/common/helpers/proxy/setup-proxy.js'
+
+const { constants: httpConstants } = http2
 
 const createServer = async () => {
   setupProxy()
@@ -51,12 +54,22 @@ const createServer = async () => {
         method: 'POST',
         path: '/create-case',
         options: {
-          handler: async (request, h) => {
-            const apiKey = request.headers['x-api-key']
-            const expectedApiKey = config.get('apiKey')
-            if (!apiKey || apiKey !== expectedApiKey) {
-              return h.response({ error: 'Invalid or missing API key' }).code(401)
+          validate: {
+            headers: Joi.object({
+              'x-api-key': Joi.string().valid(config.get('apiKey')).required()
+            }).unknown(),
+            failAction: async function (request, h, error) {
+              const headerError = Array.isArray(error?.details) &&
+                error.details.some(d => d?.context?.key === 'x-api-key')
+              if (headerError) {
+                return h
+                  .response({ error: 'Missing or invalid QA-specific x-api-key header' })
+                  .code(httpConstants.HTTP_STATUS_UNAUTHORIZED)
+                  .takeover()
+              }
             }
+          },
+          handler: async (request, h) => {
             const { getCrmAuthToken } = await import('./auth/get-crm-auth-token.js')
             const { createCaseInCrm } = await import('./services/create-case-in-crm.js')
             const authToken = await getCrmAuthToken()
