@@ -58,7 +58,7 @@ const createServer = async () => {
             headers: Joi.object({
               'x-api-key': Joi.string().valid(config.get('apiKeyForTestingCaseCreation')).required()
             }).unknown(),
-            failAction: async function (request, h, error) {
+            failAction: async function (_request, h, error) {
               const headerError = Array.isArray(error?.details) &&
                 error.details.some(d => d?.context?.key === 'x-api-key')
               if (headerError) {
@@ -67,9 +67,11 @@ const createServer = async () => {
                   .code(httpConstants.HTTP_STATUS_UNAUTHORIZED)
                   .takeover()
               }
+
+              return h.continue
             }
           },
-          handler: async (request, h) => {
+          handler: async (request) => {
             const { getCrmAuthToken } = await import('./auth/get-crm-auth-token.js')
             const { createCaseInCrm } = await import('./services/create-case-in-crm.js')
             const authToken = await getCrmAuthToken()
