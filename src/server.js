@@ -56,7 +56,7 @@ const createServer = async () => {
         options: {
           validate: {
             headers: Joi.object({
-              'x-api-key': Joi.string().valid(config.get('apiKey')).required()
+              'x-api-key': Joi.string().valid(config.get('apiKeyForTestingCaseCreation')).required()
             }).unknown(),
             failAction: async function (request, h, error) {
               const headerError = Array.isArray(error?.details) &&

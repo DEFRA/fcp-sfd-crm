@@ -120,10 +120,10 @@ export const serverConfig = {
       env: 'TRACING_HEADER'
     }
   },
-  apiKey: {
+  apiKeyForTestingCaseCreation: {
     doc: 'API key for authenticating requests for testing purposes',
     format: String,
     default: 'change-me',
-    env: 'API_KEY'
+    env: 'API_KEY_FOR_TESTING_CASE_CREATION'
   }
 }

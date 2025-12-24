@@ -5,7 +5,7 @@ import { createServer } from '../../src/server.js'
 vi.mock('../../src/config/index.js', () => ({
   config: {
     get: vi.fn().mockImplementation((key) => {
-      if (key === 'apiKey') return 'test-api-key'
+      if (key === 'apiKeyForTestingCaseCreation') return 'test-api-key'
       if (key === 'port') return 0
       if (key === 'root') return process.cwd()
       if (key === 'log') {
@@ -27,7 +27,7 @@ describe('POST /create-case', () => {
     beforeEach(async () => {
       config.get.mockImplementation((key) => {
         if (key === 'cdpEnvironment') return 'dev'
-        if (key === 'apiKey') return 'test-api-key'
+        if (key === 'apiKeyForTestingCaseCreation') return 'test-api-key'
         if (key === 'port') return 0
         if (key === 'root') return process.cwd()
         if (key === 'log') {
@@ -105,7 +105,7 @@ describe('POST /create-case', () => {
     beforeEach(async () => {
       config.get.mockImplementation((key) => {
         if (key === 'cdpEnvironment') return 'prod'
-        if (key === 'apiKey') return 'test-api-key'
+        if (key === 'apiKeyForTestingCaseCreation') return 'test-api-key'
         if (key === 'port') return 0
         if (key === 'root') return process.cwd()
         if (key === 'log') {
