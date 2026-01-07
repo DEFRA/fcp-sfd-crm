@@ -44,16 +44,16 @@ describe('createCaseInCrm service', () => {
     })
   })
 
-  test('throws error if authentication token is missing', async () => {
+  test('throws error if authentication token, crn or sbi is missing', async () => {
     await expect(
       createCaseInCrm({
         authToken: null,
-        crn: 'mock-crn',
-        sbi: 'mock-sbi'
+        crn: null,
+        sbi: null
       })
-    ).rejects.toThrow('Auth token is missing')
+    ).rejects.toThrow('Missing required parameters: authToken, crn, sbi')
 
-    expect(mockLogger.error).toHaveBeenCalledWith('Auth token is missing')
+    expect(mockLogger.error).toHaveBeenCalledWith('Missing required parameters: authToken, crn, sbi')
 
     expect(getContactIdFromCrn).not.toHaveBeenCalled()
     expect(getAccountIdFromSbi).not.toHaveBeenCalled()
@@ -61,7 +61,7 @@ describe('createCaseInCrm service', () => {
   })
 
   test('throws error if contact not found', async () => {
-    getContactIdFromCrn.mockResolvedValue({ contactId: null })
+    getContactIdFromCrn.mockResolvedValue({ contactId: null, error: 'Not found' })
 
     await expect(
       createCaseInCrm({
@@ -71,18 +71,18 @@ describe('createCaseInCrm service', () => {
       })
     ).rejects.toThrow('Contact ID not found')
 
-    expect(mockLogger.error).toHaveBeenCalledWith('No contact found for CRN: mock-crn')
+    expect(mockLogger.error).toHaveBeenCalledWith('No contact found for CRN: mock-crn, error: Not found')
   })
 
   test('throws error if account not found', async () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: 'mock-contact-id' })
-    getAccountIdFromSbi.mockResolvedValue({ accountId: null })
+    getAccountIdFromSbi.mockResolvedValue({ accountId: null, error: 'Not found' })
 
     await expect(
       createCaseInCrm({ authToken: 'mock-bearer-token', crn: 'mock-crn', sbi: 'mock-sbi' })
     ).rejects.toThrow('Account ID not found')
 
-    expect(mockLogger.error).toHaveBeenCalledWith('No account found for SBI: mock-sbi')
+    expect(mockLogger.error).toHaveBeenCalledWith('No account found for SBI: mock-sbi, error: Not found')
   })
 
   test('throws error if createCase returns error', async () => {

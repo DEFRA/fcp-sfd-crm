@@ -37,7 +37,7 @@ describe('CRM repository', () => {
         "https://crm.example.com/api/contacts?%24select=contactid&%24filter=rpa_capcustomerid%20eq%20'1234567890'",
         {
           method: 'GET',
-          headers: { Authorization: 'Bearer token' }
+          headers: { Authorization: 'Bearer token', Prefer: 'return=representation', 'Content-Type': 'application/json', }
         }
       )
       expect(result).toEqual({ contactId: '6ff3f89f-efe6-f455-fff6-bfff1f808e6' })
@@ -104,7 +104,7 @@ describe('CRM repository', () => {
         "https://crm.example.com/api/accounts?%24select=accountid&%24filter=rpa_sbinumber%20eq%20'987654321'",
         {
           method: 'GET',
-          headers: { Authorization: 'Bearer token' }
+          headers: { Authorization: 'Bearer token', Prefer: 'return=representation', 'Content-Type': 'application/json' }
         }
       )
       expect(result).toEqual({ accountId: '7dd1d67d-cdc4-f233-ddf4-9efe9e686c4' })
@@ -173,7 +173,8 @@ describe('CRM repository', () => {
           method: 'POST',
           headers: {
             Authorization: 'Bearer token',
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            Prefer: 'return=representation'
           },
           body: JSON.stringify({
             caseorigincode: 100000002,
