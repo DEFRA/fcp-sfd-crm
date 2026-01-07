@@ -1,7 +1,11 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
 
-// Mock fetch globally
 global.fetch = vi.fn()
+
+const mockLogger = {
+  error: vi.fn(),
+  info: vi.fn()
+}
 
 // Mock config
 vi.mock('../../../src/config/index.js', () => ({
@@ -11,6 +15,10 @@ vi.mock('../../../src/config/index.js', () => ({
       return null
     })
   }
+}))
+
+vi.mock('../../../src/logging/logger.js', () => ({
+  createLogger: () => mockLogger
 }))
 
 // Import after mocks
