@@ -1,4 +1,5 @@
 import { config } from '../config/index.js'
+import { createLogger } from '../logging/logger.js'
 
 const baseUrl = config.get('crm.baseUrl')
 
@@ -7,8 +8,11 @@ const baseHeaders = {
   Prefer: 'return=representation'
 }
 
+const logger = createLogger()
+
 const getContactIdFromCrn = async (authToken, crn) => {
   const query = `/contacts?%24select=contactid&%24filter=rpa_capcustomerid%20eq%20'${crn}'`
+  logger.info(`url: ${baseUrl}${query}`)
 
   try {
     const response = await fetch(`${baseUrl}${query}`, {
@@ -16,6 +20,7 @@ const getContactIdFromCrn = async (authToken, crn) => {
       headers: { Authorization: authToken, ...baseHeaders }
     })
     const responseJson = await response.json()
+    logger.info(responseJson)
     // Future: handle no results - get status code 200 whether it finds it or not
     return {
       contactId: responseJson.value[0]?.contactid
