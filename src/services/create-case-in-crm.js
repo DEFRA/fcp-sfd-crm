@@ -17,7 +17,7 @@ export const createCaseInCrm = async ({ authToken, crn, sbi }) => {
   const contactId = contactObj?.contactId
 
   if (!contactId) {
-    logger.error(`No contact found for CRN: ${crn}`)
+    logger.error(`No contact found for CRN: ${crn}, error: ${contactObj?.error}`)
     throw new Error('Contact ID not found')
   }
 
@@ -25,7 +25,7 @@ export const createCaseInCrm = async ({ authToken, crn, sbi }) => {
   const accountId = accountObj?.accountId
 
   if (!accountId) {
-    logger.error(`No account found for SBI: ${sbi}`)
+    logger.error(`No account found for SBI: ${sbi}, error: ${accountObj?.error}`)
     throw new Error('Account ID not found')
   }
 
