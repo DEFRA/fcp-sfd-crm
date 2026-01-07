@@ -93,7 +93,7 @@ describe('POST /create-case', () => {
       })
 
       expect(getCrmAuthToken).toHaveBeenCalled()
-      expect(createCaseInCrm).toHaveBeenCalledWith({ authToken: 'token', caseData: { foo: 'bar' } })
+      expect(createCaseInCrm).toHaveBeenCalledWith({ authToken: 'token', foo: 'bar' })
       expect(res.statusCode).toBe(200)
       expect(JSON.parse(res.payload)).toEqual({ caseResult: { id: 123 } })
     })

@@ -2,13 +2,18 @@ import { config } from '../config/index.js'
 
 const baseUrl = config.get('crm.baseUrl')
 
+const baseHeaders = {
+  'Content-Type': 'application/json',
+  Prefer: 'return=representation'
+}
+
 const getContactIdFromCrn = async (authToken, crn) => {
   const query = `/contacts?%24select=contactid&%24filter=rpa_capcustomerid%20eq%20'${crn}'`
 
   try {
     const response = await fetch(`${baseUrl}${query}`, {
       method: 'GET',
-      headers: { Authorization: authToken }
+      headers: { Authorization: authToken, ...baseHeaders }
     })
     const responseJson = await response.json()
     // Future: handle no results - get status code 200 whether it finds it or not
@@ -30,7 +35,7 @@ const getAccountIdFromSbi = async (authToken, sbi) => {
   try {
     const response = await fetch(`${baseUrl}${query}`, {
       method: 'GET',
-      headers: { Authorization: authToken }
+      headers: { Authorization: authToken, ...baseHeaders }
     })
 
     const responseJson = await response.json()
@@ -61,7 +66,7 @@ const createCase = async (authToken, contactId, accountId) => {
 
     const response = await fetch(`${baseUrl}/incidents`, {
       method: 'POST',
-      headers: { Authorization: authToken, 'Content-Type': 'application/json' },
+      headers: { Authorization: authToken, ...baseHeaders },
       body: JSON.stringify(payload)
     })
 

@@ -44,16 +44,16 @@ describe('createCaseInCrm service', () => {
     })
   })
 
-  test('throws error if authentication token is missing', async () => {
+  test('throws error if authentication token, crn or sbi is missing', async () => {
     await expect(
       createCaseInCrm({
         authToken: null,
-        crn: 'mock-crn',
-        sbi: 'mock-sbi'
+        crn: null,
+        sbi: null
       })
-    ).rejects.toThrow('Auth token is missing')
+    ).rejects.toThrow('Missing required parameters: authToken, crn, sbi')
 
-    expect(mockLogger.error).toHaveBeenCalledWith('Auth token is missing')
+    expect(mockLogger.error).toHaveBeenCalledWith('Missing required parameters: authToken, crn, sbi')
 
     expect(getContactIdFromCrn).not.toHaveBeenCalled()
     expect(getAccountIdFromSbi).not.toHaveBeenCalled()

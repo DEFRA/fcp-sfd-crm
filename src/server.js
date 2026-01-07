@@ -75,7 +75,7 @@ const createServer = async () => {
             const { getCrmAuthToken } = await import('./auth/get-crm-auth-token.js')
             const { createCaseInCrm } = await import('./services/create-case-in-crm.js')
             const authToken = await getCrmAuthToken()
-            const caseResult = await createCaseInCrm({ authToken, caseData: request.payload })
+            const caseResult = await createCaseInCrm({ authToken, ...request.payload })
             return { caseResult }
           }
         }

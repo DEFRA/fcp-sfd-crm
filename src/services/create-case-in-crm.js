@@ -8,9 +8,15 @@ import {
 const logger = createLogger()
 
 export const createCaseInCrm = async ({ authToken, crn, sbi }) => {
-  if (!authToken) {
-    logger.error('Auth token is missing')
-    throw new Error('Auth token is missing')
+  if (!authToken || !crn || !sbi) {
+    const missingParameters = {
+      ...(!authToken && { authToken: 'missing' }),
+      ...(!crn && { crn: 'missing' }),
+      ...(!sbi && { sbi: 'missing' })
+    }
+
+    logger.error(`Missing required parameters: ${Object.keys(missingParameters).join(', ')}`)
+    throw new Error(`Missing required parameters: ${Object.keys(missingParameters).join(', ')}`)
   }
 
   const contactObj = await getContactIdFromCrn(authToken, crn)
