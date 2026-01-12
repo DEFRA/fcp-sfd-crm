@@ -1,0 +1,10 @@
+asyncapi: 3.0.0
+info: 
+  title: Single Front Door CRM orchestration service
+  version: 1.0.0
+  description: Publish CRM event when new cases are created to the Farming Data Model (FDM) service.
+  license:
+    name: Open Government License v3.0
+    url: https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3
+
+defaultContentType: application/json
