@@ -9,35 +9,78 @@ info:
 
 defaultContentType: application/json
 
-schemas:
-  crn:
-    type: number
-    description: Customer Reference Number (consists of 10 digits)
-    minimum: 1050000000
-    maximum: 9999999999
-    example: 1234567890
+channels:
+  crmEventsTopic:
+    address: fcp_sfd_crm_events
+    description: Topic for publishing events of the lifecycle of CRM cases
+    messages:
+      caseCreated:
+        $ref: '#/components/messages/caseCreated'
 
-  crmCaseType:
-    type: string
-    description: The name of the CRM queue where the case is to be created
-    minimum: 1
-    maximum: 100
-    example: 'CS_Agreement_Evidence'
-    # similar to the note made on the object processor service, this should be an enum once the case types are known 
+operations:
+  crmEvents:
+    actions: send
+    channel: 
+      $ref: '#/channels/crmEventsTopic'
+    description: |
+      Publish CRM events to the CRM events topic. This event is then passed to the Farming Data Model (FDM) service.
+    messages: 
+      $ref: '#/channels/crmEventsTopic/messages/caseCreated'
 
-  correlationId:
-    type: string
-    description: Unique identifier for tracing the CRM event through various systems and connecting related events together
-    format: uuid
-    example: '123e4567-e89b-12d3-a456-426655440000'
+components:
 
-  sbi: 
-    type: number
-    description: Single Business Identifier (consists of 9 digits)
-    minimum: 105000000
-    maximum: 999999999
-    example: 123456789
+  schemas:
+    CloudEventBase: 
+      type: object
+      required: [specversion, type, source, id, time, data]
+      properties:
+        specversion:
+          type: string
+          enum: ['1.0']
+        type: 
+          type: string
+          enum: ['uk.gov.fcp.sfd.crm.case.created']
+        source:
+          type: string
+          example: 'fcp-sfd-object-processor'
+        id:
+          type: string
+          format: uuid
+        time:
+          type: string
+          format: date-time
+        datacontenttype:
+          type: string
+          default: application/json
 
-  sourceSystem:
-    type: string
-    
+    crn:
+      type: number
+      description: Customer Reference Number (consists of 10 digits)
+      minimum: 1050000000
+      maximum: 9999999999
+      example: 1234567890
+
+    crmCaseType:
+      type: string
+      description: The name of the CRM queue where the case is to be created
+      minimum: 1
+      maximum: 100
+      example: 'CS_Agreement_Evidence'
+      # similar to the note made on the object processor service, this should be an enum once the case types are known 
+
+    correlationId:
+      type: string
+      description: Unique identifier for tracing the CRM event through various systems and connecting related events together
+      format: uuid
+      example: '123e4567-e89b-12d3-a456-426655440000'
+
+    sbi: 
+      type: number
+      description: Single Business Identifier (consists of 9 digits)
+      minimum: 105000000
+      maximum: 999999999
+      example: 123456789
+
+    sourceSystem:
+      type: string
+
