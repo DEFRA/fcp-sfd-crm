@@ -63,7 +63,7 @@ components:
               - correlationId
               - crn
               - sbi
-              - caseId           
+              - caseId
             properties:
               correlationId:
                 $ref: '#/components/schemas/correlationId'
@@ -73,6 +73,8 @@ components:
                 $ref: '#/components/schemas/sbi'
               caseId: 
                 $ref: '#/components/schemas/caseId'
+              onlineSubmissionActivities:
+                $ref: '#/components/schemas/onlineSubmissionActivities'
 
   schemas:
     id:
@@ -123,8 +125,24 @@ components:
       format: uuid
       description: Unique identifier of the case itself (equivalent to incidentid)
       example: '123e4567-e89b-12d3-a456-426655440000'
-    onlineSubmissionActivityId:
-      type: string
-      format: uuid
-      description: Unique identifier of the Online Submission Activity (OLS) created in association with the case
-      example: '123e4567-e89b-12d3-a456-426655440000'
+    onlineSubmissionActivity:
+      type: object
+      required:
+        - id
+        - time
+      description: Details associated with an individual Online Submission (OLS) Activity
+      properties:
+        id:
+          type: string
+          description: Unique identifier of the OLS Activity created in association with the case
+          format: uuid
+          example: '123e4567-e89b-12d3-a456-426655440000'
+        time:
+          type: string
+          description: Time OLS activity was created
+          format: date-time
+    onlineSubmissionActivities:
+      type: array
+      description: List of OLS activities associated with the case
+      items:
+        $ref: '#/components/schemas/onlineSubmissionActivity'
