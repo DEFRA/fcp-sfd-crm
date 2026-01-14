@@ -63,8 +63,7 @@ components:
               - correlationId
               - crn
               - sbi
-              - caseId
-              - caseType              
+              - caseId           
             properties:
               correlationId:
                 $ref: '#/components/schemas/correlationId'
@@ -74,14 +73,13 @@ components:
                 $ref: '#/components/schemas/sbi'
               caseId: 
                 $ref: '#/components/schemas/caseId'
-              caseType:
-                $ref: '#/components/schemas/caseType'
 
   schemas:
     id:
       type: string
       description: Unique identifier of the CloudEvent
       format: uuid
+      example: '123e4567-e89b-12d3-a456-426655440000'
     source:
       type: string
       description: Service responsible for creating the case
@@ -90,6 +88,7 @@ components:
       type: string
       description: Version of CloudEvents specification used by the event
       enum: ['1.0']
+      example: '1.0'
     type: 
       type: string
       description: The type of event in reverse DNS notation
@@ -122,12 +121,10 @@ components:
     caseId:
       type: string
       format: uuid
-      description: Unique identifier of the case itself
+      description: Unique identifier of the case itself (equivalent to incidentid)
       example: '123e4567-e89b-12d3-a456-426655440000'
-    caseType:
+    onlineSubmissionActivityId:
       type: string
-      description: The name of the CRM queue where the case is to be created
-      minimum: 1
-      maximum: 100
-      example: 'CS_Agreement_Evidence'
-      # similar to note on object processor service, should be an enum once case types are known 
+      format: uuid
+      description: Unique identifier of the Online Submission Activity (OLS) created in association with the case
+      example: '123e4567-e89b-12d3-a456-426655440000'
