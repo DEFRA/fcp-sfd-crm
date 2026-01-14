@@ -1,0 +1,156 @@
+asyncapi: 3.0.0
+info: 
+  title: Single Front Door CRM orchestration service
+  version: 1.0.0
+  description: Publish CRM event when new cases are created to the Farming Data Model (FDM) service.
+  license:
+    name: Open Government License v3.0
+    url: https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3
+
+defaultContentType: application/json
+
+channels:
+  crmEventsTopic:
+    address: fcp_sfd_crm_events
+    description: Topic for publishing events of the lifecycle of CRM cases
+    messages:
+      caseCreated:
+        $ref: '#/components/messages/caseCreated'
+
+operations:
+  crmEvents:
+    action: send
+    channel: 
+      $ref: '#/channels/crmEventsTopic'
+    description: |
+      Publish CRM events to the CRM events topic which is then passed to the Farming Data Model (FDM) service
+    messages: 
+      - $ref: '#/channels/crmEventsTopic/messages/caseCreated'
+
+components:
+  messages: 
+    caseCreated:
+      name: caseCreatedEvent
+      title: Case Created event
+      contentType: application/json
+      payload: 
+        type: object
+        required:
+          - id
+          - source
+          - specversion
+          - type
+          - datacontenttype
+          - time
+          - data
+        properties:
+          id:
+            $ref: '#/components/schemas/id'
+          source:
+            $ref: '#/components/schemas/source'
+          specversion:
+            $ref: '#/components/schemas/specversion'
+          type:
+            $ref: '#/components/schemas/type'
+          datacontenttype:
+            $ref: '#/components/schemas/datacontenttype'
+          time:
+            $ref: '#/components/schemas/time'
+          data:
+            type: object
+            additionalProperties: false
+            required:
+              - correlationId
+              - crn
+              - sbi
+              - caseId
+              - caseType
+            properties:
+              correlationId:
+                $ref: '#/components/schemas/correlationId'
+              crn:
+                $ref: '#/components/schemas/crn'
+              sbi:
+                $ref: '#/components/schemas/sbi'
+              caseId: 
+                $ref: '#/components/schemas/caseId'
+              caseType:
+                $ref: '#/components/schemas/caseType'
+              onlineSubmissionActivities:
+                $ref: '#/components/schemas/onlineSubmissionActivities'
+
+  schemas:
+    id:
+      type: string
+      description: Unique identifier of the CloudEvent
+      format: uuid
+      example: '123e4567-e89b-12d3-a456-426655440000'
+    source:
+      type: string
+      description: Service responsible for creating the case
+      example: 'fcp-sfd-object-processor'
+    specversion:
+      type: string
+      description: Version of CloudEvents specification used by the event
+      enum: ['1.0']
+      example: '1.0'
+    type: 
+      type: string
+      description: The type of event in reverse DNS notation
+      enum: ['uk.gov.fcp.sfd.crm.case.created'] 
+    datacontenttype:
+      type: string
+      description: Format of the CloudEvent data
+      default: application/json
+    time:
+      type: string
+      description: Time of when the event occurred
+      format: date-time
+    correlationId:
+      type: string
+      description: Unique identifier for associating the case to a related event e.g. object processor events
+      format: uuid
+      example: '123e4567-e89b-12d3-a456-426655440000'
+    crn:
+      type: number
+      description: Customer Reference Number (consists of 10 digits)
+      minimum: 1050000000
+      maximum: 9999999999
+      example: 1234567890
+    sbi: 
+      type: number
+      description: Single Business Identifier (consists of 9 digits)
+      minimum: 105000000
+      maximum: 999999999
+      example: 123456789
+    caseId:
+      type: string
+      format: uuid
+      description: Unique identifier of the case itself (equivalent to incidentid)
+      example: '123e4567-e89b-12d3-a456-426655440000'
+    caseType:
+      type: string
+      description: Descriptor to provide context on what the case relates to e.g. document upload
+      enum: ['DOCUMENT_UPLOAD']
+      example: 'DOCUMENT_UPLOAD'
+    onlineSubmissionActivity:
+      type: object
+      required:
+        - id
+        - time
+      description: Details associated with an individual Online Submission (OLS) Activity
+      properties:
+        id:
+          type: string
+          description: Unique identifier of the OLS Activity created in association with the case
+          format: uuid
+          example: '123e4567-e89b-12d3-a456-426655440000'
+        time:
+          type: string
+          description: Time OLS activity was created
+          format: date-time
+    onlineSubmissionActivities:
+      type: array
+      description: List of OLS activities associated with the case
+      items:
+        $ref: '#/components/schemas/onlineSubmissionActivity'
