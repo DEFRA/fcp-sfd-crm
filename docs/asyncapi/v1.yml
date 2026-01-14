@@ -15,7 +15,7 @@ channels:
     description: Topic for publishing events of the lifecycle of CRM cases
     messages:
       caseCreated:
-        $ref: '#/components/messages/caseCreatedEvent'
+        $ref: '#/components/messages/caseCreated'
 
 operations:
   crmEvents:
@@ -23,117 +23,111 @@ operations:
     channel: 
       $ref: '#/channels/crmEventsTopic'
     description: |
-      Publish CRM events to the CRM events topic. This event is then passed to the Farming Data Model (FDM) service.
+      Publish CRM events to the CRM events topic which is then passed to the Farming Data Model (FDM) service
     messages: 
       - $ref: '#/channels/crmEventsTopic/messages/caseCreated'
 
 components:
   messages: 
-    caseCreatedEvent:
-      name: CaseCreatedEvent
+    caseCreated:
+      name: caseCreatedEvent
       title: Case Created event
       contentType: application/json
       payload: 
-        $ref: '#/components/schemas/caseCreatedPayload'
+        type: object
+        required:
+          - id
+          - source
+          - specversion
+          - type
+          - datacontenttype
+          - time
+          - data
+        properties:
+          id:
+            $ref: '#/components/schemas/id'
+          source:
+            $ref: '#/components/schemas/source'
+          specversion:
+            $ref: '#/components/schemas/specversion'
+          type:
+            $ref: '#/components/schemas/type'
+          datacontenttype:
+            $ref: '#/components/schemas/datacontenttype'
+          time:
+            $ref: '#/components/schemas/time'
+          data:
+            type: object
+            additionalProperties: false
+            required:
+              - correlationId
+              - crn
+              - sbi
+              - caseId
+              - caseType              
+            properties:
+              correlationId:
+                $ref: '#/components/schemas/correlationId'
+              crn:
+                $ref: '#/components/schemas/crn'
+              sbi:
+                $ref: '#/components/schemas/sbi'
+              caseId: 
+                $ref: '#/components/schemas/caseId'
+              caseType:
+                $ref: '#/components/schemas/caseType'
 
-      
   schemas:
-    # Case payload schemas
-    caseCreatedPayload:
-      type: object
-      description: CloudEvent containing details of a created CRM case.
-      required:
-        - specversion
-        - type
-        - source
-        - id
-        - time
-        - datacontenttype
-        - data
-      properties:
-        specversion:
-          type: string
-          enum: ["1.0"]
-        type:
-          type: string
-          enum: ["uk.gov.fcp.sfd.crm.case.created"]
-        source:
-          type: string
-        id:
-          type: string
-          format: uuid
-        time:
-          type: string
-          format: date-time
-        datacontenttype:
-          type: string
-          default: application/json
-        data:
-          $ref: '#/components/schemas/caseCreatedData'
-
-    # Base CloudEvent schema
-    cloudEventBase: 
-      type: object
-      description: Cloud event properties
-      required: [specversion, type, source, id, time, datacontenttype]
-      properties:
-        specversion:
-          type: string
-          description: Version of CloudEvents specification used by the event
-          enum: ['1.0']
-        type: 
-          type: string
-          description: The type of event in reverse DNS notation
-          enum: ['uk.gov.fcp.sfd.crm.case.created'] 
-        source:
-          type: string
-          description: Service responsible for creating the case
-          example: 'fcp-sfd-object-processor'
-        id:
-          type: string
-          description: Unique identifier of the CloudEvent
-          format: uuid
-        time:
-          type: string
-          description: Time of when the event occurred
-          format: date-time
-        datacontenttype:
-          type: string
-          description: Format of the CloudEvent data
-          default: application/json
-
-    # Data schemas
-    caseCreatedData:
-      type: object
-      description: CRM case properties at the point of case creation
-      required: [correlationId, crn, sbi, caseId, caseType]
-      properties:
-        correlationId:
-          type: string
-          description: Unique identifier for associating the case to a related event e.g. object processor events
-          format: uuid
-          example: '123e4567-e89b-12d3-a456-426655440000'
-        crn:
-          type: number
-          description: Customer Reference Number (consists of 10 digits)
-          minimum: 1050000000
-          maximum: 9999999999
-          example: 1234567890
-        sbi: 
-          type: number
-          description: Single Business Identifier (consists of 9 digits)
-          minimum: 105000000
-          maximum: 999999999
-          example: 123456789
-        caseId:
-          type: string
-          format: uuid
-          description: Unique identifier of the case itself
-          example: '123e4567-e89b-12d3-a456-426655440000'
-        caseType:
-          type: string
-          description: The name of the CRM queue where the case is to be created
-          minimum: 1
-          maximum: 100
-          example: 'CS_Agreement_Evidence'
-          # similar to note on object processor service, should be an enum once case types are known 
+    id:
+      type: string
+      description: Unique identifier of the CloudEvent
+      format: uuid
+    source:
+      type: string
+      description: Service responsible for creating the case
+      example: 'fcp-sfd-object-processor'
+    specversion:
+      type: string
+      description: Version of CloudEvents specification used by the event
+      enum: ['1.0']
+    type: 
+      type: string
+      description: The type of event in reverse DNS notation
+      enum: ['uk.gov.fcp.sfd.crm.case.created'] 
+    datacontenttype:
+      type: string
+      description: Format of the CloudEvent data
+      default: application/json
+    time:
+      type: string
+      description: Time of when the event occurred
+      format: date-time
+    correlationId:
+      type: string
+      description: Unique identifier for associating the case to a related event e.g. object processor events
+      format: uuid
+      example: '123e4567-e89b-12d3-a456-426655440000'
+    crn:
+      type: number
+      description: Customer Reference Number (consists of 10 digits)
+      minimum: 1050000000
+      maximum: 9999999999
+      example: 1234567890
+    sbi: 
+      type: number
+      description: Single Business Identifier (consists of 9 digits)
+      minimum: 105000000
+      maximum: 999999999
+      example: 123456789
+    caseId:
+      type: string
+      format: uuid
+      description: Unique identifier of the case itself
+      example: '123e4567-e89b-12d3-a456-426655440000'
+    caseType:
+      type: string
+      description: The name of the CRM queue where the case is to be created
+      minimum: 1
+      maximum: 100
+      example: 'CS_Agreement_Evidence'
+      # similar to note on object processor service, should be an enum once case types are known 
