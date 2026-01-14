@@ -15,7 +15,7 @@ channels:
     description: Topic for publishing events of the lifecycle of CRM cases
     messages:
       caseCreated:
-        $ref: '#/components/messages/CaseCreatedEvent'
+        $ref: '#/components/messages/caseCreatedEvent'
 
 operations:
   crmEvents:
@@ -29,41 +29,36 @@ operations:
 
 components:
   messages: 
-    CaseCreatedEvent:
+    caseCreatedEvent:
       name: CaseCreatedEvent
       title: Case Created event
       contentType: application/json
       payload: 
-        $ref: '#/components/schemas/CaseCreatedPayload'
+        $ref: '#/components/schemas/caseCreatedPayload'
 
       
   schemas:
     # Case payload schemas
-    CaseCreatedPayload:
-      allOf:
-        - $ref: '#/components/schemas/CloudEventBase'
-        - type: object
-          properties: 
-            type:
-              type: string
-              enum: ['uk.gov.fcp.sfd.crm.case.created']
-            data:
-              $ref: '#/components/schemas/CaseCreatedData'
-
-    # Base CloudEvent schema
-    CloudEventBase: 
+    caseCreatedPayload:
       type: object
-      required: [specversion, type, source, id, time, data]
+      description: CloudEvent containing details of a created CRM case.
+      required:
+        - specversion
+        - type
+        - source
+        - id
+        - time
+        - datacontenttype
+        - data
       properties:
         specversion:
           type: string
-          enum: ['1.0']
-        type: 
+          enum: ["1.0"]
+        type:
           type: string
-          enum: ['uk.gov.fcp.sfd.crm.case.created'] 
+          enum: ["uk.gov.fcp.sfd.crm.case.created"]
         source:
           type: string
-          example: 'fcp-sfd-object-processor'
         id:
           type: string
           format: uuid
@@ -73,15 +68,49 @@ components:
         datacontenttype:
           type: string
           default: application/json
+        data:
+          $ref: '#/components/schemas/caseCreatedData'
+
+    # Base CloudEvent schema
+    cloudEventBase: 
+      type: object
+      description: Cloud event properties
+      required: [specversion, type, source, id, time, datacontenttype]
+      properties:
+        specversion:
+          type: string
+          description: Version of CloudEvents specification used by the event
+          enum: ['1.0']
+        type: 
+          type: string
+          description: The type of event in reverse DNS notation
+          enum: ['uk.gov.fcp.sfd.crm.case.created'] 
+        source:
+          type: string
+          description: Service responsible for creating the case
+          example: 'fcp-sfd-object-processor'
+        id:
+          type: string
+          description: Unique identifier of the CloudEvent
+          format: uuid
+        time:
+          type: string
+          description: Time of when the event occurred
+          format: date-time
+        datacontenttype:
+          type: string
+          description: Format of the CloudEvent data
+          default: application/json
 
     # Data schemas
-    CaseCreatedData:
+    caseCreatedData:
       type: object
-      required: [correlationId, crn, sbi, caseId, caseType, title, sourceSystem]
+      description: CRM case properties at the point of case creation
+      required: [correlationId, crn, sbi, caseId, caseType]
       properties:
         correlationId:
           type: string
-          description: Unique identifier for tracing the CRM event through various systems and connecting related events together
+          description: Unique identifier for associating the case to a related event e.g. object processor events
           format: uuid
           example: '123e4567-e89b-12d3-a456-426655440000'
         crn:
@@ -107,13 +136,4 @@ components:
           minimum: 1
           maximum: 100
           example: 'CS_Agreement_Evidence'
-          # similar to note made on object processor service, this should be an enum once case types are known 
-        title:
-          type: string
-          description: Title of CRM 
-          example: 'Agreement evidence - Jane Doe - 25-07-2026'
-          minLength: 1
-          maxLength: 200
-        sourceSystem:
-          type: string
-          example: 'fcp-sfd-crm'
+          # similar to note on object processor service, should be an enum once case types are known 
