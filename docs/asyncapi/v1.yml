@@ -64,6 +64,7 @@ components:
               - crn
               - sbi
               - caseId
+              - caseType
             properties:
               correlationId:
                 $ref: '#/components/schemas/correlationId'
@@ -73,6 +74,8 @@ components:
                 $ref: '#/components/schemas/sbi'
               caseId: 
                 $ref: '#/components/schemas/caseId'
+              caseType:
+                $ref: '#/components/schemas/caseType'
               onlineSubmissionActivities:
                 $ref: '#/components/schemas/onlineSubmissionActivities'
 
@@ -125,6 +128,11 @@ components:
       format: uuid
       description: Unique identifier of the case itself (equivalent to incidentid)
       example: '123e4567-e89b-12d3-a456-426655440000'
+    caseType:
+      type: string
+      description: Descriptor to provide context on what the case relates to e.g. document upload
+      enum: ['DOCUMENT_UPLOAD']
+      example: 'DOCUMENT_UPLOAD'
     onlineSubmissionActivity:
       type: object
       required:
