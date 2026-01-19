@@ -85,6 +85,34 @@ const createCase = async (authToken, contactId, accountId) => {
   }
 }
 
+const createOnlineSubmissionActivity = async (authToken, caseId, caseTitle, documentType, contactId, accountId) => {
+  try {
+    const payload = {
+      'regardingobjectid_incident_rpa_onlinesubmission@odata.bind': `/incidents(${caseId})`,
+      'rpa_SubmissionType_rpa_onlinesubmission@odata.bind': `/rpa_documentTypeses(${documentType})`,
+      'rpa_filesinsubmission': 0,
+      'rpa_onlinesubmission_activity_parties': [
+        {
+          participationtypemask: 1,
+          'partyid_contact@odata.bind': `/contacts(${contactId})`
+        },
+        {
+          participationtypemask: 11,
+          'partyid_account@odata.bind': `/accounts(${accountId})`
+        }
+      ],
+      rpa_onlinesubmissiondate: new Date(),
+      rpa_onlinesubmissionid: 1234567890,
+      rpa_genericcontrol1: 'BANKVERIFY,DEACTIVATE,FRAUD,PROBATE,INACTIVE',
+      rpa_genericerror1: 'Invalid CRN(s)',
+      rpa_genericcontrol2: '1234',
+      subject: `${caseTitle}`
+    }
+  } catch (err) {
+    
+  }
+}
+
 // Future: get document type
 // Future: create online submission (params dictate type)
 
