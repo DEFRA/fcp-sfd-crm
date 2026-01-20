@@ -85,18 +85,18 @@ const createCase = async (authToken, contactId, accountId) => {
   }
 }
 
-createCaseWithOnlineSubmissionActivityAndMetadata = async (request) => {
+const createCaseWithOnlineSubmissionActivityAndMetadata = async (request) => {
   try {
     const { authToken, case: caseData, onlineSubmissionActivity } = request
     const { title, caseDescription, contactId, accountId } = caseData
     const { subject, description, scheduledStart, scheduledEnd, stateCode, statusCode, metadata } = onlineSubmissionActivity
     const { name, documentType, fileUrl, copiedFileUrl } = metadata
-  
+
     const payload = {
       title,
       caseDescription,
       caseorigincode: 100000002,
-      prioritycode: 2, 
+      prioritycode: 2,
       'customerid_contact@odata.bind': `/contacts(${contactId})`,
       'rpa_Contact@odata.bind': `/contacts(${contactId})`,
       'rpa_Organisation@odata.bind': `/accounts(${accountId})`,
@@ -113,15 +113,17 @@ createCaseWithOnlineSubmissionActivityAndMetadata = async (request) => {
           statecode: stateCode,
           statuscode: statusCode,
           rpa_onlinesubmission_rpa_activitymetadata: [
-            rpa_name: name,
-            rpa_fileabsoluteurl: fileUrl,
-            rpa_copiedfileurl: copiedFileUrl,
-            'rpa_DocumentTypeMetaId@odata.bind': `/rpa_documenttypeses(${documentType})`
+            {
+              rpa_name: name,
+              rpa_fileabsoluteurl: fileUrl,
+              rpa_copiedfileurl: copiedFileUrl,
+              'rpa_DocumentTypeMetaId@odata.bind': `/rpa_documenttypeses(${documentType})`
+            }
           ]
         }
       ]
     }
-  
+
     const response = await fetch(`${baseUrl}/incidents`, {
       method: 'POST',
       headers: {
@@ -130,9 +132,9 @@ createCaseWithOnlineSubmissionActivityAndMetadata = async (request) => {
       },
       body: JSON.stringify(payload)
     })
-  
+
     const data = await response.json()
-  
+
     return {
       caseId: data.incidentid,
       error: null
@@ -153,4 +155,3 @@ export {
   createCase,
   createCaseWithOnlineSubmissionActivityAndMetadata
 }
-

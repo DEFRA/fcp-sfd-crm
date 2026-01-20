@@ -159,9 +159,9 @@ describe('CRM repository', () => {
     test('should create case with correct payload and return caseId', async () => {
       const mockResponse = {
         ok: true,
-        headers: {
-          get: vi.fn().mockReturnValue('https://crm.example.com/api/incidents(8bb8b45b-aba2-f011-bbd2-7ced8d4645a2)')
-        }
+        json: vi.fn().mockResolvedValue({
+          incidentid: '8bb8b45b-aba2-f011-bbd2-7ced8d4645a2'
+        })
       }
       global.fetch.mockResolvedValue(mockResponse)
 
@@ -195,15 +195,14 @@ describe('CRM repository', () => {
     test('should extract caseId from location header', async () => {
       const mockResponse = {
         ok: true,
-        headers: {
-          get: vi.fn().mockReturnValue('https://crm.example.com/api/incidents(abc-def-ghi-123)')
-        }
+        json: vi.fn().mockResolvedValue({
+          incidentid: 'abc-def-ghi-123'
+        })
       }
       global.fetch.mockResolvedValue(mockResponse)
 
       const { caseId, error } = await createCase('Bearer token', 'contact-id', 'account-id')
 
-      expect(mockResponse.headers.get).toHaveBeenCalledWith('location')
       expect(caseId).toBe('abc-def-ghi-123')
       expect(error).toBeNull()
     })
