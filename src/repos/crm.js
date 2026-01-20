@@ -70,8 +70,8 @@ const createCase = async (authToken, contactId, accountId) => {
       body: JSON.stringify(payload)
     })
 
-    const location = response.headers.get('location')
-    const caseId = location?.split('(')[1]?.split(')')[0]
+    const data = await response.json()
+    const caseId = data.incidentid
 
     return {
       caseId,
@@ -115,8 +115,8 @@ const createOnlineSubmissionActivity = async (authToken, caseId, caseTitle, docu
       body: JSON.stringify(payload)
     })
 
-    const location = response.headers.get('location')
-    const onlineSubmissionActivityId = location?.split('(')[1]?.split(')')[0]
+    const data = await response.json()
+    const onlineSubmissionActivityId = data.activityid
 
     return {
       onlineSubmissionActivityId,
