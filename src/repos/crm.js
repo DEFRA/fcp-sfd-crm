@@ -108,12 +108,34 @@ const createOnlineSubmissionActivity = async (authToken, caseId, caseTitle, docu
       rpa_genericcontrol2: '1234',
       subject: `${caseTitle}`
     }
+
+    const response = await fetch(`${baseUrl}/rpa_onlinesubmissions`, {
+      method: 'POST',
+      headers: { Authorization: authToken, ...baseHeaders },
+      body: JSON.stringify(payload)
+    })
+
+    const location = response.headers.get('location')
+    const onlineSubmissionActivityId = location?.split('(')[1]?.split(')')[0]
+
+    return {
+      onlineSubmissionActivityId,
+      error: null
+    }
   } catch (err) {
-    
+    return {
+      onlineSubmissionActivityId: null,
+      error: err.message
+    }
   }
 }
 
 // Future: get document type
-// Future: create online submission (params dictate type)
 
-export { getContactIdFromCrn, getAccountIdFromSbi, createCase }
+
+export { 
+  getContactIdFromCrn,
+  getAccountIdFromSbi,
+  createCase,
+  createOnlineSubmissionActivity
+}
