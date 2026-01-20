@@ -85,46 +85,61 @@ const createCase = async (authToken, contactId, accountId) => {
   }
 }
 
-const createOnlineSubmissionActivity = async (authToken, caseId, caseTitle, documentType, contactId, accountId) => {
+createCaseWithOnlineSubmissionActivityAndMetadata = async (request) => {
   try {
+    const { authToken, case: caseData, onlineSubmissionActivity } = request
+    const { title, description, contactId, accountId } = caseData
+    const { subject, description, scheduledStart, scheduledEnd, stateCode, statusCode, metadata } = onlineSubmissionActivity
+    const { name, documentType, fileUrl, copiedFileUrl } = metadata
+  
     const payload = {
-      'regardingobjectid_incident_rpa_onlinesubmission@odata.bind': `/incidents(${caseId})`,
-      'rpa_SubmissionType_rpa_onlinesubmission@odata.bind': `/rpa_documentTypeses(${documentType})`,
-      'rpa_filesinsubmission': 0,
-      'rpa_onlinesubmission_activity_parties': [
+      title,
+      description,
+      caseorigincode: 100000002,
+      prioritycode: 2, 
+      'customerid_contact@odata.bind': `/contacts(${contactId})`,
+      'rpa_Contact@odata.bind': `/contacts(${contactId})`,
+      'rpa_Organisation@odata.bind': `/accounts(${accountId})`,
+      rpa_isunknowncontact: false,
+      rpa_isunknownorganisation: false,
+      incident_rpa_onlinesubmissions: [
         {
-          participationtypemask: 1,
-          'partyid_contact@odata.bind': `/contacts(${contactId})`
-        },
-        {
-          participationtypemask: 11,
-          'partyid_account@odata.bind': `/accounts(${accountId})`
+          subject,
+          description,
+          scheduledstart: scheduledStart,
+          scheduledend: scheduledEnd,
+          rpa_onlinesubmissionid: 'OLS-2026-0001',
+          rpa_onlinesubmissiondate: new Date().toISOString(),
+          statecode: stateCode,
+          statuscode: statusCode,
+          rpa_onlinesubmission_rpa_activitymetadata: [
+            rpa_name: name,
+            rpa_fileabsoluteurl: fileUrl,
+            rpa_copiedfileurl: copiedFileUrl,
+            'rpa_DocumentTypeMetaId@odata.bind': `/rpa_documenttypeses(${documentType})`
+          ]
         }
-      ],
-      rpa_onlinesubmissiondate: new Date(),
-      rpa_onlinesubmissionid: 1234567890,
-      rpa_genericcontrol1: 'BANKVERIFY,DEACTIVATE,FRAUD,PROBATE,INACTIVE',
-      rpa_genericerror1: 'Invalid CRN(s)',
-      rpa_genericcontrol2: '1234',
-      subject: `${caseTitle}`
+      ]
     }
-
-    const response = await fetch(`${baseUrl}/rpa_onlinesubmissions`, {
+  
+    const response = await fetch(`${baseUrl}/incidents`, {
       method: 'POST',
-      headers: { Authorization: authToken, ...baseHeaders },
+      headers: {
+        Authorization: authToken,
+        ...baseHeaders
+      },
       body: JSON.stringify(payload)
     })
-
+  
     const data = await response.json()
-    const onlineSubmissionActivityId = data.activityid
-
+  
     return {
-      onlineSubmissionActivityId,
+      caseId: data.incidentid,
       error: null
     }
   } catch (err) {
     return {
-      onlineSubmissionActivityId: null,
+      caseId: null,
       error: err.message
     }
   }
@@ -132,10 +147,10 @@ const createOnlineSubmissionActivity = async (authToken, caseId, caseTitle, docu
 
 // Future: get document type
 
-
-export { 
+export {
   getContactIdFromCrn,
   getAccountIdFromSbi,
   createCase,
-  createOnlineSubmissionActivity
+  createCaseWithOnlineSubmissionActivityAndMetadata
 }
+
