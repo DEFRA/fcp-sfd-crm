@@ -88,13 +88,13 @@ const createCase = async (authToken, contactId, accountId) => {
 createCaseWithOnlineSubmissionActivityAndMetadata = async (request) => {
   try {
     const { authToken, case: caseData, onlineSubmissionActivity } = request
-    const { title, description, contactId, accountId } = caseData
+    const { title, caseDescription, contactId, accountId } = caseData
     const { subject, description, scheduledStart, scheduledEnd, stateCode, statusCode, metadata } = onlineSubmissionActivity
     const { name, documentType, fileUrl, copiedFileUrl } = metadata
   
     const payload = {
       title,
-      description,
+      caseDescription,
       caseorigincode: 100000002,
       prioritycode: 2, 
       'customerid_contact@odata.bind': `/contacts(${contactId})`,
