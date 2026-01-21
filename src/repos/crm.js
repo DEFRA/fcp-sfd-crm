@@ -85,7 +85,7 @@ const createCase = async (authToken, contactId, accountId) => {
   }
 }
 
-const createCaseWithOnlineSubmissionActivityAndMetadata = async (request) => {
+const createCaseWithOnlineSubmission = async (request) => {
   try {
     const { authToken, case: caseData, onlineSubmissionActivity } = request
     const { title, caseDescription, contactId, accountId } = caseData
@@ -153,5 +153,5 @@ export {
   getContactIdFromCrn,
   getAccountIdFromSbi,
   createCase,
-  createCaseWithOnlineSubmissionActivityAndMetadata
+  createCaseWithOnlineSubmission
 }

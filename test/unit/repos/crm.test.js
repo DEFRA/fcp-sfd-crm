@@ -217,4 +217,8 @@ describe('CRM repository', () => {
       expect(error).toBe('Network error')
     })
   })
+
+  describe('createCaseWithOnlineSubmissionActivityAndMetadata', () => {
+    
+  })
 })
