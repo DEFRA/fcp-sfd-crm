@@ -14,6 +14,49 @@ import { createCaseWithOnlineSubmissionInCrm } from './services/create-case-with
 
 const { constants: httpConstants } = http2
 
+const validateApiKeyHeader = () => ({
+  headers: Joi.object({
+    'x-api-key': Joi.string().valid(config.get('apiKeyForTestingCaseCreation')).required()
+  }).unknown(),
+  failAction: async (_request, h, error) => {
+    const headerError = Array.isArray(error?.details) &&
+      error.details.some(d => d?.context?.key === 'x-api-key')
+    if (headerError) {
+      return h
+        .response({ error: 'Missing or invalid QA-specific x-api-key header' })
+        .code(httpConstants.HTTP_STATUS_UNAUTHORIZED)
+        .takeover()
+    }
+    return h.continue
+  }
+})
+
+const postCreateCase = () => ({
+  method: 'POST',
+  path: '/create-case',
+  options: {
+    validate: validateApiKeyHeader(),
+    handler: async (request) => {
+      const authToken = await getCrmAuthToken()
+      const caseResult = await createCaseInCrm({ authToken, ...request.payload })
+      return { caseResult }
+    }
+  }
+})
+
+const postCreateCaseWithOnlineSubmission = () => ({
+  method: 'POST',
+  path: '/create-case-with-online-submission',
+  options: {
+    validate: validateApiKeyHeader(),
+    handler: async (request) => {
+      const authToken = await getCrmAuthToken()
+      const caseResult = await createCaseWithOnlineSubmissionInCrm({ authToken, ...request.payload })
+      return { caseResult }
+    }
+  }
+})
+
 const createServer = async () => {
   setupProxy()
 
@@ -53,68 +96,8 @@ const createServer = async () => {
 
   if (config.get('cdpEnvironment') !== 'prod') {
     server.route([
-      {
-        method: 'POST',
-        path: '/create-case',
-        options: {
-          validate: {
-            headers: Joi.object({
-              'x-api-key': Joi.string().valid(config.get('apiKeyForTestingCaseCreation')).required()
-            }).unknown(),
-            failAction: async (_request, h, error) => {
-              const headerError = Array.isArray(error?.details) &&
-                error.details.some(d => d?.context?.key === 'x-api-key')
-              if (headerError) {
-                return h
-                  .response({ error: 'Missing or invalid QA-specific x-api-key header' })
-                  .code(httpConstants.HTTP_STATUS_UNAUTHORIZED)
-                  .takeover()
-              }
-
-              return h.continue
-            }
-          },
-          handler: async (request) => {
-            const authToken = await getCrmAuthToken()
-            const caseResult = await createCaseInCrm({ authToken, ...request.payload })
-            return { caseResult }
-          }
-        }
-      },
-      {
-        method: 'POST',
-        path: '/create-case-with-online-submission',
-        options: {
-          validate: {
-            headers: Joi.object({
-              'x-api-key': Joi.string().valid(config.get('apiKeyForTestingCaseCreation')).required()
-            }).unknown(),
-            failAction: async (_request, h, error) => {
-              const headerError = Array.isArray(error?.details) &&
-                error.details.some(d => d?.context?.key === 'x-api-key')
-
-              if (headerError) {
-                return h
-                  .response({ error: 'Missing or invalid QA-specific x-api-key header' })
-                  .code(401)
-                  .takeover()
-              }
-
-              return h.continue
-            }
-          },
-          handler: async (request) => {
-            const authToken = await getCrmAuthToken()
-
-            const caseResult = await createCaseWithOnlineSubmissionInCrm({
-              authToken,
-              ...request.payload
-            })
-
-            return { caseResult }
-          }
-        }
-      }
+      postCreateCase(),
+      postCreateCaseWithOnlineSubmission()
     ])
   }
 
