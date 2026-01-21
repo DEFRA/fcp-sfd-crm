@@ -272,7 +272,7 @@ describe('CRM repository', () => {
 
       expect(payload).toMatchObject({
         title: 'Test case title',
-        caseDescription: 'Test case description',
+        description: 'Test case description',
         caseorigincode: 100000002,
         prioritycode: 2,
         'customerid_contact@odata.bind': '/contacts(contact-123)',
