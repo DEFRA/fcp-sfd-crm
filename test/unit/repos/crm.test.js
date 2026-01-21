@@ -14,7 +14,7 @@ vi.mock('../../../src/config/index.js', () => ({
 }))
 
 // Import after mocks
-const { getContactIdFromCrn, getAccountIdFromSbi, createCase } = await import('../../../src/repos/crm.js')
+const { getContactIdFromCrn, getAccountIdFromSbi, createCase, createCaseWithOnlineSubmission } = await import('../../../src/repos/crm.js')
 
 describe('CRM repository', () => {
   beforeEach(() => {
@@ -159,9 +159,9 @@ describe('CRM repository', () => {
     test('should create case with correct payload and return caseId', async () => {
       const mockResponse = {
         ok: true,
-        headers: {
-          get: vi.fn().mockReturnValue('https://crm.example.com/api/incidents(8bb8b45b-aba2-f011-bbd2-7ced8d4645a2)')
-        }
+        json: vi.fn().mockResolvedValue({
+          incidentid: '8bb8b45b-aba2-f011-bbd2-7ced8d4645a2'
+        })
       }
       global.fetch.mockResolvedValue(mockResponse)
 
@@ -192,18 +192,17 @@ describe('CRM repository', () => {
       expect(error).toBeNull()
     })
 
-    test('should extract caseId from location header', async () => {
+    test('should extract caseId from body', async () => {
       const mockResponse = {
         ok: true,
-        headers: {
-          get: vi.fn().mockReturnValue('https://crm.example.com/api/incidents(abc-def-ghi-123)')
-        }
+        json: vi.fn().mockResolvedValue({
+          incidentid: 'abc-def-ghi-123'
+        })
       }
       global.fetch.mockResolvedValue(mockResponse)
 
       const { caseId, error } = await createCase('Bearer token', 'contact-id', 'account-id')
 
-      expect(mockResponse.headers.get).toHaveBeenCalledWith('location')
       expect(caseId).toBe('abc-def-ghi-123')
       expect(error).toBeNull()
     })
@@ -216,6 +215,160 @@ describe('CRM repository', () => {
 
       expect(caseId).toBeNull()
       expect(error).toBe('Network error')
+    })
+  })
+
+  describe('createCaseWithOnlineSubmission', () => {
+    test('should create case with online submission activity using correct payload and return caseId', async () => {
+      const mockResponse = {
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          incidentid: '8bb8b45b-aba2-f011-bbd2-7ced8d4645a2'
+        })
+      }
+
+      global.fetch.mockResolvedValue(mockResponse)
+
+      const request = {
+        authToken: 'Bearer token',
+        case: {
+          title: 'Test case title',
+          caseDescription: 'Test case description',
+          contactId: 'contact-123',
+          accountId: 'account-456'
+        },
+        onlineSubmissionActivity: {
+          subject: 'Test submission subject',
+          description: 'Test submission description',
+          scheduledStart: '2026-01-01T10:00:00Z',
+          scheduledEnd: '2026-01-01T11:00:00Z',
+          stateCode: 0,
+          statusCode: 1,
+          metadata: {
+            name: 'test-document.pdf',
+            documentType: 'doc-type-789',
+            fileUrl: 'https://files.example.com/original.pdf',
+            copiedFileUrl: 'https://files.example.com/copied.pdf'
+          }
+        }
+      }
+
+      const { caseId, error } = await createCaseWithOnlineSubmission(request)
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        'https://crm.example.com/api/incidents',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer token',
+            'Content-Type': 'application/json',
+            Prefer: 'return=representation'
+          },
+          body: expect.any(String)
+        }
+      )
+
+      const payload = JSON.parse(global.fetch.mock.calls[0][1].body)
+
+      expect(payload).toMatchObject({
+        title: 'Test case title',
+        description: 'Test case description',
+        caseorigincode: 100000002,
+        prioritycode: 2,
+        'customerid_contact@odata.bind': '/contacts(contact-123)',
+        'rpa_Contact@odata.bind': '/contacts(contact-123)',
+        'rpa_Organisation@odata.bind': '/accounts(account-456)',
+        rpa_isunknowncontact: false,
+        rpa_isunknownorganisation: false
+      })
+
+      expect(payload.incident_rpa_onlinesubmissions).toHaveLength(1)
+
+      const submission = payload.incident_rpa_onlinesubmissions[0]
+
+      expect(submission).toMatchObject({
+        subject: 'Test submission subject',
+        description: 'Test submission description',
+        scheduledstart: '2026-01-01T10:00:00Z',
+        scheduledend: '2026-01-01T11:00:00Z',
+        statecode: 0,
+        statuscode: 1
+      })
+
+      expect(submission.rpa_onlinesubmission_rpa_activitymetadata[0]).toEqual({
+        rpa_name: 'test-document.pdf',
+        rpa_fileabsoluteurl: 'https://files.example.com/original.pdf',
+        rpa_copiedfileurl: 'https://files.example.com/copied.pdf',
+        'rpa_DocumentTypeMetaId@odata.bind': '/rpa_documenttypeses(doc-type-789)'
+      })
+
+      expect(caseId).toBe('8bb8b45b-aba2-f011-bbd2-7ced8d4645a2')
+      expect(error).toBeNull()
+    })
+
+    test('should return error when fetch throws', async () => {
+      global.fetch.mockRejectedValue(new Error('Network error'))
+
+      const { caseId, error } = await createCaseWithOnlineSubmission({
+        authToken: 'Bearer token',
+        case: {
+          title: 'Test',
+          caseDescription: 'Test',
+          contactId: 'contact-123',
+          accountId: 'account-456'
+        },
+        onlineSubmissionActivity: {
+          subject: 'Subject',
+          description: 'Description',
+          scheduledStart: '2026-01-01T10:00:00Z',
+          scheduledEnd: '2026-01-01T11:00:00Z',
+          stateCode: 0,
+          statusCode: 1,
+          metadata: {
+            name: 'file.pdf',
+            documentType: 'doc-type',
+            fileUrl: 'url',
+            copiedFileUrl: 'copied-url'
+          }
+        }
+      })
+
+      expect(caseId).toBeNull()
+      expect(error).toBe('Network error')
+    })
+
+    test('should return error when response json parsing fails', async () => {
+      global.fetch.mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockRejectedValue(new Error('Invalid JSON'))
+      })
+
+      const { caseId, error } = await createCaseWithOnlineSubmission({
+        authToken: 'Bearer token',
+        case: {
+          title: 'Test',
+          caseDescription: 'Test',
+          contactId: 'contact-123',
+          accountId: 'account-456'
+        },
+        onlineSubmissionActivity: {
+          subject: 'Subject',
+          description: 'Description',
+          scheduledStart: '2026-01-01T10:00:00Z',
+          scheduledEnd: '2026-01-01T11:00:00Z',
+          stateCode: 0,
+          statusCode: 1,
+          metadata: {
+            name: 'file.pdf',
+            documentType: 'doc-type',
+            fileUrl: 'url',
+            copiedFileUrl: 'copied-url'
+          }
+        }
+      })
+
+      expect(caseId).toBeNull()
+      expect(error).toBe('Invalid JSON')
     })
   })
 })

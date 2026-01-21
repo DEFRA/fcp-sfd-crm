@@ -1,6 +1,4 @@
 import { describe, it, beforeEach, afterEach, afterAll, vi, expect } from 'vitest'
-import { config } from '../../src/config/index.js'
-import { createServer } from '../../src/server.js'
 
 vi.mock('../../src/config/index.js', () => ({
   config: {
@@ -20,7 +18,25 @@ vi.mock('../../src/config/index.js', () => ({
   }
 }))
 
-describe('POST /create-case', () => {
+vi.mock('../../src/auth/get-crm-auth-token.js', () => ({
+  getCrmAuthToken: vi.fn().mockResolvedValue('token')
+}))
+
+vi.mock('../../src/services/create-case-in-crm.js', () => ({
+  createCaseInCrm: vi.fn().mockResolvedValue({ id: 123 })
+}))
+
+vi.mock('../../src/services/create-case-with-online-submission-in-crm.js', () => ({
+  createCaseWithOnlineSubmissionInCrm: vi.fn().mockResolvedValue({ caseId: '123-abc' })
+}))
+
+const { config } = await import('../../src/config/index.js')
+const { getCrmAuthToken } = await import('../../src/auth/get-crm-auth-token.js')
+const { createCaseInCrm } = await import('../../src/services/create-case-in-crm.js')
+const { createCaseWithOnlineSubmissionInCrm } = await import('../../src/services/create-case-with-online-submission-in-crm.js')
+const { createServer } = await import('../../src/server.js')
+
+describe('POST methods for creating cases in CRM', () => {
   describe('in a non-prod environment', () => {
     let server
 
@@ -45,7 +61,7 @@ describe('POST /create-case', () => {
     })
 
     afterEach(async () => {
-      vi.resetAllMocks()
+      vi.clearAllMocks()
     })
 
     afterAll(async () => {
@@ -54,37 +70,30 @@ describe('POST /create-case', () => {
       }
     })
 
-    it('returns 401 if API key is missing', async () => {
+    it('returns 401 if API key is missing on /create-case', async () => {
       const res = await server.inject({
         method: 'POST',
         url: '/create-case',
         payload: { foo: 'bar' }
       })
+
       expect(res.statusCode).toBe(401)
       expect(JSON.parse(res.payload)).toEqual({ error: 'Missing or invalid QA-specific x-api-key header' })
     })
 
-    it('returns 401 if API key is invalid', async () => {
+    it('returns 401 if API key is invalid on /create-case', async () => {
       const res = await server.inject({
         method: 'POST',
         url: '/create-case',
         headers: { 'x-api-key': 'wrong-key' },
         payload: { foo: 'bar' }
       })
+
       expect(res.statusCode).toBe(401)
       expect(JSON.parse(res.payload)).toEqual({ error: 'Missing or invalid QA-specific x-api-key header' })
     })
 
     it('calls createCaseInCrm and returns result if API key is valid', async () => {
-      vi.mock('../../src/auth/get-crm-auth-token.js', () => ({
-        getCrmAuthToken: vi.fn().mockResolvedValue('token')
-      }))
-      vi.mock('../../src/services/create-case-in-crm.js', () => ({
-        createCaseInCrm: vi.fn().mockResolvedValue({ id: 123 })
-      }))
-      const { getCrmAuthToken } = await import('../../src/auth/get-crm-auth-token.js')
-      const { createCaseInCrm } = await import('../../src/services/create-case-in-crm.js')
-
       const res = await server.inject({
         method: 'POST',
         url: '/create-case',
@@ -96,6 +105,63 @@ describe('POST /create-case', () => {
       expect(createCaseInCrm).toHaveBeenCalledWith({ authToken: 'token', foo: 'bar' })
       expect(res.statusCode).toBe(200)
       expect(JSON.parse(res.payload)).toEqual({ caseResult: { id: 123 } })
+    })
+
+    it('returns 401 if API key is missing on /create-case-with-online-submission', async () => {
+      const res = await server.inject({
+        method: 'POST',
+        url: '/create-case-with-online-submission',
+        payload: { foo: 'bar' }
+      })
+
+      expect(res.statusCode).toBe(401)
+      expect(JSON.parse(res.payload)).toEqual({ error: 'Missing or invalid QA-specific x-api-key header' })
+    })
+
+    it('returns 401 if API key is invalid on /create-case-with-online-submission', async () => {
+      const res = await server.inject({
+        method: 'POST',
+        url: '/create-case-with-online-submission',
+        headers: { 'x-api-key': 'wrong-key' },
+        payload: { foo: 'bar' }
+      })
+
+      expect(res.statusCode).toBe(401)
+      expect(JSON.parse(res.payload)).toEqual({ error: 'Missing or invalid QA-specific x-api-key header' })
+    })
+
+    it('calls createCaseWithOnlineSubmissionInCrm if API key is valid', async () => {
+      const payload = {
+        crn: '123456',
+        sbi: '654321',
+        caseData: { title: 'Test case', caseDescription: 'Desc' },
+        onlineSubmissionActivity: {
+          subject: 'Subj',
+          description: 'Sub Desc',
+          scheduledStart: '2026-01-01T10:00:00Z',
+          scheduledEnd: '2026-01-01T11:00:00Z',
+          stateCode: 0,
+          statusCode: 1,
+          metadata: {
+            name: 'file.pdf',
+            documentType: 'doc-type',
+            fileUrl: 'https://file.url',
+            copiedFileUrl: 'https://copied.file.url'
+          }
+        }
+      }
+
+      const res = await server.inject({
+        method: 'POST',
+        url: '/create-case-with-online-submission',
+        headers: { 'x-api-key': 'test-api-key' },
+        payload
+      })
+
+      expect(getCrmAuthToken).toHaveBeenCalled()
+      expect(createCaseWithOnlineSubmissionInCrm).toHaveBeenCalledWith({ authToken: 'token', ...payload })
+      expect(res.statusCode).toBe(200)
+      expect(JSON.parse(res.payload)).toEqual({ caseResult: { caseId: '123-abc' } })
     })
   })
 
@@ -123,7 +189,7 @@ describe('POST /create-case', () => {
     })
 
     afterEach(async () => {
-      vi.resetAllMocks()
+      vi.clearAllMocks()
     })
 
     afterAll(async () => {
@@ -131,15 +197,29 @@ describe('POST /create-case', () => {
         await server.stop()
       }
     })
-    it('returns 404 if route does not exist in prod', async () => {
+
+    it('returns 404 if route does not exist in prod on /create-case', async () => {
       const res = await server.inject({
         method: 'POST',
         url: '/create-case',
         headers: { 'x-api-key': 'test-api-key' },
         payload: { foo: 'bar' }
       })
+
       expect(res.statusCode).toBe(404)
-      expect(JSON.parse(res.payload)).toEqual({ error: 'Not Found', message: 'Not Found', statusCode: 404, })
+      expect(JSON.parse(res.payload)).toEqual({ error: 'Not Found', message: 'Not Found', statusCode: 404 })
+    })
+
+    it('returns 404 if route does not exist in prod on /create-case-with-online-submission', async () => {
+      const res = await server.inject({
+        method: 'POST',
+        url: '/create-case-with-online-submission',
+        headers: { 'x-api-key': 'test-api-key' },
+        payload: { foo: 'bar' }
+      })
+
+      expect(res.statusCode).toBe(404)
+      expect(JSON.parse(res.payload)).toEqual({ error: 'Not Found', message: 'Not Found', statusCode: 404 })
     })
   })
 })

@@ -1,0 +1,109 @@
+import { describe, test, expect, vi, beforeEach } from 'vitest'
+
+const mockLogger = { error: vi.fn() }
+
+vi.mock('../../../src/logging/logger.js', () => ({
+  createLogger: () => mockLogger
+}))
+
+vi.mock('../../../src/repos/crm.js', () => ({
+  getContactIdFromCrn: vi.fn(),
+  getAccountIdFromSbi: vi.fn(),
+  createCaseWithOnlineSubmission: vi.fn()
+}))
+
+const { createCaseWithOnlineSubmissionInCrm } = await import('../../../src/services/create-case-with-online-submission-in-crm.js')
+const { getContactIdFromCrn, getAccountIdFromSbi, createCaseWithOnlineSubmission } = await import('../../../src/repos/crm.js')
+
+describe('createCaseWithOnlineSubmissionInCrm service', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  test('returns contactId, accountId, and caseId on success', async () => {
+    getContactIdFromCrn.mockResolvedValue({ contactId: 'mock-contact-id' })
+    getAccountIdFromSbi.mockResolvedValue({ accountId: 'mock-account-id' })
+    createCaseWithOnlineSubmission.mockResolvedValue({ caseId: 'mock-case-id', error: null })
+
+    const request = {
+      authToken: 'mock-bearer-token',
+      crn: 'mock-crn',
+      sbi: 'mock-sbi',
+      caseData: { title: 'Test Case', caseDescription: 'Test description' },
+      onlineSubmissionActivity: { subject: 'Test', description: 'Test submission' }
+    }
+
+    const result = await createCaseWithOnlineSubmissionInCrm(request)
+
+    expect(getContactIdFromCrn).toHaveBeenCalledWith('mock-bearer-token', 'mock-crn')
+    expect(getAccountIdFromSbi).toHaveBeenCalledWith('mock-bearer-token', 'mock-sbi')
+    expect(createCaseWithOnlineSubmission).toHaveBeenCalledWith({
+      authToken: 'mock-bearer-token',
+      case: { ...request.caseData, contactId: 'mock-contact-id', accountId: 'mock-account-id' },
+      onlineSubmissionActivity: request.onlineSubmissionActivity
+    })
+
+    expect(result).toEqual({
+      contactId: 'mock-contact-id',
+      accountId: 'mock-account-id',
+      caseId: 'mock-case-id'
+    })
+  })
+
+  test('throws error if required parameters are missing', async () => {
+    await expect(createCaseWithOnlineSubmissionInCrm({
+      authToken: null,
+      crn: null,
+      sbi: null,
+      caseData: null,
+      onlineSubmissionActivity: null
+    })).rejects.toThrow('Missing required parameter: authToken')
+
+    expect(mockLogger.error).toHaveBeenCalledWith('Missing required parameter: authToken')
+  })
+
+  test('throws error if contact not found', async () => {
+    getContactIdFromCrn.mockResolvedValue({ contactId: null, error: 'Not found' })
+
+    await expect(createCaseWithOnlineSubmissionInCrm({
+      authToken: 'mock-bearer-token',
+      crn: 'mock-crn',
+      sbi: 'mock-sbi',
+      caseData: {},
+      onlineSubmissionActivity: {}
+    })).rejects.toThrow('Contact ID not found')
+
+    expect(mockLogger.error).toHaveBeenCalledWith('No contact found for CRN: mock-crn, error: Not found')
+  })
+
+  test('throws error if account not found', async () => {
+    getContactIdFromCrn.mockResolvedValue({ contactId: 'mock-contact-id' })
+    getAccountIdFromSbi.mockResolvedValue({ accountId: null, error: 'Not found' })
+
+    await expect(createCaseWithOnlineSubmissionInCrm({
+      authToken: 'mock-bearer-token',
+      crn: 'mock-crn',
+      sbi: 'mock-sbi',
+      caseData: {},
+      onlineSubmissionActivity: {}
+    })).rejects.toThrow('Account ID not found')
+
+    expect(mockLogger.error).toHaveBeenCalledWith('No account found for SBI: mock-sbi, error: Not found')
+  })
+
+  test('throws error if createCaseWithOnlineSubmission returns error', async () => {
+    getContactIdFromCrn.mockResolvedValue({ contactId: 'mock-contact-id' })
+    getAccountIdFromSbi.mockResolvedValue({ accountId: 'mock-account-id' })
+    createCaseWithOnlineSubmission.mockResolvedValue({ caseId: null, error: 'CRM service failed' })
+
+    await expect(createCaseWithOnlineSubmissionInCrm({
+      authToken: 'mock-bearer-token',
+      crn: 'mock-crn',
+      sbi: 'mock-sbi',
+      caseData: {},
+      onlineSubmissionActivity: {}
+    })).rejects.toThrow('Unable to create case with online submission activity in CRM')
+
+    expect(mockLogger.error).toHaveBeenCalledWith('Error creating case with online submission activity: CRM service failed')
+  })
+})

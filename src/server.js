@@ -8,8 +8,54 @@ import { secureContext } from './api/common/helpers/secure-context/secure-contex
 import { pulse } from './api/common/helpers/pulse.js'
 import { requestTracing } from './api/common/helpers/request-tracing.js'
 import { setupProxy } from './api/common/helpers/proxy/setup-proxy.js'
+import { getCrmAuthToken } from './auth/get-crm-auth-token.js'
+import { createCaseInCrm } from './services/create-case-in-crm.js'
+import { createCaseWithOnlineSubmissionInCrm } from './services/create-case-with-online-submission-in-crm.js'
 
 const { constants: httpConstants } = http2
+
+const validateApiKeyHeader = () => ({
+  headers: Joi.object({
+    'x-api-key': Joi.string().valid(config.get('apiKeyForTestingCaseCreation')).required()
+  }).unknown(),
+  failAction: async (_request, h, error) => {
+    const headerError = Array.isArray(error?.details) &&
+      error.details.some(d => d?.context?.key === 'x-api-key')
+    if (headerError) {
+      return h
+        .response({ error: 'Missing or invalid QA-specific x-api-key header' })
+        .code(httpConstants.HTTP_STATUS_UNAUTHORIZED)
+        .takeover()
+    }
+    return h.continue
+  }
+})
+
+const postCreateCase = () => ({
+  method: 'POST',
+  path: '/create-case',
+  options: {
+    validate: validateApiKeyHeader(),
+    handler: async (request) => {
+      const authToken = await getCrmAuthToken()
+      const caseResult = await createCaseInCrm({ authToken, ...request.payload })
+      return { caseResult }
+    }
+  }
+})
+
+const postCreateCaseWithOnlineSubmission = () => ({
+  method: 'POST',
+  path: '/create-case-with-online-submission',
+  options: {
+    validate: validateApiKeyHeader(),
+    handler: async (request) => {
+      const authToken = await getCrmAuthToken()
+      const caseResult = await createCaseWithOnlineSubmissionInCrm({ authToken, ...request.payload })
+      return { caseResult }
+    }
+  }
+})
 
 const createServer = async () => {
   setupProxy()
@@ -50,36 +96,8 @@ const createServer = async () => {
 
   if (config.get('cdpEnvironment') !== 'prod') {
     server.route([
-      {
-        method: 'POST',
-        path: '/create-case',
-        options: {
-          validate: {
-            headers: Joi.object({
-              'x-api-key': Joi.string().valid(config.get('apiKeyForTestingCaseCreation')).required()
-            }).unknown(),
-            failAction: async function (_request, h, error) {
-              const headerError = Array.isArray(error?.details) &&
-                error.details.some(d => d?.context?.key === 'x-api-key')
-              if (headerError) {
-                return h
-                  .response({ error: 'Missing or invalid QA-specific x-api-key header' })
-                  .code(httpConstants.HTTP_STATUS_UNAUTHORIZED)
-                  .takeover()
-              }
-
-              return h.continue
-            }
-          },
-          handler: async (request) => {
-            const { getCrmAuthToken } = await import('./auth/get-crm-auth-token.js')
-            const { createCaseInCrm } = await import('./services/create-case-in-crm.js')
-            const authToken = await getCrmAuthToken()
-            const caseResult = await createCaseInCrm({ authToken, ...request.payload })
-            return { caseResult }
-          }
-        }
-      }
+      postCreateCase(),
+      postCreateCaseWithOnlineSubmission()
     ])
   }
 
