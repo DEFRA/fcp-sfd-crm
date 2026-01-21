@@ -1,24 +1,26 @@
-import { createLogger } from '../logging/logger.js'
 import {
   getContactIdFromCrn,
   getAccountIdFromSbi,
   createCaseWithOnlineSubmission
 } from '../repos/crm.js'
+import { createLogger } from '../logging/logger.js'
 
 const logger = createLogger()
 
 export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi, caseData, onlineSubmissionActivity }) => {
-  if (!authToken || !crn || !sbi || !caseData || !onlineSubmissionActivity) {
-    const missingParameters = {
-      ...(!authToken && { authToken: 'missing' }),
-      ...(!crn && { crn: 'missing' }),
-      ...(!sbi && { sbi: 'missing' }),
-      ...(!caseData && { caseData: 'missing' }),
-      ...(!onlineSubmissionActivity && { onlineSubmissionActivity: 'missing' })
-    }
+  const requiredParams = {
+    authToken,
+    crn,
+    sbi,
+    caseData,
+    onlineSubmissionActivity
+  }
 
-    logger.error(`Missing required parameters: ${Object.keys(missingParameters).join(', ')}`)
-    throw new Error(`Missing required parameters: ${Object.keys(missingParameters).join(', ')}`)
+  for (const [param, value] of Object.entries(requiredParams)) {
+    if (!value) {
+      logger.error(`Missing required parameter: ${param}`)
+      throw new Error(`Missing required parameter: ${param}`)
+    }
   }
 
   const contactObj = await getContactIdFromCrn(authToken, crn)
