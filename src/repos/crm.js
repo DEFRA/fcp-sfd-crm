@@ -94,7 +94,7 @@ const createCaseWithOnlineSubmission = async (request) => {
 
     const payload = {
       title,
-      caseDescription,
+      description: caseDescription,
       caseorigincode: 100000002,
       prioritycode: 2,
       'customerid_contact@odata.bind': `/contacts(${contactId})`,
