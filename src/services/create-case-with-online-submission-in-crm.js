@@ -1,3 +1,5 @@
+import http2 from 'node:http2'
+import Boom from '@hapi/boom'
 import {
   getContactIdFromCrn,
   getAccountIdFromSbi,
@@ -5,7 +7,14 @@ import {
 } from '../repos/crm.js'
 import { createLogger } from '../logging/logger.js'
 
+const { constants: httpConstants } = http2
+const { badRequest, boomify, internal } = Boom
 const logger = createLogger()
+
+const unprocessableEntity = (message) => {
+  const error = new Error(message)
+  return boomify(error, { statusCode: httpConstants.HTTP_STATUS_UNPROCESSABLE_ENTITY })
+}
 
 export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi, caseData, onlineSubmissionActivity }) => {
   const requiredParams = {
@@ -19,7 +28,7 @@ export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi,
   for (const [param, value] of Object.entries(requiredParams)) {
     if (!value) {
       logger.error(`Missing required parameter: ${param}`)
-      throw new Error(`Missing required parameter: ${param}`)
+      throw badRequest(`Missing required parameter: ${param}`)
     }
   }
 
@@ -28,7 +37,7 @@ export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi,
 
   if (!contactId) {
     logger.error(`No contact found for CRN: ${crn}, error: ${contactObj?.error}`)
-    throw new Error('Contact ID not found')
+    throw unprocessableEntity('Contact ID not found')
   }
 
   const accountObj = await getAccountIdFromSbi(authToken, sbi)
@@ -36,7 +45,7 @@ export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi,
 
   if (!accountId) {
     logger.error(`No account found for SBI: ${sbi}, error: ${accountObj?.error}`)
-    throw new Error('Account ID not found')
+    throw unprocessableEntity('Account ID not found')
   }
 
   const { caseId, error } = await createCaseWithOnlineSubmission({
@@ -51,7 +60,7 @@ export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi,
 
   if (error) {
     logger.error(`Error creating case with online submission activity: ${error}`)
-    throw new Error('Unable to create case with online submission activity in CRM')
+    throw internal('Unable to create case with online submission activity in CRM')
   }
 
   return {
