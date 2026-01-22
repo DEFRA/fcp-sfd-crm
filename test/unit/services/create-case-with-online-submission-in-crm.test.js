@@ -65,13 +65,19 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
   test('throws error if contact not found', async () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: null, error: 'Not found' })
 
-    await expect(createCaseWithOnlineSubmissionInCrm({
-      authToken: 'mock-bearer-token',
-      crn: 'mock-crn',
-      sbi: 'mock-sbi',
-      caseData: {},
-      onlineSubmissionActivity: {}
-    })).rejects.toThrow('Contact ID not found')
+    await expect(
+      createCaseWithOnlineSubmissionInCrm({
+        authToken: 'mock-bearer-token',
+        crn: 'mock-crn',
+        sbi: 'mock-sbi',
+        caseData: {},
+        onlineSubmissionActivity: {}
+      })
+    ).rejects.toMatchObject({
+      isBoom: true,
+      message: 'Contact ID not found',
+      output: { statusCode: 422 }
+    })
 
     expect(mockLogger.error).toHaveBeenCalledWith('No contact found for CRN: mock-crn, error: Not found')
   })
@@ -80,13 +86,19 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: 'mock-contact-id' })
     getAccountIdFromSbi.mockResolvedValue({ accountId: null, error: 'Not found' })
 
-    await expect(createCaseWithOnlineSubmissionInCrm({
-      authToken: 'mock-bearer-token',
-      crn: 'mock-crn',
-      sbi: 'mock-sbi',
-      caseData: {},
-      onlineSubmissionActivity: {}
-    })).rejects.toThrow('Account ID not found')
+    await expect(
+      createCaseWithOnlineSubmissionInCrm({
+        authToken: 'mock-bearer-token',
+        crn: 'mock-crn',
+        sbi: 'mock-sbi',
+        caseData: {},
+        onlineSubmissionActivity: {}
+      })
+    ).rejects.toMatchObject({
+      isBoom: true,
+      message: 'Account ID not found',
+      output: { statusCode: 422 }
+    })
 
     expect(mockLogger.error).toHaveBeenCalledWith('No account found for SBI: mock-sbi, error: Not found')
   })
