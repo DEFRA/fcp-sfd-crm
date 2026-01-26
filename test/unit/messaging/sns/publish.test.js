@@ -1,6 +1,6 @@
 import { vi, describe, beforeEach, test, expect } from 'vitest'
 import { PublishCommand } from '@aws-sdk/client-sns'
-import { publish } from '../../../src/sns/publish.js'
+import { publish } from '../../../../src/messaging/sns/publish.js'
 
 const mockSnsClient = {
   send: vi.fn()
@@ -14,7 +14,7 @@ describe('SNS Publish', () => {
   })
 
   test('should receive and execute publish command', async () => {
-    const topicArn = 'arn:aws:sns:eu-west-2:000000000000:fcp_fdm_events'
+    const topicArn = 'arn:aws:sns:eu-west-2:000000000000:fcp_sfd_crm_events'
 
     const message = {
       test: 'hello world',
@@ -24,7 +24,7 @@ describe('SNS Publish', () => {
     await publish(mockSnsClient, topicArn, message)
 
     expect(PublishCommand).toHaveBeenCalledWith({
-      TopicArn: 'arn:aws:sns:eu-west-2:000000000000:fcp_fdm_events',
+      TopicArn: 'arn:aws:sns:eu-west-2:000000000000:fcp_sfd_crm_events',
       Message: JSON.stringify(message)
     })
 
