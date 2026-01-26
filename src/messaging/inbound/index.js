@@ -1,15 +1,19 @@
 import AWS from 'aws-sdk'
 import { config } from '../../config/index.js'
 import { handleMessage } from './messageHandler.js'
-import { createLogger } from './logging/logger.js'
+import { createLogger } from '../../logging/logger.js'
 
 const logger = createLogger()
-
 AWS.config.update({ region: config.get('queue.region') })
 
 const sqs = new AWS.SQS({ apiVersion: '2012-11-05' })
 
-export async function pollInboundMessages() {
+/**
+ * Poll messages from the inbound queue.
+ *
+ * @param {function} delayFn - optional function to wait between polls (default: setTimeout)
+ */
+export async function pollInboundMessages(delayFn = (fn, ms) => setTimeout(fn, ms)) {
     try {
         const data = await sqs.receiveMessage({
             QueueUrl: config.get('queue.url'),
@@ -35,5 +39,5 @@ export async function pollInboundMessages() {
         logger.error('Inbound polling error', err)
     }
 
-    setTimeout(pollInboundMessages, config.get('queue.pollIntervalMs'))
+    delayFn(() => pollInboundMessages(delayFn), config.get('queue.pollIntervalMs'))
 }
