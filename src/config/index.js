@@ -3,13 +3,15 @@ import convictFormatWithValidator from 'convict-format-with-validator'
 import { serverConfig } from './server.js'
 import { authConfig } from './auth.js'
 import { crmConfig } from './crm.js'
+import { queueConfig } from './queue.js'
 
 convict.addFormats(convictFormatWithValidator)
 
 const config = convict({
   ...serverConfig,
   ...authConfig,
-  ...crmConfig
+  ...crmConfig,
+  ...queueConfig
 })
 
 config.validate({ allowed: 'strict' })
