@@ -37,7 +37,7 @@ describe('CRM repository', () => {
         "https://crm.example.com/api/contacts?%24select=contactid&%24filter=rpa_capcustomerid%20eq%20'1234567890'",
         {
           method: 'GET',
-          headers: { Authorization: 'Bearer token', Prefer: 'return=representation', 'Content-Type': 'application/json', }
+          headers: { Authorization: 'Bearer token', Prefer: 'return=representation', 'Content-Type': 'application/json' }
         }
       )
       expect(result).toEqual({ contactId: '6ff3f89f-efe6-f455-fff6-bfff1f808e6' })
