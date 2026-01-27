@@ -1,5 +1,5 @@
 import { vi, describe, beforeEach, test, expect } from 'vitest'
-// import { createLogger } from '../../../../../src/logging/logger.js'
+import { createLogger } from '../../../../../src/logging/logger.js'
 import { snsClient } from '../../../../../src/messaging/sns/client.js'
 import { publish } from '../../../../../src/messaging/sns/publish.js'
 import { publishReceivedRequest } from '../../../../../src/messaging/outbound/received-request/publish-received-request.js'
@@ -15,7 +15,7 @@ vi.mock('../../../../../src/logging/logger.js', () => ({
   })
 }))
 
-// const mockLogger = createLogger()
+const mockLogger = createLogger()
 
 describe('Publish received request', () => {
   beforeEach(() => {
@@ -33,6 +33,34 @@ describe('Publish received request', () => {
       expect.objectContaining({
         type: 'uk.gov.fcp.sfd.crm.case.created'
       })
+    )
+  })
+
+  test('should publish and include all original message data within the event', async () => {
+    await publishReceivedRequest(mockCrmRequest)
+
+    expect(publish).toHaveBeenCalledWith(
+      snsClient,
+      'arn:aws:sns:eu-west-2:000000000000:fcp_sfd_crm_events',
+      expect.objectContaining({
+        data: {
+          ...mockCrmRequest.data,
+          correlationId: mockCrmRequest.id
+        }
+      })
+    )
+  })
+
+  test('should log error if publishing of event fails', async () => {
+    const mockError = new Error('Publish error')
+
+    publish.mockRejectedValue(mockError)
+
+    await publishReceivedRequest(mockCrmRequest)
+
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      mockError,
+      'Error publishing received CRM request event'
     )
   })
 })
