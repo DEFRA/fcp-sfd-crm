@@ -2,8 +2,8 @@ import { vi, describe, beforeEach, test, expect } from 'vitest'
 import { createLogger } from '../../../../../src/logging/logger.js'
 import { snsClient } from '../../../../../src/messaging/sns/client.js'
 import { publish } from '../../../../../src/messaging/sns/publish.js'
-import { publishReceivedRequest } from '../../../../../src/messaging/outbound/received-request/publish-received-request.js'
-import mockCrmRequest from '../../../../mocks/v1-received-request.js'
+import { publishReceivedEvent } from '../../../../../src/messaging/outbound/received-event/publish-received-event.js'
+import mockCrmRequest from '../../../../mocks/v1-received-event.js'
 
 vi.mock('../../../../../src/messaging/sns/publish.js')
 
@@ -25,7 +25,7 @@ describe('Publish received request', () => {
   })
 
   test('should publish a received request with type CREATED if request event type is CREATED', async () => {
-    await publishReceivedRequest(mockCrmRequest)
+    await publishReceivedEvent(mockCrmRequest)
 
     expect(publish).toHaveBeenCalledWith(
       snsClient,
@@ -37,7 +37,7 @@ describe('Publish received request', () => {
   })
 
   test('should publish and include all original message data within the event', async () => {
-    await publishReceivedRequest(mockCrmRequest)
+    await publishReceivedEvent(mockCrmRequest)
 
     expect(publish).toHaveBeenCalledWith(
       snsClient,
@@ -56,7 +56,7 @@ describe('Publish received request', () => {
 
     publish.mockRejectedValue(mockError)
 
-    await publishReceivedRequest(mockCrmRequest)
+    await publishReceivedEvent(mockCrmRequest)
 
     expect(mockLogger.error).toHaveBeenCalledWith(
       mockError,
