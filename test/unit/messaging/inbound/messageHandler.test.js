@@ -2,16 +2,16 @@ import { describe, test, expect, vi, beforeEach } from 'vitest'
 
 const mockLogger = { error: vi.fn(), info: vi.fn() }
 
-vi.mock('../../../src/logging/logger.js', () => ({
+vi.mock('../../../../src/logging/logger.js', () => ({
   createLogger: () => mockLogger
 }))
 
-vi.mock('../../../src/services/caseService.js', () => ({
+vi.mock('../../../../src/services/caseService.js', () => ({
   createCase: vi.fn()
 }))
 
-const { handleMessage } = await import('../../../src/messaging/inbound/messageHandler.js')
-const { createCase } = await import('../../../src/services/caseService.js')
+const { handleMessage } = await import('../../../../src/messaging/inbound/messageHandler.js')
+const { createCase } = await import('../../../../src/services/caseService.js')
 
 describe('handleMessage', () => {
   beforeEach(() => {

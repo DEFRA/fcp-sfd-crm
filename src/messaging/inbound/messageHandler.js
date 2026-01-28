@@ -15,5 +15,7 @@ export async function handleMessage (message) {
 
   try {
     await createCase(payload)
-  } catch (err) { }
+  } catch (err) {
+    logger.error('Failed to create case via CRM API', err)
+  }
 }

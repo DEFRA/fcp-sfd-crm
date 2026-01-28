@@ -14,15 +14,24 @@ vi.mock('../../../../src/services/caseService.js', () => ({
 }))
 
 // Mock AWS SDK SQS
-const mockDeleteMessage = vi.fn().mockResolvedValue({})
+const mockDeleteMessage = vi.fn()
 const mockReceiveMessage = vi.fn()
 vi.mock('aws-sdk', () => {
-  return {
+  const mockAws = {
     SQS: class {
-      receiveMessage = mockReceiveMessage
-      deleteMessage = mockDeleteMessage
+      receiveMessage (params) {
+        return mockReceiveMessage(params)
+      }
+
+      deleteMessage (params) {
+        return mockDeleteMessage(params)
+      }
     },
     config: { update: vi.fn() }
+  }
+
+  return {
+    default: mockAws
   }
 })
 
@@ -31,6 +40,9 @@ const { pollInboundMessages } = await import('../../../../src/messaging/inbound/
 describe('pollInboundMessages', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockDeleteMessage.mockReturnValue({
+      promise: () => Promise.resolve({})
+    })
   })
 
   test('processes messages successfully and deletes them', async () => {
@@ -98,7 +110,7 @@ describe('pollInboundMessages', () => {
     await pollInboundMessages(() => { })
 
     expect(mockCreateCase).toHaveBeenCalledTimes(1)
-    expect(mockLogger.error).toHaveBeenCalledWith('Inbound message handling failed', error)
+    expect(mockLogger.error).toHaveBeenCalledWith('Failed to create case via CRM API', error)
     expect(mockDeleteMessage).toHaveBeenCalledTimes(1)
   })
 })
