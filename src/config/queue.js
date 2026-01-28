@@ -3,7 +3,7 @@ export const queueConfig = {
     url: {
       doc: 'URL of the SQS queue for CRM case messages',
       format: String,
-      default: null,
+      default: undefined,
       env: 'CRM_QUEUE_URL'
     },
     region: {
