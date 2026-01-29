@@ -24,7 +24,7 @@ const sqsConfig = {
 if (!isLocalStack && config.get('env') !== environments.PRODUCTION) {
   const accessKeyId = config.get('aws.accessKeyId')
   const secretAccessKey = config.get('aws.secretAccessKey')
-  
+
   if (accessKeyId && secretAccessKey) {
     sqsConfig.credentials = {
       accessKeyId,

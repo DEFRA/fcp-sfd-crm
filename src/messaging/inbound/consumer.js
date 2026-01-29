@@ -10,7 +10,7 @@ let crmRequestConsumer
 
 const startCRMListener = (sqsClient) => {
   const queueUrl = config.get('messaging.crmRequest.queueUrl')
-  
+
   logger.info({ queueUrl, endpoint: sqsClient.config.endpoint }, 'Starting CRM request consumer')
 
   crmRequestConsumer = Consumer.create({

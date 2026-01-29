@@ -21,7 +21,7 @@ function transformPayload (cloudEventPayload) {
 
   const caseData = {
     title: crm?.title || 'Document Upload',
-    caseDescription: `Document uploaded: ${file?.fileName || 'Unknown file'}`,
+    caseDescription: `Document uploaded: ${file?.fileName || 'Unknown file'}`
   }
 
   const onlineSubmissionActivity = {
