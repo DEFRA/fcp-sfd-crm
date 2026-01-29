@@ -1,19 +1,17 @@
 import { vi, describe, test, expect, beforeEach, afterAll } from 'vitest'
 
-// Create a single mockConsumer instance for all tests
 const mockConsumer = {
   start: vi.fn(),
   stop: vi.fn(),
-  emit: vi.fn(),
   _listeners: {},
-  on: function (event, fn) {
+  on (event, fn) {
     if (!this._listeners[event]) this._listeners[event] = []
     this._listeners[event].push(fn)
-  }
-}
-mockConsumer.emit = function (event, ...args) {
-  if (this._listeners && this._listeners[event]) {
-    this._listeners[event].forEach(fn => fn(...args))
+  },
+  emit (event, ...args) {
+    if (this._listeners[event]) {
+      this._listeners[event].forEach(fn => fn(...args))
+    }
   }
 }
 
@@ -23,7 +21,7 @@ vi.mock('sqs-consumer', () => ({
   }
 }))
 
-let startCRMListener, stopCRMListener, mockLogger
+let startCRMListener, stopCRMListener, setLogger, mockLogger
 
 beforeEach(async () => {
   vi.resetModules()
@@ -38,9 +36,12 @@ beforeEach(async () => {
   vi.mock('../../../../../src/logging/logger.js', () => ({
     createLogger: vi.fn(() => mockLogger)
   }))
-    ; ({ startCRMListener, stopCRMListener } = await import('../../../../src/messaging/inbound/consumer.js'))
+  const consumerModule = await import('../../../../src/messaging/inbound/consumer.js')
+  startCRMListener = consumerModule.startCRMListener
+  stopCRMListener = consumerModule.stopCRMListener
+  setLogger = consumerModule.setLogger
+  setLogger(mockLogger)
 })
-
 describe('CRM request sqs consumer', () => {
   test('should start the consumer', () => {
     // Reset mockConsumer state
@@ -66,13 +67,11 @@ describe('CRM request sqs consumer', () => {
       mockConsumer._listeners = {}
     })
 
-    async function setupAndImportConsumer() {
+    async function setupAndImportConsumer () {
       vi.resetModules()
       mockConsumer._listeners = {}
       const logger = { info: vi.fn(), error: vi.fn() }
-      // Mock logger
       vi.mock('../../../../../src/logging/logger.js', () => ({ createLogger: vi.fn(() => logger) }))
-      // Mock config
       vi.mock('../../../../../src/config/index.js', () => ({
         config: {
           get: vi.fn((key) => {
@@ -84,11 +83,11 @@ describe('CRM request sqs consumer', () => {
           })
         }
       }))
-      // Mock messageHandler
       vi.mock('../../../../../src/messaging/inbound/messageHandler.js', () => ({
         handleMessage: vi.fn()
       }))
       const imported = await import('../../../../src/messaging/inbound/consumer.js')
+      imported.setLogger(logger)
       return { ...imported, logger }
     }
 
@@ -98,7 +97,7 @@ describe('CRM request sqs consumer', () => {
       start(mockSqsClient)
       // Debug: check listeners
       expect(Object.keys(mockConsumer._listeners)).toContain('started')
-      expect(mockConsumer._listeners['started'].length).toBeGreaterThan(0)
+      expect(mockConsumer._listeners.started.length).toBeGreaterThan(0)
       mockConsumer.emit('started')
       expect(logger.info).toHaveBeenCalledWith('CRM request consumer started')
     })
@@ -108,7 +107,7 @@ describe('CRM request sqs consumer', () => {
       const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
       start(mockSqsClient)
       expect(Object.keys(mockConsumer._listeners)).toContain('stopped')
-      expect(mockConsumer._listeners['stopped'].length).toBeGreaterThan(0)
+      expect(mockConsumer._listeners.stopped.length).toBeGreaterThan(0)
       mockConsumer.emit('stopped')
       expect(logger.info).toHaveBeenCalledWith('CRM request consumer stopped')
     })
@@ -118,7 +117,7 @@ describe('CRM request sqs consumer', () => {
       const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
       start(mockSqsClient)
       expect(Object.keys(mockConsumer._listeners)).toContain('error')
-      expect(mockConsumer._listeners['error'].length).toBeGreaterThan(0)
+      expect(mockConsumer._listeners.error.length).toBeGreaterThan(0)
       const mockError = new Error('Consumer error')
       mockConsumer.emit('error', mockError)
       expect(logger.error).toHaveBeenCalledWith(
@@ -132,7 +131,7 @@ describe('CRM request sqs consumer', () => {
       const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
       start(mockSqsClient)
       expect(Object.keys(mockConsumer._listeners)).toContain('processing_error')
-      expect(mockConsumer._listeners['processing_error'].length).toBeGreaterThan(0)
+      expect(mockConsumer._listeners.processing_error.length).toBeGreaterThan(0)
       const mockError = new Error('Consumer error')
       mockConsumer.emit('processing_error', mockError)
       expect(logger.error).toHaveBeenCalledWith(
@@ -146,7 +145,7 @@ describe('CRM request sqs consumer', () => {
       const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
       start(mockSqsClient)
       expect(Object.keys(mockConsumer._listeners)).toContain('timeout_error')
-      expect(mockConsumer._listeners['timeout_error'].length).toBeGreaterThan(0)
+      expect(mockConsumer._listeners.timeout_error.length).toBeGreaterThan(0)
       const mockError = new Error('Consumer error')
       mockConsumer.emit('timeout_error', mockError)
       expect(logger.error).toHaveBeenCalledWith(

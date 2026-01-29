@@ -4,7 +4,11 @@ import { createLogger } from '../../logging/logger.js'
 import { config } from '../../config/index.js'
 import { handleMessage } from './messageHandler.js'
 
-const logger = createLogger()
+// Allow injection of logger for testing
+let logger = createLogger()
+const setLogger = (customLogger) => {
+  logger = customLogger
+}
 
 let crmRequestConsumer
 
@@ -53,4 +57,4 @@ const stopCRMListener = () => {
   crmRequestConsumer.stop()
 }
 
-export { startCRMListener, stopCRMListener }
+export { startCRMListener, stopCRMListener, setLogger }
