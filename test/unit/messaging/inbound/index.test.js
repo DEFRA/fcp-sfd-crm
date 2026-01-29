@@ -1,9 +1,12 @@
 import { vi, describe, test, expect, beforeEach } from 'vitest'
 
 import { sqsClient } from '../../../../src/messaging/sqs/client.js'
-import { startCommsListener, stopCommsListener } from '../../../../src/messaging/inbound/consumer.js'
+import { startCRMListener, stopCRMListener } from '../../../../src/messaging/inbound/consumer.js'
 
-vi.mock('../../../../src/messaging/inbound/consumer.js')
+vi.mock('../../../../src/messaging/inbound/consumer.js', () => ({
+  startCRMListener: vi.fn(),
+  stopCRMListener: vi.fn()
+}))
 
 const { startMessaging, stopMessaging } = await import('../../../../src/messaging/inbound/index.js')
 
@@ -15,12 +18,12 @@ describe('inbound messaging setup', () => {
   test('should start message consumers', () => {
     startMessaging()
 
-    expect(startCommsListener).toHaveBeenCalledWith(sqsClient)
+    expect(startCRMListener).toHaveBeenCalledWith(sqsClient)
   })
 
   test('should stop message consumers', () => {
     stopMessaging()
 
-    expect(stopCommsListener).toHaveBeenCalled()
+    expect(stopCRMListener).toHaveBeenCalled()
   })
 })

@@ -17,21 +17,19 @@ vi.mock('../../../../src/services/caseService.js', () => ({
 const mockDeleteMessage = vi.fn()
 const mockReceiveMessage = vi.fn()
 vi.mock('aws-sdk', () => {
-  const mockAws = {
-    SQS: class {
-      receiveMessage (params) {
-        return mockReceiveMessage(params)
-      }
+  class SQS {
+    receiveMessage (params) {
+      return mockReceiveMessage(params)
+    }
 
-      deleteMessage (params) {
-        return mockDeleteMessage(params)
-      }
-    },
-    config: { update: vi.fn() }
+    deleteMessage (params) {
+      return mockDeleteMessage(params)
+    }
   }
-
   return {
-    default: mockAws
+    SQS,
+    default: { SQS, config: { update: vi.fn() } },
+    config: { update: vi.fn() }
   }
 })
 
