@@ -12,95 +12,81 @@ const mockCreateCase = vi.fn()
 vi.mock('../../../../src/services/caseService.js', () => ({
   createCase: mockCreateCase
 }))
+// Mock AWS SDK v3 SQS client
+vi.mock('@aws-sdk/client-sqs', () => ({
+  ReceiveMessageCommand: class { constructor (params) { this.params = params } },
+  DeleteMessageCommand: class { constructor (params) { this.params = params } }
+}))
 
-// Mock AWS SDK SQS
-const mockDeleteMessage = vi.fn()
-const mockReceiveMessage = vi.fn()
-vi.mock('aws-sdk', () => {
-  class SQS {
-    receiveMessage (params) {
-      return mockReceiveMessage(params)
-    }
-
-    deleteMessage (params) {
-      return mockDeleteMessage(params)
-    }
-  }
-  return {
-    SQS,
-    default: { SQS, config: { update: vi.fn() } },
-    config: { update: vi.fn() }
-  }
-})
+const mockSend = vi.fn()
+vi.mock('../../../../src/messaging/sqs/client.js', () => ({
+  sqsClient: { send: mockSend }
+}))
 
 const { pollInboundMessages } = await import('../../../../src/messaging/inbound/index.js')
 
 describe('pollInboundMessages', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockDeleteMessage.mockReturnValue({
-      promise: () => Promise.resolve({})
-    })
+    mockSend.mockReset()
   })
 
   test('processes messages successfully and deletes them', async () => {
-    mockReceiveMessage.mockReturnValueOnce({
-      promise: () => Promise.resolve({
+    mockSend
+      .mockResolvedValueOnce({
         Messages: [
           { Body: JSON.stringify({ caseId: '1', subject: 'A', details: {} }), ReceiptHandle: 'rh-1' },
           { Body: JSON.stringify({ caseId: '2', subject: 'B', details: {} }), ReceiptHandle: 'rh-2' }
         ]
       })
-    })
+      .mockResolvedValue({}) // for DeleteMessageCommand
 
-    // Run pollInboundMessages once using no-op delay
     await pollInboundMessages(() => { })
 
-    // Assert createCase called with each message payload
     expect(mockCreateCase).toHaveBeenCalledTimes(2)
     expect(mockCreateCase).toHaveBeenCalledWith({ caseId: '1', subject: 'A', details: {} })
     expect(mockCreateCase).toHaveBeenCalledWith({ caseId: '2', subject: 'B', details: {} })
 
-    // Assert messages deleted from SQS
-    expect(mockDeleteMessage).toHaveBeenCalledTimes(2)
-    expect(mockDeleteMessage).toHaveBeenCalledWith(expect.objectContaining({ ReceiptHandle: 'rh-1' }))
-    expect(mockDeleteMessage).toHaveBeenCalledWith(expect.objectContaining({ ReceiptHandle: 'rh-2' }))
+    // There should be two delete calls
+    const deleteCalls = mockSend.mock.calls.filter(([cmd]) => cmd.constructor.name === 'DeleteMessageCommand')
+    expect(deleteCalls.length).toBe(2)
+    expect(deleteCalls[0][0].params.ReceiptHandle).toBe('rh-1')
+    expect(deleteCalls[1][0].params.ReceiptHandle).toBe('rh-2')
   })
 
   test('logs errors on invalid JSON but continues processing', async () => {
-    mockReceiveMessage.mockReturnValueOnce({
-      promise: () => Promise.resolve({
+    mockSend
+      .mockResolvedValueOnce({
         Messages: [
           { Body: 'invalid-json', ReceiptHandle: 'rh-1' },
           { Body: JSON.stringify({ caseId: '3', subject: 'C', details: {} }), ReceiptHandle: 'rh-2' }
         ]
       })
-    })
+      .mockResolvedValue({}) // for DeleteMessageCommand
 
     await pollInboundMessages(() => { })
 
-    // Only one valid message triggers createCase
     expect(mockCreateCase).toHaveBeenCalledTimes(1)
     expect(mockCreateCase).toHaveBeenCalledWith({ caseId: '3', subject: 'C', details: {} })
 
-    // Error logged for invalid JSON
     expect(mockLogger.error).toHaveBeenCalledWith(
       'Invalid JSON in inbound message',
       expect.any(SyntaxError)
     )
 
-    // Both messages attempted to be deleted
-    expect(mockDeleteMessage).toHaveBeenCalledTimes(2)
+    // There should be two delete calls
+    const deleteCalls = mockSend.mock.calls.filter(([cmd]) => cmd.constructor.name === 'DeleteMessageCommand')
+    expect(deleteCalls.length).toBe(2)
   })
 
   test('logs errors from createCase but continues processing', async () => {
-    mockReceiveMessage.mockReturnValueOnce({
-      promise: () => Promise.resolve({
+    mockSend
+      .mockResolvedValueOnce({
         Messages: [
           { Body: JSON.stringify({ caseId: '4', subject: 'D', details: {} }), ReceiptHandle: 'rh-4' }
         ]
       })
-    })
+      .mockResolvedValue({}) // for DeleteMessageCommand
 
     const error = new Error('CRM API failed')
     mockCreateCase.mockRejectedValue(error)
@@ -109,6 +95,8 @@ describe('pollInboundMessages', () => {
 
     expect(mockCreateCase).toHaveBeenCalledTimes(1)
     expect(mockLogger.error).toHaveBeenCalledWith('Failed to create case via CRM API', error)
-    expect(mockDeleteMessage).toHaveBeenCalledTimes(1)
+    // There should be one delete call
+    const deleteCalls = mockSend.mock.calls.filter(([cmd]) => cmd.constructor.name === 'DeleteMessageCommand')
+    expect(deleteCalls.length).toBe(1)
   })
 })
