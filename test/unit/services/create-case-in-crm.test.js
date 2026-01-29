@@ -14,8 +14,13 @@ vi.mock('../../../src/repos/crm.js', () => ({
   createCase: vi.fn()
 }))
 
+vi.mock('../../../src/messaging/outbound/received-event/publish-received-event.js', () => ({
+  publishReceivedEvent: vi.fn()
+}))
+
 const { createCaseInCrm } = await import('../../../src/services/create-case-in-crm.js')
 const { getContactIdFromCrn, getAccountIdFromSbi, createCase } = await import('../../../src/repos/crm.js')
+const { publishReceivedEvent } = await import('../../../src/messaging/outbound/received-event/publish-received-event.js')
 
 describe('createCaseInCrm service', () => {
   beforeEach(() => {
@@ -41,6 +46,32 @@ describe('createCaseInCrm service', () => {
       contactId: 'mock-contact-id',
       accountId: 'mock-account-id',
       caseId: 'mock-case-id'
+    })
+  })
+
+  test('should call publishReceivedEvent with caseId, crn, and sbi', async () => {
+    getContactIdFromCrn.mockResolvedValue({ contactId: 'mock-contact-id' })
+    getAccountIdFromSbi.mockResolvedValue({ accountId: 'mock-account-id' })
+    createCase.mockResolvedValue({ caseId: 'mock-case-id', error: null })
+
+    const result = await createCaseInCrm({
+      authToken: 'mock-bearer-token',
+      crn: 'mock-crn',
+      sbi: 'mock-sbi'
+    })
+
+    expect(result).toEqual({
+      contactId: 'mock-contact-id',
+      accountId: 'mock-account-id',
+      caseId: 'mock-case-id'
+    })
+
+    expect(publishReceivedEvent).toHaveBeenCalledWith({
+      data: {
+        caseId: 'mock-case-id',
+        crn: 'mock-crn',
+        sbi: 'mock-sbi'
+      }
     })
   })
 

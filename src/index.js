@@ -2,8 +2,10 @@ import process from 'node:process'
 
 import { createLogger } from './logging/logger.js'
 import { startServer } from './api/common/helpers/start-server.js'
+import { publishReceivedEvent } from './messaging/outbound/received-event/publish-received-event.js'
 
 await startServer()
+await publishReceivedEvent()
 
 process.on('unhandledRejection', (error) => {
   const logger = createLogger()
