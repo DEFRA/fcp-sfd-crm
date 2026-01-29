@@ -14,8 +14,8 @@ vi.mock('../../../../src/services/caseService.js', () => ({
 }))
 // Mock AWS SDK v3 SQS client
 vi.mock('@aws-sdk/client-sqs', () => ({
-  ReceiveMessageCommand: class { constructor (params) { this.params = params } },
-  DeleteMessageCommand: class { constructor (params) { this.params = params } }
+  ReceiveMessageCommand: class { constructor(params) { this.params = params } },
+  DeleteMessageCommand: class { constructor(params) { this.params = params } }
 }))
 
 const mockSend = vi.fn()
