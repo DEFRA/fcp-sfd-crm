@@ -94,15 +94,40 @@ describe('POST methods for creating cases in CRM', () => {
     })
 
     it('calls createCaseInCrm and returns result if API key is valid', async () => {
+      const payload = {
+        caseType: 'DOCUMENT_UPLOAD',
+        crn: '123456',
+        sbi: '654321',
+        caseData: { title: 'Test case', caseDescription: 'Test description' },
+        onlineSubmissionActivity: {
+          subject: 'Test subject',
+          description: 'Test subject description',
+          scheduledStart: '2026-01-01T10:00:00Z',
+          scheduledEnd: '2026-01-01T11:00:00Z',
+          stateCode: 0,
+          statusCode: 1,
+          metadata: {
+            name: 'mock-file.pdf',
+            documentType: 'mock-doc-type',
+            fileUrl: 'https://file.url',
+            copiedFileUrl: 'https://copied.file.url'
+          }
+        }
+      }
+
       const res = await server.inject({
         method: 'POST',
         url: '/create-case',
         headers: { 'x-api-key': 'test-api-key' },
-        payload: { foo: 'bar' }
+        payload
       })
 
       expect(getCrmAuthToken).toHaveBeenCalled()
-      expect(createCaseInCrm).toHaveBeenCalledWith({ authToken: 'token', foo: 'bar' })
+      expect(createCaseInCrm).toHaveBeenCalledWith({
+        authToken: 'token',
+        ...payload
+      })
+
       expect(res.statusCode).toBe(200)
       expect(JSON.parse(res.payload)).toEqual({ caseResult: { id: 123 } })
     })
@@ -132,19 +157,20 @@ describe('POST methods for creating cases in CRM', () => {
 
     it('calls createCaseWithOnlineSubmissionInCrm if API key is valid', async () => {
       const payload = {
+        caseType: 'DOCUMENT_UPLOAD',
         crn: '123456',
         sbi: '654321',
-        caseData: { title: 'Test case', caseDescription: 'Desc' },
+        caseData: { title: 'Test case', caseDescription: 'Test description' },
         onlineSubmissionActivity: {
-          subject: 'Subj',
-          description: 'Sub Desc',
+          subject: 'Test subject',
+          description: 'Test subject description',
           scheduledStart: '2026-01-01T10:00:00Z',
           scheduledEnd: '2026-01-01T11:00:00Z',
           stateCode: 0,
           statusCode: 1,
           metadata: {
-            name: 'file.pdf',
-            documentType: 'doc-type',
+            name: 'mock-file.pdf',
+            documentType: 'mock-doc-type',
             fileUrl: 'https://file.url',
             copiedFileUrl: 'https://copied.file.url'
           }
@@ -159,7 +185,30 @@ describe('POST methods for creating cases in CRM', () => {
       })
 
       expect(getCrmAuthToken).toHaveBeenCalled()
-      expect(createCaseWithOnlineSubmissionInCrm).toHaveBeenCalledWith({ authToken: 'token', ...payload })
+
+      expect(createCaseWithOnlineSubmissionInCrm).toHaveBeenCalledWith({
+        authToken: 'token',
+        correlationId: expect.any(String),
+        caseType: 'DOCUMENT_UPLOAD',
+        crn: '123456',
+        sbi: '654321',
+        caseData: { title: 'Test case', caseDescription: 'Test description' },
+        onlineSubmissionActivity: {
+          subject: 'Test subject',
+          description: 'Test subject description',
+          scheduledStart: '2026-01-01T10:00:00Z',
+          scheduledEnd: '2026-01-01T11:00:00Z',
+          stateCode: 0,
+          statusCode: 1,
+          metadata: {
+            name: 'mock-file.pdf',
+            documentType: 'mock-doc-type',
+            fileUrl: 'https://file.url',
+            copiedFileUrl: 'https://copied.file.url'
+          }
+        }
+      })
+
       expect(res.statusCode).toBe(200)
       expect(JSON.parse(res.payload)).toEqual({ caseResult: { caseId: '123-abc' } })
     })
