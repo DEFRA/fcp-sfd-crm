@@ -9,7 +9,7 @@ const logger = createLogger()
  * Polls inbound SQS messages and processes them.
  * @param {Function} delayFn - Function to delay between polls (for testability)
  */
-export async function pollInboundMessages (delayFn = () => new Promise(resolve => setTimeout(resolve, 1000))) {
+export async function pollInboundMessages(delayFn = () => new Promise(resolve => setTimeout(resolve, 1000))) {
   const queueUrl = process.env.CRM_QUEUE_URL
 
   const receiveParams = {
@@ -19,7 +19,9 @@ export async function pollInboundMessages (delayFn = () => new Promise(resolve =
   }
 
   const { Messages } = await sqsClient.send(new ReceiveMessageCommand(receiveParams))
-  if (!Messages) return
+  if (!Messages) {
+    return
+  }
 
   for (const msg of Messages) {
     let payload
