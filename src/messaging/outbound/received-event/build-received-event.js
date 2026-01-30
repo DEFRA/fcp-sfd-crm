@@ -1,5 +1,5 @@
 import crypto from 'node:crypto'
-import SOURCE from '../../../constants/source.js'
+import { SOURCE } from '../../../constants/source.js'
 
 export const buildReceivedEvent = (message, type) => ({
   id: crypto.randomUUID(),

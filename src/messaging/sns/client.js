@@ -1,5 +1,5 @@
 import { SNSClient } from '@aws-sdk/client-sns'
-import environments from '../../constants/environments'
+import environments from '../../constants/environments.js'
 import { config } from '../../config/index.js'
 
 const snsConfig = {
