@@ -8,7 +8,7 @@ import { publishReceivedEvent } from '../messaging/outbound/received-event/publi
 
 const logger = createLogger()
 
-export const createCaseInCrm = async ({ authToken, crn, sbi }) => {
+export const createCaseInCrm = async ({ authToken, crn, sbi, caseType, correlationId }) => {
   if (!authToken || !crn || !sbi) {
     const missingParameters = {
       ...(!authToken && { authToken: 'missing' }),
@@ -44,7 +44,9 @@ export const createCaseInCrm = async ({ authToken, crn, sbi }) => {
   }
 
   const eventData = {
+    correlationId,
     caseId,
+    caseType,
     crn,
     sbi
   }

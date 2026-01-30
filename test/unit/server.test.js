@@ -123,9 +123,28 @@ describe('POST methods for creating cases in CRM', () => {
       })
 
       expect(getCrmAuthToken).toHaveBeenCalled()
+
       expect(createCaseInCrm).toHaveBeenCalledWith({
         authToken: 'token',
-        ...payload
+        correlationId: expect.any(String),
+        caseType: 'DOCUMENT_UPLOAD',
+        crn: '123456',
+        sbi: '654321',
+        caseData: { title: 'Test case', caseDescription: 'Test description' },
+        onlineSubmissionActivity: {
+          subject: 'Test subject',
+          description: 'Test subject description',
+          scheduledStart: '2026-01-01T10:00:00Z',
+          scheduledEnd: '2026-01-01T11:00:00Z',
+          stateCode: 0,
+          statusCode: 1,
+          metadata: {
+            name: 'mock-file.pdf',
+            documentType: 'mock-doc-type',
+            fileUrl: 'https://file.url',
+            copiedFileUrl: 'https://copied.file.url'
+          }
+        }
       })
 
       expect(res.statusCode).toBe(200)

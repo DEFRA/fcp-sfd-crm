@@ -34,6 +34,8 @@ describe('createCaseInCrm service', () => {
 
     const result = await createCaseInCrm({
       authToken: 'mock-bearer-token',
+      correlationId: 'mock-correlation-id',
+      caseType: 'DOCUMENT_UPLOAD',
       crn: 'mock-crn',
       sbi: 'mock-sbi'
     })
@@ -56,6 +58,8 @@ describe('createCaseInCrm service', () => {
 
     const result = await createCaseInCrm({
       authToken: 'mock-bearer-token',
+      correlationId: 'mock-correlation-id',
+      caseType: 'DOCUMENT_UPLOAD',
       crn: 'mock-crn',
       sbi: 'mock-sbi'
     })
@@ -68,6 +72,8 @@ describe('createCaseInCrm service', () => {
 
     expect(publishReceivedEvent).toHaveBeenCalledWith({
       data: {
+        correlationId: 'mock-correlation-id',
+        caseType: 'DOCUMENT_UPLOAD',
         caseId: 'mock-case-id',
         crn: 'mock-crn',
         sbi: 'mock-sbi'
@@ -79,6 +85,8 @@ describe('createCaseInCrm service', () => {
     await expect(
       createCaseInCrm({
         authToken: null,
+        correlationId: null,
+        caseType: null,
         crn: null,
         sbi: null
       })
@@ -97,6 +105,8 @@ describe('createCaseInCrm service', () => {
     await expect(
       createCaseInCrm({
         authToken: 'mock-bearer-token',
+        correlationId: 'mock-correlation-id',
+        caseType: 'DOCUMENT_UPLOAD',
         crn: 'mock-crn',
         sbi: 'mock-sbi'
       })
@@ -110,7 +120,13 @@ describe('createCaseInCrm service', () => {
     getAccountIdFromSbi.mockResolvedValue({ accountId: null, error: 'Not found' })
 
     await expect(
-      createCaseInCrm({ authToken: 'mock-bearer-token', crn: 'mock-crn', sbi: 'mock-sbi' })
+      createCaseInCrm({
+        authToken: 'mock-bearer-token',
+        correlationId: 'mock-correlation-id',
+        caseType: 'DOCUMENT_UPLOAD',
+        crn: 'mock-crn',
+        sbi: 'mock-sbi'
+      })
     ).rejects.toThrow('Account ID not found')
 
     expect(mockLogger.error).toHaveBeenCalledWith('No account found for SBI: mock-sbi, error: Not found')
@@ -124,6 +140,8 @@ describe('createCaseInCrm service', () => {
     await expect(
       createCaseInCrm({
         authToken: 'mock-bearer-token',
+        correlationId: 'mock-correlation-id',
+        caseType: 'DOCUMENT_UPLOAD',
         crn: 'mock-crn',
         sbi: 'mock-sbi'
       })
