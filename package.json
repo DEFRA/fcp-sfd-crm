@@ -21,10 +21,12 @@
   },
   "author": "Defra DDTS",
   "contributors": [
-    "Rana Salem <rana.salem@defra.gov.uk>"
+    "Rana Salem <rana.salem@defra.gov.uk>",
+    "Fay Toward <fay.toward@defra.gov.uk>",
+    "Simon Dunn <simon.dunn1@defra.gov.uk>"
   ],
   "dependencies": {
-    "@aws-sdk/client-sns": "3.975.0",
+    "@aws-sdk/client-sns": "5.3.4",
     "@defra/hapi-tracing": "1.0.0",
     "@elastic/ecs-pino-format": "1.5.0",
     "@hapi/boom": "10.0.1",
