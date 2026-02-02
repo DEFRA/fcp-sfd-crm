@@ -32,6 +32,11 @@ services:
       CRM_AUTH_SCOPE: ${CRM_AUTH_SCOPE}
       CRM_API_BASE_URL: ${CRM_API_BASE_URL}
       API_KEY_FOR_TESTING_CASE_CREATION: ${API_KEY_FOR_TESTING_CASE_CREATION}
+      SNS_ENDPOINT: http://localstack:4567
+      AWS_REGION: ${AWS_REGION:-eu-west-2}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-test}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-test}
+      CRM_EVENTS_TOPIC_ARN: arn:aws:sns:eu-west-2:000000000000:fcp_sfd_crm_events
     networks:
       - cdp-tenant
 
@@ -47,6 +52,9 @@ services:
       LS_LOG: WARN # Localstack DEBUG Level
       SERVICES: s3,sqs,sns,firehose
       LOCALSTACK_HOST: 127.0.0.1
+      AWS_REGION: ${AWS_REGION:-eu-west-2}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-test}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-test}
     volumes:
       - '${TMPDIR:-/tmp}/localstack:/var/lib/localstack'
       - ./compose/start-localstack.sh:/etc/localstack/init/ready.d/start-localstack.sh

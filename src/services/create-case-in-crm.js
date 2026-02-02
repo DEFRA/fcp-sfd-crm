@@ -4,10 +4,11 @@ import {
   getAccountIdFromSbi,
   createCase
 } from '../repos/crm.js'
+import { publishReceivedEvent } from '../messaging/outbound/received-event/publish-received-event.js'
 
 const logger = createLogger()
 
-export const createCaseInCrm = async ({ authToken, crn, sbi }) => {
+export const createCaseInCrm = async ({ authToken, crn, sbi, caseType, correlationId }) => {
   if (!authToken || !crn || !sbi) {
     const missingParameters = {
       ...(!authToken && { authToken: 'missing' }),
@@ -41,6 +42,16 @@ export const createCaseInCrm = async ({ authToken, crn, sbi }) => {
     logger.error(`Error creating case: ${error}`)
     throw new Error('Unable to create case in CRM')
   }
+
+  const eventData = {
+    correlationId,
+    caseId,
+    caseType,
+    crn,
+    sbi
+  }
+
+  publishReceivedEvent({ data: eventData })
 
   return {
     contactId,

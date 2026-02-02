@@ -14,8 +14,13 @@ vi.mock('../../../src/repos/crm.js', () => ({
   createCase: vi.fn()
 }))
 
+vi.mock('../../../src/messaging/outbound/received-event/publish-received-event.js', () => ({
+  publishReceivedEvent: vi.fn()
+}))
+
 const { createCaseInCrm } = await import('../../../src/services/create-case-in-crm.js')
 const { getContactIdFromCrn, getAccountIdFromSbi, createCase } = await import('../../../src/repos/crm.js')
+const { publishReceivedEvent } = await import('../../../src/messaging/outbound/received-event/publish-received-event.js')
 
 describe('createCaseInCrm service', () => {
   beforeEach(() => {
@@ -29,6 +34,8 @@ describe('createCaseInCrm service', () => {
 
     const result = await createCaseInCrm({
       authToken: 'mock-bearer-token',
+      correlationId: 'mock-correlation-id',
+      caseType: 'DOCUMENT_UPLOAD',
       crn: 'mock-crn',
       sbi: 'mock-sbi'
     })
@@ -44,10 +51,42 @@ describe('createCaseInCrm service', () => {
     })
   })
 
+  test('should call publishReceivedEvent with caseId, crn, and sbi', async () => {
+    getContactIdFromCrn.mockResolvedValue({ contactId: 'mock-contact-id' })
+    getAccountIdFromSbi.mockResolvedValue({ accountId: 'mock-account-id' })
+    createCase.mockResolvedValue({ caseId: 'mock-case-id', error: null })
+
+    const result = await createCaseInCrm({
+      authToken: 'mock-bearer-token',
+      correlationId: 'mock-correlation-id',
+      caseType: 'DOCUMENT_UPLOAD',
+      crn: 'mock-crn',
+      sbi: 'mock-sbi'
+    })
+
+    expect(result).toEqual({
+      contactId: 'mock-contact-id',
+      accountId: 'mock-account-id',
+      caseId: 'mock-case-id'
+    })
+
+    expect(publishReceivedEvent).toHaveBeenCalledWith({
+      data: {
+        correlationId: 'mock-correlation-id',
+        caseType: 'DOCUMENT_UPLOAD',
+        caseId: 'mock-case-id',
+        crn: 'mock-crn',
+        sbi: 'mock-sbi'
+      }
+    })
+  })
+
   test('throws error if authentication token, crn or sbi is missing', async () => {
     await expect(
       createCaseInCrm({
         authToken: null,
+        correlationId: null,
+        caseType: null,
         crn: null,
         sbi: null
       })
@@ -66,6 +105,8 @@ describe('createCaseInCrm service', () => {
     await expect(
       createCaseInCrm({
         authToken: 'mock-bearer-token',
+        correlationId: 'mock-correlation-id',
+        caseType: 'DOCUMENT_UPLOAD',
         crn: 'mock-crn',
         sbi: 'mock-sbi'
       })
@@ -79,7 +120,13 @@ describe('createCaseInCrm service', () => {
     getAccountIdFromSbi.mockResolvedValue({ accountId: null, error: 'Not found' })
 
     await expect(
-      createCaseInCrm({ authToken: 'mock-bearer-token', crn: 'mock-crn', sbi: 'mock-sbi' })
+      createCaseInCrm({
+        authToken: 'mock-bearer-token',
+        correlationId: 'mock-correlation-id',
+        caseType: 'DOCUMENT_UPLOAD',
+        crn: 'mock-crn',
+        sbi: 'mock-sbi'
+      })
     ).rejects.toThrow('Account ID not found')
 
     expect(mockLogger.error).toHaveBeenCalledWith('No account found for SBI: mock-sbi, error: Not found')
@@ -93,6 +140,8 @@ describe('createCaseInCrm service', () => {
     await expect(
       createCaseInCrm({
         authToken: 'mock-bearer-token',
+        correlationId: 'mock-correlation-id',
+        caseType: 'DOCUMENT_UPLOAD',
         crn: 'mock-crn',
         sbi: 'mock-sbi'
       })

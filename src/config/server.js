@@ -15,6 +15,16 @@ export const serverConfig = {
     default: null,
     env: 'SERVICE_VERSION'
   },
+  env: {
+    doc: 'The application environment.',
+    format: [
+      environments.DEVELOPMENT,
+      environments.PRODUCTION,
+      environments.TEST
+    ],
+    default: environments.DEVELOPMENT,
+    env: 'NODE_ENV'
+  },
   host: {
     doc: 'The IP address to bind',
     format: 'ipaddress',
