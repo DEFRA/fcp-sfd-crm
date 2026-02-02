@@ -9,7 +9,7 @@ const logger = createLogger()
  * @param {object} cloudEventPayload - CloudEvents format payload with data property
  * @returns {object} Transformed payload
  */
-function transformPayload (cloudEventPayload) {
+export function transformPayload (cloudEventPayload) {
   // Extract data from CloudEvents format
   const { data } = cloudEventPayload
 
