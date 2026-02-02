@@ -26,13 +26,13 @@
     "Simon Dunn <simon.dunn1@defra.gov.uk>"
   ],
   "dependencies": {
-    "@aws-sdk/client-sns": "3.893.0",
+    "@aws-sdk/client-sns": "3.894.0",
     "@defra/hapi-tracing": "1.0.0",
     "@elastic/ecs-pino-format": "1.5.0",
     "@hapi/boom": "10.0.1",
     "@hapi/hapi": "21.3.12",
     "aws-embedded-metrics": "4.2.0",
-    "aws-sdk": "1.18.0",
+    "aws-sdk": "2.1401.0",
     "aws4": "1.13.2",
     "convict": "6.2.4",
     "convict-format-with-validator": "6.2.0",
