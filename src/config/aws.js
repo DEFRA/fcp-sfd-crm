@@ -11,6 +11,7 @@ export const awsConfig = {
       format: String,
       default: 'https://sns.eu-west-2.amazonaws.com',
       env: 'AWS_SNS_ENDPOINT'
+      env: 'SNS_ENDPOINT'
     },
     region: {
       doc: 'AWS Region',

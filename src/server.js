@@ -38,7 +38,15 @@ const postCreateCase = () => ({
     validate: validateApiKeyHeader(),
     handler: async (request) => {
       const authToken = await getCrmAuthToken()
-      const caseResult = await createCaseInCrm({ authToken, ...request.payload })
+      const { caseType, ...crmPayload } = request.payload
+      const correlationId = request.info.id
+      const caseResult = await createCaseInCrm({
+        authToken,
+        correlationId,
+        caseType,
+        ...crmPayload
+      })
+
       return { caseResult }
     }
   }
@@ -51,7 +59,15 @@ const postCreateCaseWithOnlineSubmission = () => ({
     validate: validateApiKeyHeader(),
     handler: async (request) => {
       const authToken = await getCrmAuthToken()
-      const caseResult = await createCaseWithOnlineSubmissionInCrm({ authToken, ...request.payload })
+      const { caseType, ...crmPayload } = request.payload
+      const correlationId = request.info.id
+      const caseResult = await createCaseWithOnlineSubmissionInCrm({
+        authToken,
+        correlationId,
+        caseType,
+        ...crmPayload
+      })
+
       return { caseResult }
     }
   }

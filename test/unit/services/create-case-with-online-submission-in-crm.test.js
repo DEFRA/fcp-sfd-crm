@@ -12,8 +12,13 @@ vi.mock('../../../src/repos/crm.js', () => ({
   createCaseWithOnlineSubmission: vi.fn()
 }))
 
+vi.mock('../../../src/messaging/outbound/received-event/publish-received-event.js', () => ({
+  publishReceivedEvent: vi.fn()
+}))
+
 const { createCaseWithOnlineSubmissionInCrm } = await import('../../../src/services/create-case-with-online-submission-in-crm.js')
 const { getContactIdFromCrn, getAccountIdFromSbi, createCaseWithOnlineSubmission } = await import('../../../src/repos/crm.js')
+const { publishReceivedEvent } = await import('../../../src/messaging/outbound/received-event/publish-received-event.js')
 
 describe('createCaseWithOnlineSubmissionInCrm service', () => {
   beforeEach(() => {
@@ -27,9 +32,11 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
 
     const request = {
       authToken: 'mock-bearer-token',
+      correlationId: 'mock-correlation-id',
       crn: 'mock-crn',
       sbi: 'mock-sbi',
       caseData: { title: 'Test Case', caseDescription: 'Test description' },
+      caseType: 'DOCUMENT_UPLOAD',
       onlineSubmissionActivity: { subject: 'Test', description: 'Test submission' }
     }
 
@@ -37,10 +44,11 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
 
     expect(getContactIdFromCrn).toHaveBeenCalledWith('mock-bearer-token', 'mock-crn')
     expect(getAccountIdFromSbi).toHaveBeenCalledWith('mock-bearer-token', 'mock-sbi')
+
     expect(createCaseWithOnlineSubmission).toHaveBeenCalledWith({
       authToken: 'mock-bearer-token',
       case: { ...request.caseData, contactId: 'mock-contact-id', accountId: 'mock-account-id' },
-      onlineSubmissionActivity: request.onlineSubmissionActivity
+      onlineSubmissionActivity: request.onlineSubmissionActivity,
     })
 
     expect(result).toEqual({
@@ -50,11 +58,41 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     })
   })
 
+  test('should call publishReceivedEvent with caseId, crn, and sbi', async () => {
+    getContactIdFromCrn.mockResolvedValue({ contactId: 'mock-contact-id' })
+    getAccountIdFromSbi.mockResolvedValue({ accountId: 'mock-account-id' })
+    createCaseWithOnlineSubmission.mockResolvedValue({ caseId: 'mock-case-id', error: null })
+
+    const request = {
+      authToken: 'mock-bearer-token',
+      correlationId: 'mock-correlation-id',
+      crn: 'mock-crn',
+      sbi: 'mock-sbi',
+      caseData: { title: 'Test Case', caseDescription: 'Test description' },
+      caseType: 'DOCUMENT_UPLOAD',
+      onlineSubmissionActivity: { subject: 'Test', description: 'Test submission' }
+    }
+
+    await createCaseWithOnlineSubmissionInCrm(request)
+
+    expect(publishReceivedEvent).toHaveBeenCalledWith({
+      data: {
+        correlationId: 'mock-correlation-id',
+        caseId: 'mock-case-id',
+        caseType: 'DOCUMENT_UPLOAD',
+        crn: 'mock-crn',
+        sbi: 'mock-sbi'
+      }
+    })
+  })
+
   test('throws error if required parameters are missing', async () => {
     await expect(createCaseWithOnlineSubmissionInCrm({
       authToken: null,
+      correlationId: null,
       crn: null,
       sbi: null,
+      caseType: null,
       caseData: null,
       onlineSubmissionActivity: null
     })).rejects.toThrow('Missing required parameter: authToken')
@@ -68,8 +106,10 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     await expect(
       createCaseWithOnlineSubmissionInCrm({
         authToken: 'mock-bearer-token',
+        correlationId: 'mock-correlation-id',
         crn: 'mock-crn',
         sbi: 'mock-sbi',
+        caseType: 'DOCUMENT_UPLOAD',
         caseData: {},
         onlineSubmissionActivity: {}
       })
@@ -89,8 +129,10 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     await expect(
       createCaseWithOnlineSubmissionInCrm({
         authToken: 'mock-bearer-token',
+        correlationId: 'mock-correlation-id',
         crn: 'mock-crn',
         sbi: 'mock-sbi',
+        caseType: 'DOCUMENT_UPLOAD',
         caseData: {},
         onlineSubmissionActivity: {}
       })
@@ -110,6 +152,8 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
 
     await expect(createCaseWithOnlineSubmissionInCrm({
       authToken: 'mock-bearer-token',
+      correlationId: 'mock-correlation-id',
+      caseType: 'DOCUMENT_UPLOAD',
       crn: 'mock-crn',
       sbi: 'mock-sbi',
       caseData: {},
