@@ -35,11 +35,27 @@ describe('createCaseWithOnlineSubmissionInCrm edge cases', () => {
 
   it('should throw Boom unprocessableEntity if contact/account not found', async () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: null, error: 'err' })
-    await expect(createCaseWithOnlineSubmissionInCrm({ authToken: 't', crn: 'c', sbi: 's', caseData: {}, onlineSubmissionActivity: {} }))
+    await expect(createCaseWithOnlineSubmissionInCrm({
+      authToken: 't',
+      crn: 'c',
+      sbi: 's',
+      caseType: 'testType',
+      caseData: {},
+      onlineSubmissionActivity: {},
+      correlationId: 'test-correlation-id'
+    }))
       .rejects.toMatchObject({ isBoom: true, message: expect.stringContaining('Contact ID not found') })
     getContactIdFromCrn.mockResolvedValue({ contactId: 'id' })
     getAccountIdFromSbi.mockResolvedValue({ accountId: null, error: 'err' })
-    await expect(createCaseWithOnlineSubmissionInCrm({ authToken: 't', crn: 'c', sbi: 's', caseData: {}, onlineSubmissionActivity: {} }))
+    await expect(createCaseWithOnlineSubmissionInCrm({
+      authToken: 't',
+      crn: 'c',
+      sbi: 's',
+      caseType: 'testType',
+      caseData: {},
+      onlineSubmissionActivity: {},
+      correlationId: 'test-correlation-id'
+    }))
       .rejects.toMatchObject({ isBoom: true, message: expect.stringContaining('Account ID not found') })
   })
 
@@ -47,7 +63,15 @@ describe('createCaseWithOnlineSubmissionInCrm edge cases', () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: 'id' })
     getAccountIdFromSbi.mockResolvedValue({ accountId: 'aid' })
     createCaseWithOnlineSubmission.mockResolvedValue({ caseId: null, error: 'fail' })
-    await expect(createCaseWithOnlineSubmissionInCrm({ authToken: 't', crn: 'c', sbi: 's', caseData: {}, onlineSubmissionActivity: {} }))
+    await expect(createCaseWithOnlineSubmissionInCrm({
+      authToken: 't',
+      crn: 'c',
+      sbi: 's',
+      caseType: 'testType',
+      caseData: {},
+      onlineSubmissionActivity: {},
+      correlationId: 'test-correlation-id'
+    }))
       .rejects.toMatchObject({ isBoom: true, message: expect.stringContaining('Unable to create case with online submission activity in CRM') })
   })
 
@@ -55,7 +79,15 @@ describe('createCaseWithOnlineSubmissionInCrm edge cases', () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: 'id' })
     getAccountIdFromSbi.mockResolvedValue({ accountId: 'aid' })
     createCaseWithOnlineSubmission.mockResolvedValue({ caseId: 'cid', error: null })
-    const result = await createCaseWithOnlineSubmissionInCrm({ authToken: 't', crn: 'c', sbi: 's', caseData: {}, onlineSubmissionActivity: {} })
+    const result = await createCaseWithOnlineSubmissionInCrm({
+      authToken: 't',
+      crn: 'c',
+      sbi: 's',
+      caseType: 'testType',
+      caseData: {},
+      onlineSubmissionActivity: {},
+      correlationId: 'test-correlation-id'
+    })
     expect(result).toEqual({ contactId: 'id', accountId: 'aid', caseId: 'cid' })
   })
 })
