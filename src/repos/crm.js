@@ -117,7 +117,7 @@ const createCaseWithOnlineSubmission = async (request) => {
               rpa_name: name,
               rpa_fileabsoluteurl: fileUrl,
               rpa_copiedfileurl: copiedFileUrl,
-              'rpa_DocumentTypeMetaId@odata.bind': `/rpa_documenttypeses(${documentType})`
+              'rpa_DocumentTypeMetaId@odata.bind': `/rpa_documenttypeses(4e88916b-aae2-ee11-904c-000d3adc1ec9)`
             }
           ]
         }
