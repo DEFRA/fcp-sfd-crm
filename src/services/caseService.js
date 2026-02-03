@@ -9,7 +9,7 @@ const logger = createLogger()
  * @param {object} cloudEventPayload - CloudEvents format payload with data property
  * @returns {object} Transformed payload
  */
-export function transformPayload (cloudEventPayload) {
+export function transformPayload(cloudEventPayload) {
   // Extract data from CloudEvents format
   const { data } = cloudEventPayload
 
@@ -21,7 +21,8 @@ export function transformPayload (cloudEventPayload) {
 
   const caseData = {
     title: crm?.title || 'Document Upload',
-    caseDescription: `Document uploaded: ${file?.fileName || 'Unknown file'}`
+    caseDescription: `Document uploaded: ${file?.fileName || 'Unknown file'}`,
+    queue: crm?.caseType || 'Outgoing'
   }
 
   const onlineSubmissionActivity = {
@@ -41,8 +42,10 @@ export function transformPayload (cloudEventPayload) {
   return {
     crn,
     sbi,
+    caseType: 'Document Upload',
     caseData,
-    onlineSubmissionActivity
+    onlineSubmissionActivity,
+    correlationId
   }
 }
 
@@ -50,7 +53,7 @@ export function transformPayload (cloudEventPayload) {
  * Create a case in CRM via the existing API service
  * @param {object} payload - parsed CloudEvents message payload
  */
-export async function createCase (payload) {
+export async function createCase(payload) {
   try {
     // Get auth token
     const authToken = await getCrmAuthToken()

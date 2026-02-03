@@ -18,7 +18,7 @@
     "test": "rm -rf ./coverage/** && vitest run --coverage",
     "test:watch": "vitest watch",
     "test:lint": "npx eslint",
-    "start:watch": "nodemon --watch src --exec 'node --experimental-vm-modules src/index.js'",
+    "start:watch": "nodemon --watch src --exec 'node --experimental-vm-modules --inspect-brk=0.0.0.0:9232 src/index.js'",
     "start:debug": "nodemon --watch src --exec 'node --experimental-vm-modules --inspect-brk=0.0.0.0:9232 src/index.js'",
     "start": "node --experimental-vm-modules src/index.js"
   },
