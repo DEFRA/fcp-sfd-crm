@@ -1,3 +1,9 @@
-export const crmEvents = {
-  CREATED: 'uk.gov.fcp.sfd.crm.case.created'
+import { caseTypes } from './case-types.js'
+
+const crmEvents = {
+  DOCUMENT_UPLOADED: 'uk.gov.fcp.sfd.crm.case.created'
+}
+
+const typeToEventMap = {
+  
 }
