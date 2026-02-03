@@ -298,8 +298,8 @@ describe('CRM repository', () => {
       expect(submission.rpa_onlinesubmission_rpa_activitymetadata[0]).toEqual({
         rpa_name: 'test-document.pdf',
         rpa_fileabsoluteurl: 'https://files.example.com/original.pdf',
-        rpa_copiedfileurl: 'https://files.example.com/copied.pdf',
-        'rpa_DocumentTypeMetaId@odata.bind': '/rpa_documenttypeses(doc-type-789)'
+        rpa_copiedfileurl: 'https://files.example.com/original.pdf',
+        'rpa_DocumentTypeMetaId@odata.bind': '/rpa_documenttypeses(4e88916b-aae2-ee11-904c-000d3adc1ec9)'
       })
 
       expect(caseId).toBe('8bb8b45b-aba2-f011-bbd2-7ced8d4645a2')

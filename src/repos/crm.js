@@ -90,7 +90,7 @@ const createCaseWithOnlineSubmission = async (request) => {
     const { authToken, case: caseData, onlineSubmissionActivity } = request
     const { title, caseDescription, contactId, accountId } = caseData
     const { subject, description, scheduledStart, scheduledEnd, stateCode, statusCode, metadata } = onlineSubmissionActivity
-    const { name, documentType, fileUrl, copiedFileUrl } = metadata
+    const { name, fileUrl } = metadata
 
     const payload = {
       title,
@@ -117,7 +117,7 @@ const createCaseWithOnlineSubmission = async (request) => {
               rpa_name: name,
               rpa_fileabsoluteurl: fileUrl,
               rpa_copiedfileurl: fileUrl,
-              'rpa_DocumentTypeMetaId@odata.bind': `/rpa_documenttypeses(4e88916b-aae2-ee11-904c-000d3adc1ec9)`
+              'rpa_DocumentTypeMetaId@odata.bind': '/rpa_documenttypeses(4e88916b-aae2-ee11-904c-000d3adc1ec9)'
             }
           ]
         }
