@@ -1,7 +1,7 @@
 import { ReceiveMessageCommand, DeleteMessageCommand } from '@aws-sdk/client-sqs'
 import { sqsClient } from '../sqs/client.js'
 import { createLogger } from '../../logging/logger.js'
-import { createCase } from '../../services/caseService.js'
+import { createCase } from '../../services/case.js'
 
 const logger = createLogger()
 

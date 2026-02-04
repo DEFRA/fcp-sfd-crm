@@ -7,9 +7,9 @@ vi.mock('../../../../src/logging/logger.js', () => ({
   createLogger: () => mockLogger
 }))
 
-// Mock caseService
+// Mock case service
 const mockCreateCase = vi.fn()
-vi.mock('../../../../src/services/caseService.js', () => ({
+vi.mock('../../../../src/services/case.js', () => ({
   createCase: mockCreateCase
 }))
 // Mock AWS SDK v3 SQS client

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
-import * as caseService from '../../../src/services/caseService.js'
-import { transformPayload } from '../../../src/services/caseService.js'
+import * as caseService from '../../../src/services/case.js'
+import { transformPayload } from '../../../src/services/case.js'
 
 // Mocks
 vi.mock('../../../src/logging/logger.js', () => ({ createLogger: () => ({ info: vi.fn(), error: vi.fn() }) }))
@@ -9,7 +9,7 @@ vi.mock('../../../src/services/create-case-with-online-submission-in-crm.js', ()
   createCaseWithOnlineSubmissionInCrm: vi.fn(async () => ({ caseId: 'mock-case-id', status: 'success' }))
 }))
 
-describe('caseService', () => {
+describe('case', () => {
   describe('transformPayload', () => {
     it('should transform a valid CloudEvents payload', () => {
       const payload = {
