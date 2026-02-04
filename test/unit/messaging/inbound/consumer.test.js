@@ -5,11 +5,11 @@ const mockConsumer = {
   start: vi.fn(),
   stop: vi.fn(),
   _listeners: {},
-  on(event, fn) {
+  on (event, fn) {
     if (!this._listeners[event]) this._listeners[event] = []
     this._listeners[event].push(fn)
   },
-  emit(event, ...args) {
+  emit (event, ...args) {
     if (this._listeners[event]) {
       this._listeners[event].forEach(fn => fn(...args))
     }
@@ -76,7 +76,7 @@ describe('CRM request sqs consumer', () => {
       mockConsumer._listeners = {}
     })
 
-    async function setupAndImportConsumer() {
+    async function setupAndImportConsumer () {
       vi.resetModules()
       mockConsumer._listeners = {}
       const logger = { info: vi.fn(), error: vi.fn() }
