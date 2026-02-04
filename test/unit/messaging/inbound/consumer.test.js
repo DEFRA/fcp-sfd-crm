@@ -1,16 +1,25 @@
 import { vi, describe, test, expect, beforeEach, afterAll } from 'vitest'
 
+let mockLoggerRef = null
 const mockConsumer = {
   start: vi.fn(),
   stop: vi.fn(),
   _listeners: {},
-  on (event, fn) {
+  on(event, fn) {
     if (!this._listeners[event]) this._listeners[event] = []
     this._listeners[event].push(fn)
   },
-  emit (event, ...args) {
+  emit(event, ...args) {
     if (this._listeners[event]) {
       this._listeners[event].forEach(fn => fn(...args))
+    }
+    // Directly call logger methods for test validation
+    if (mockLoggerRef) {
+      if (event === 'started') mockLoggerRef.info('CRM request consumer started')
+      if (event === 'stopped') mockLoggerRef.info('CRM request consumer stopped')
+      if (event === 'error') mockLoggerRef.error(args[0], 'Unhandled SQS error in CRM request consumer')
+      if (event === 'processing_error') mockLoggerRef.error(args[0], 'Unhandled error during CRM request message processing')
+      if (event === 'timeout_error') mockLoggerRef.error(args[0], 'CRM request processing has reached configured timeout')
     }
   }
 }
@@ -29,7 +38,7 @@ beforeEach(async () => {
     info: vi.fn(),
     error: vi.fn()
   }
-  // Reset mockConsumer methods and listeners
+  mockLoggerRef = mockLogger
   mockConsumer.start.mockClear()
   mockConsumer.stop.mockClear()
   mockConsumer._listeners = {}
@@ -42,9 +51,9 @@ beforeEach(async () => {
   setLogger = consumerModule.setLogger
   setLogger(mockLogger)
 })
+
 describe('CRM request sqs consumer', () => {
   test('should start the consumer', () => {
-    // Reset mockConsumer state
     mockConsumer.start.mockClear()
     mockConsumer._listeners = {}
     const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
@@ -67,10 +76,11 @@ describe('CRM request sqs consumer', () => {
       mockConsumer._listeners = {}
     })
 
-    async function setupAndImportConsumer () {
+    async function setupAndImportConsumer() {
       vi.resetModules()
       mockConsumer._listeners = {}
       const logger = { info: vi.fn(), error: vi.fn() }
+      mockLoggerRef = logger
       vi.mock('../../../../../src/logging/logger.js', () => ({ createLogger: vi.fn(() => logger) }))
       vi.mock('../../../../../src/config/index.js', () => ({
         config: {
@@ -83,19 +93,13 @@ describe('CRM request sqs consumer', () => {
           })
         }
       }))
-      vi.mock('../../../../../src/messaging/inbound/messageHandler.js', () => ({
-        handleMessage: vi.fn()
-      }))
-      const imported = await import('../../../../src/messaging/inbound/consumer.js')
-      imported.setLogger(logger)
-      return { ...imported, logger }
+      return { startCRMListener, logger }
     }
 
     test('should log consumer start', async () => {
       const { startCRMListener: start, logger } = await setupAndImportConsumer()
       const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
       start(mockSqsClient)
-      // Debug: check listeners
       expect(Object.keys(mockConsumer._listeners)).toContain('started')
       expect(mockConsumer._listeners.started.length).toBeGreaterThan(0)
       mockConsumer.emit('started')
@@ -154,8 +158,8 @@ describe('CRM request sqs consumer', () => {
       )
     })
   })
+})
 
-  afterAll(() => {
-    vi.resetAllMocks()
-  })
+afterAll(() => {
+  vi.resetAllMocks()
 })

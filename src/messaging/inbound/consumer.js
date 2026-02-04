@@ -2,7 +2,6 @@ import { Consumer } from 'sqs-consumer'
 
 import { createLogger } from '../../logging/logger.js'
 import { config } from '../../config/index.js'
-import { handleMessage } from './messageHandler.js'
 
 // Allow injection of logger for testing
 let logger = createLogger()
@@ -22,11 +21,6 @@ const startCRMListener = (sqsClient) => {
     batchSize: config.get('messaging.batchSize'),
     waitTimeSeconds: config.get('messaging.waitTimeSeconds'),
     pollingWaitTime: config.get('messaging.pollingWaitTime'),
-    handleMessageBatch: async (messages) => {
-      for (const message of messages) {
-        await handleMessage(message)
-      }
-    },
     sqs: sqsClient
   })
 

@@ -42,7 +42,6 @@ export const serverConfig = {
     format: String,
     default: 'fcp-sfd-crm'
   },
-  // Duplicate 'env' key removed
   root: {
     doc: 'Project root',
     format: String,
