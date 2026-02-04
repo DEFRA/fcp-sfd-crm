@@ -2,6 +2,7 @@ import { Consumer } from 'sqs-consumer'
 
 import { createLogger } from '../../logging/logger.js'
 import { config } from '../../config/index.js'
+import { createCase } from '../../services/case.js'
 
 // Allow injection of logger for testing
 let logger = createLogger()
@@ -21,7 +22,21 @@ const startCRMListener = (sqsClient) => {
     batchSize: config.get('messaging.batchSize'),
     waitTimeSeconds: config.get('messaging.waitTimeSeconds'),
     pollingWaitTime: config.get('messaging.pollingWaitTime'),
-    sqs: sqsClient
+    sqs: sqsClient,
+    async handleMessage(message) {
+      let payload
+      try {
+        payload = JSON.parse(message.Body)
+      } catch (err) {
+        logger.error('Invalid JSON in inbound message', err)
+        return
+      }
+      try {
+        await createCase(payload)
+      } catch (err) {
+        logger.error('Failed to create case via CRM API', err)
+      }
+    }
   })
 
   crmRequestConsumer.on('started', () => {
