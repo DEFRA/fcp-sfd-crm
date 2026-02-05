@@ -5,24 +5,16 @@
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=DEFRA_fcp-sfd-crm&metric=coverage)](https://sonarcloud.io/summary/new_code?id=DEFRA_fcp-sfd-crm)
 [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=DEFRA_fcp-sfd-crm&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=DEFRA_fcp-sfd-crm)
 
-CRM orchestration service for Single Front Door.  
+CRM orchestration service for Single Front Door.
 This service is part of the [Single Front Door (SFD)](https://github.com/defra/fcp-sfd-core) service.
 
 ## Environment variables
 
-Create a `.env` file in the root of the project with the required environment variables.
-The following variables need to be added into the `.env` file, values for some of the variables may be stored in Bitwarden.
-```bash
-CRM_AUTH_ENDPOINT
-CRM_AUTH_CLIENT_ID
-CRM_AUTH_CLIENT_SECRET
-CRM_AUTH_SCOPE
-CRM_API_BASE_URL
-```
+Create a `.env` file in the root of the project based on `.env.example`.
 
 ## Local development
 
-## Building and starting the service 
+## Building and starting the service
 
 This service has been configured to run in a Docker container and it is recommended to utilise Docker and Docker Compose for local development.
 
