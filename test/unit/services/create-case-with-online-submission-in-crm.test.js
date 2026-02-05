@@ -48,7 +48,7 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     expect(createCaseWithOnlineSubmission).toHaveBeenCalledWith({
       authToken: 'mock-bearer-token',
       case: { ...request.caseData, contactId: 'mock-contact-id', accountId: 'mock-account-id' },
-      onlineSubmissionActivity: request.onlineSubmissionActivity,
+      onlineSubmissionActivity: request.onlineSubmissionActivity
     })
 
     expect(result).toEqual({
