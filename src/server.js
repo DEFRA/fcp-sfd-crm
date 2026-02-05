@@ -6,7 +6,6 @@ import { secureContext } from './api/common/helpers/secure-context/secure-contex
 import { pulse } from './api/common/helpers/pulse.js'
 import { requestTracing } from './api/common/helpers/request-tracing.js'
 import { setupProxy } from './api/common/helpers/proxy/setup-proxy.js'
-import { postCreateCase } from './routes/create-case.js'
 import { postCreateCaseWithOnlineSubmission } from './routes/create-case-with-online-submission.js'
 
 const createServer = async () => {
@@ -48,7 +47,6 @@ const createServer = async () => {
 
   if (config.get('cdpEnvironment') !== 'prod') {
     server.route([
-      postCreateCase(),
       postCreateCaseWithOnlineSubmission()
     ])
   }
