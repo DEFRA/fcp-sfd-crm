@@ -51,40 +51,6 @@ const getAccountIdFromSbi = async (authToken, sbi) => {
   }
 }
 
-const createCase = async (authToken, contactId, accountId) => {
-  try {
-    const payload = {
-      caseorigincode: 100000002,
-      casetypecode: 927350013,
-      'customerid_contact@odata.bind': `/contacts(${contactId})`,
-      'rpa_Contact@odata.bind': `/contacts(${contactId})`,
-      'rpa_Organisation@odata.bind': `/accounts(${accountId})`,
-      rpa_isunknowncontact: false,
-      rpa_isunknownorganisation: false,
-      title: 'fcp-sfd-crm test case'
-    }
-
-    const response = await fetch(`${baseUrl}/incidents`, {
-      method: 'POST',
-      headers: { Authorization: authToken, ...baseHeaders },
-      body: JSON.stringify(payload)
-    })
-
-    const data = await response.json()
-    const caseId = data.incidentid
-
-    return {
-      caseId,
-      error: null
-    }
-  } catch (err) {
-    return {
-      caseId: null,
-      error: err.message
-    }
-  }
-}
-
 const createCaseWithOnlineSubmission = async (request) => {
   try {
     const { authToken, case: caseData, onlineSubmissionActivity } = request
@@ -152,6 +118,5 @@ const createCaseWithOnlineSubmission = async (request) => {
 export {
   getContactIdFromCrn,
   getAccountIdFromSbi,
-  createCase,
   createCaseWithOnlineSubmission
 }

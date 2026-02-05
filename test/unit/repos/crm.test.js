@@ -14,7 +14,7 @@ vi.mock('../../../src/config/index.js', () => ({
 }))
 
 // Import after mocks
-const { getContactIdFromCrn, getAccountIdFromSbi, createCase, createCaseWithOnlineSubmission } = await import('../../../src/repos/crm.js')
+const { getContactIdFromCrn, getAccountIdFromSbi, createCaseWithOnlineSubmission } = await import('../../../src/repos/crm.js')
 
 describe('CRM repository', () => {
   beforeEach(() => {
@@ -152,69 +152,6 @@ describe('CRM repository', () => {
         accountId: null,
         error: 'Invalid JSON'
       })
-    })
-  })
-
-  describe('createCase', () => {
-    test('should create case with correct payload and return caseId', async () => {
-      const mockResponse = {
-        ok: true,
-        json: vi.fn().mockResolvedValue({
-          incidentid: '8bb8b45b-aba2-f011-bbd2-7ced8d4645a2'
-        })
-      }
-      global.fetch.mockResolvedValue(mockResponse)
-
-      const { caseId, error } = await createCase('Bearer token', 'contact-123', 'account-456')
-
-      expect(global.fetch).toHaveBeenCalledWith(
-        'https://crm.example.com/api/incidents',
-        {
-          method: 'POST',
-          headers: {
-            Authorization: 'Bearer token',
-            'Content-Type': 'application/json',
-            Prefer: 'return=representation'
-          },
-          body: JSON.stringify({
-            caseorigincode: 100000002,
-            casetypecode: 927350013,
-            'customerid_contact@odata.bind': '/contacts(contact-123)',
-            'rpa_Contact@odata.bind': '/contacts(contact-123)',
-            'rpa_Organisation@odata.bind': '/accounts(account-456)',
-            rpa_isunknowncontact: false,
-            rpa_isunknownorganisation: false,
-            title: 'fcp-sfd-crm test case'
-          })
-        }
-      )
-      expect(caseId).toBe('8bb8b45b-aba2-f011-bbd2-7ced8d4645a2')
-      expect(error).toBeNull()
-    })
-
-    test('should extract caseId from body', async () => {
-      const mockResponse = {
-        ok: true,
-        json: vi.fn().mockResolvedValue({
-          incidentid: 'abc-def-ghi-123'
-        })
-      }
-      global.fetch.mockResolvedValue(mockResponse)
-
-      const { caseId, error } = await createCase('Bearer token', 'contact-id', 'account-id')
-
-      expect(caseId).toBe('abc-def-ghi-123')
-      expect(error).toBeNull()
-    })
-
-    test('should handle error and log to console', async () => {
-      const mockError = new Error('Network error')
-      global.fetch.mockRejectedValue(mockError)
-
-      const { caseId, error } = await createCase('Bearer token', 'contact-id', 'account-id')
-
-      expect(caseId).toBeNull()
-      expect(error).toBe('Network error')
     })
   })
 

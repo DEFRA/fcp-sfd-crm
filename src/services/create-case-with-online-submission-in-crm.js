@@ -29,29 +29,29 @@ export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi,
   }
 
   for (const [param, value] of Object.entries(requiredParams)) {
+    const errorMessage = `Missing required parameter: ${param}`
+
     if (!value) {
-      logger.error(`Missing required parameter: ${param}`)
-      throw badRequest(`Missing required parameter: ${param}`)
+      logger.error(errorMessage)
+      throw badRequest(errorMessage)
     }
   }
 
-  const contactObj = await getContactIdFromCrn(authToken, crn)
-  const contactId = contactObj?.contactId
+  const { contactId, error: contactError } = await getContactIdFromCrn(authToken, crn)
 
-  if (!contactId) {
-    logger.error(`No contact found for CRN: ${crn}, error: ${contactObj?.error}`)
+  if (contactError || !contactId) {
+    logger.error(`No contact found for CRN: ${crn}, error: ${contactError}`)
     throw unprocessableEntity('Contact ID not found')
   }
 
-  const accountObj = await getAccountIdFromSbi(authToken, sbi)
-  const accountId = accountObj?.accountId
+  const { accountId, error: accountError } = await getAccountIdFromSbi(authToken, sbi)
 
-  if (!accountId) {
-    logger.error(`No account found for SBI: ${sbi}, error: ${accountObj?.error}`)
+  if (accountError || !accountId) {
+    logger.error(`No account found for SBI: ${sbi}, error: ${accountError}`)
     throw unprocessableEntity('Account ID not found')
   }
 
-  const { caseId, error } = await createCaseWithOnlineSubmission({
+  const { caseId, error: caseError } = await createCaseWithOnlineSubmission({
     authToken,
     case: {
       ...caseData,
@@ -61,8 +61,8 @@ export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi,
     onlineSubmissionActivity
   })
 
-  if (error) {
-    logger.error(`Error creating case with online submission activity: ${error}`)
+  if (caseError) {
+    logger.error(`Error creating case with online submission activity: ${caseError}`)
     throw internal('Unable to create case with online submission activity in CRM')
   }
 
