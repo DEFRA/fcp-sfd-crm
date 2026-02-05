@@ -39,14 +39,14 @@ export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi,
 
   const { contactId, error: contactError } = await getContactIdFromCrn(authToken, crn)
 
-  if (contactError) {
+  if (contactError || !contactId) {
     logger.error(`No contact found for CRN: ${crn}, error: ${contactError}`)
     throw unprocessableEntity('Contact ID not found')
   }
 
   const { accountId, error: accountError } = await getAccountIdFromSbi(authToken, sbi)
 
-  if (accountError) {
+  if (accountError || !accountId) {
     logger.error(`No account found for SBI: ${sbi}, error: ${accountError}`)
     throw unprocessableEntity('Account ID not found')
   }

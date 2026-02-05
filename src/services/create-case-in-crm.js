@@ -24,14 +24,14 @@ export const createCaseInCrm = async ({ authToken, crn, sbi, caseType, correlati
 
   const { contactId, error: contactError } = await getContactIdFromCrn(authToken, crn)
 
-  if (contactError) {
+  if (contactError || !contactId) {
     logger.error(`No contact found for CRN: ${crn}, error: ${contactError}`)
     throw new Error('Contact ID not found')
   }
 
   const { accountId, error: accountError } = await getAccountIdFromSbi(authToken, sbi)
 
-  if (accountError) {
+  if (accountError || !accountId) {
     logger.error(`No account found for SBI: ${sbi}, error: ${accountError}`)
     throw new Error('Account ID not found')
   }
