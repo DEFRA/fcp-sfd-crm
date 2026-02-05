@@ -1,5 +1,5 @@
 import { getCrmAuthToken } from '../auth/get-crm-auth-token.js'
-import { validateApiKeyHeader } from '../api/common/helpers/validate-api-key-header'
+import { validateApiKeyHeader } from '../api/common/helpers/validate-api-key-header.js'
 import { createCaseWithOnlineSubmissionInCrm } from '../services/create-case-with-online-submission-in-crm.js'
 
 export const postCreateCaseWithOnlineSubmission = () => ({
