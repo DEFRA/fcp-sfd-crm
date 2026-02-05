@@ -16,30 +16,30 @@ export const createCaseInCrm = async ({ authToken, crn, sbi, caseType, correlati
       ...(!sbi && { sbi: 'missing' })
     }
 
-    logger.error(`Missing required parameters: ${Object.keys(missingParameters).join(', ')}`)
-    throw new Error(`Missing required parameters: ${Object.keys(missingParameters).join(', ')}`)
+    const errorMessage = `Missing required parameters: ${Object.keys(missingParameters).join(', ')}`
+
+    logger.error(errorMessage)
+    throw new Error(errorMessage)
   }
 
-  const contactObj = await getContactIdFromCrn(authToken, crn)
-  const contactId = contactObj?.contactId
+  const { contactId, error: contactError } = await getContactIdFromCrn(authToken, crn)
 
-  if (!contactId) {
-    logger.error(`No contact found for CRN: ${crn}, error: ${contactObj?.error}`)
+  if (contactError) {
+    logger.error(`No contact found for CRN: ${crn}, error: ${contactError}`)
     throw new Error('Contact ID not found')
   }
 
-  const accountObj = await getAccountIdFromSbi(authToken, sbi)
-  const accountId = accountObj?.accountId
+  const { accountId, error: accountError } = await getAccountIdFromSbi(authToken, sbi)
 
-  if (!accountId) {
-    logger.error(`No account found for SBI: ${sbi}, error: ${accountObj?.error}`)
+  if (accountError) {
+    logger.error(`No account found for SBI: ${sbi}, error: ${accountError}`)
     throw new Error('Account ID not found')
   }
 
-  const { caseId, error } = await createCase(authToken, contactId, accountId)
+  const { caseId, error: caseError } = await createCase(authToken, contactId, accountId)
 
-  if (error) {
-    logger.error(`Error creating case: ${error}`)
+  if (caseError) {
+    logger.error(`Error creating case: ${caseError}`)
     throw new Error('Unable to create case in CRM')
   }
 
