@@ -1,3 +1,3 @@
 export const caseTypes = {
-  DOCUMENT_UPLOAD: 'document-upload'
+  CASE_CREATED: 'case-created'
 }
