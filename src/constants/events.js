@@ -1,6 +1,6 @@
 import { caseTypes } from './case-types.js'
 
-const crmEvents = {
+export const crmEvents = {
   CASE_CREATED: 'uk.gov.fcp.sfd.crm.case.created',
   DOCUMENT_UPLOAD: 'uk.gov.fcp.sfd.document.uploaded'
 }

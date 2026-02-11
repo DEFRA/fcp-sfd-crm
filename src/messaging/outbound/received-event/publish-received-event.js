@@ -10,7 +10,7 @@ const snsTopic = config.get('messaging.crmEvents.topicArn')
 const logger = createLogger()
 
 export const publishReceivedEvent = async (message) => {
-  const type = crmEvents.CREATED
+  const type = crmEvents.CASE_CREATED
 
   const receivedRequest = buildReceivedEvent(message, type)
 
