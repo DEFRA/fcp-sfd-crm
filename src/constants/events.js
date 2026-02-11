@@ -6,6 +6,6 @@ const crmEvents = {
 }
 
 const typeToEventMap = {
-  [caseTypes.CASE_CREATED]: CASE_CREATED,
-  [caseTypes.DOCUMENT_UPLOAD]: DOCUMENT_UPLOAD
+  [caseTypes.CASE_CREATED]: crmEvents.CASE_CREATED,
+  [caseTypes.DOCUMENT_UPLOAD]: crmEvents.DOCUMENT_UPLOAD
 }
