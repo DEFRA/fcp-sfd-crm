@@ -45,7 +45,8 @@ describe('Publish received request', () => {
       expect.objectContaining({
         data: {
           ...mockCrmRequest.data,
-          correlationId: mockCrmRequest.id
+          correlationId: mockCrmRequest.id,
+          caseType: 'case-created'
         }
       })
     )

@@ -10,7 +10,6 @@ export default {
     crn: 1234567890,
     sbi: 123456789,
     caseId: '123e4567-e89b-12d3-a456-426655440000',
-    caseType: 'DOCUMENT_UPLOAD',
     onlineSubmissionActivities: [
       {
         id: '123e4567-e89b-12d3-a456-426655440000',
