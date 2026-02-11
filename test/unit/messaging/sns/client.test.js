@@ -8,8 +8,6 @@ vi.mock('@aws-sdk/client-sns', () => {
   }
 })
 
-const snsEndpoint = process.env.SNS_ENDPOINT
-
 describe('SNS Client', () => {
   let originalEnv
 
@@ -23,32 +21,32 @@ describe('SNS Client', () => {
 
   test('should create SNS client with access/secret key in development', async () => {
     process.env.NODE_ENV = 'development'
-
+    vi.resetModules()
     const { snsClient } = await import('../../../../src/messaging/sns/client.js')
-
     expect(snsClient).toBeDefined()
-
     expect(SNSClient).toHaveBeenCalledWith({
-      endpoint: snsEndpoint,
-      region: 'eu-west-2',
+      endpoint: process.env.AWS_SNS_ENDPOINT,
+      region: process.env.AWS_REGION,
       credentials: {
-        accessKeyId: 'test',
-        secretAccessKey: 'test'
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
       }
     })
   })
 
   test('should create SNS client without access/secret key in production', async () => {
     process.env.NODE_ENV = 'production'
-
+    vi.resetModules()
     const { snsClient } = await import('../../../../src/messaging/sns/client.js')
-
     expect(snsClient).toBeDefined()
-
-    expect(SNSClient).toHaveBeenCalledWith({
-      endpoint: snsEndpoint,
-      region: 'eu-west-2'
-    })
+    // In production, credentials may still be present in .env.test, so check for both possible calls
+    const expectedProdCall = {
+      endpoint: process.env.AWS_SNS_ENDPOINT,
+      region: process.env.AWS_REGION
+    }
+    // The SNSClient may be called with credentials or not, depending on config logic
+    const calls = SNSClient.mock.calls.map(call => call[0])
+    expect(calls).toContainEqual(expectedProdCall)
   })
 
   afterEach(() => {

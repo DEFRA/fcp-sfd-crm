@@ -14,7 +14,7 @@ vi.mock('../../../src/config/index.js', () => ({
 }))
 
 // Import after mocks
-const { getContactIdFromCrn, getAccountIdFromSbi, createCase, createCaseWithOnlineSubmission } = await import('../../../src/repos/crm.js')
+const { getContactIdFromCrn, getAccountIdFromSbi, createCaseWithOnlineSubmission } = await import('../../../src/repos/crm.js')
 
 describe('CRM repository', () => {
   beforeEach(() => {
@@ -37,7 +37,7 @@ describe('CRM repository', () => {
         "https://crm.example.com/api/contacts?%24select=contactid&%24filter=rpa_capcustomerid%20eq%20'1234567890'",
         {
           method: 'GET',
-          headers: { Authorization: 'Bearer token', Prefer: 'return=representation', 'Content-Type': 'application/json', }
+          headers: { Authorization: 'Bearer token', Prefer: 'return=representation', 'Content-Type': 'application/json' }
         }
       )
       expect(result).toEqual({ contactId: '6ff3f89f-efe6-f455-fff6-bfff1f808e6' })
@@ -155,69 +155,6 @@ describe('CRM repository', () => {
     })
   })
 
-  describe('createCase', () => {
-    test('should create case with correct payload and return caseId', async () => {
-      const mockResponse = {
-        ok: true,
-        json: vi.fn().mockResolvedValue({
-          incidentid: '8bb8b45b-aba2-f011-bbd2-7ced8d4645a2'
-        })
-      }
-      global.fetch.mockResolvedValue(mockResponse)
-
-      const { caseId, error } = await createCase('Bearer token', 'contact-123', 'account-456')
-
-      expect(global.fetch).toHaveBeenCalledWith(
-        'https://crm.example.com/api/incidents',
-        {
-          method: 'POST',
-          headers: {
-            Authorization: 'Bearer token',
-            'Content-Type': 'application/json',
-            Prefer: 'return=representation'
-          },
-          body: JSON.stringify({
-            caseorigincode: 100000002,
-            casetypecode: 927350013,
-            'customerid_contact@odata.bind': '/contacts(contact-123)',
-            'rpa_Contact@odata.bind': '/contacts(contact-123)',
-            'rpa_Organisation@odata.bind': '/accounts(account-456)',
-            rpa_isunknowncontact: false,
-            rpa_isunknownorganisation: false,
-            title: 'fcp-sfd-crm test case'
-          })
-        }
-      )
-      expect(caseId).toBe('8bb8b45b-aba2-f011-bbd2-7ced8d4645a2')
-      expect(error).toBeNull()
-    })
-
-    test('should extract caseId from body', async () => {
-      const mockResponse = {
-        ok: true,
-        json: vi.fn().mockResolvedValue({
-          incidentid: 'abc-def-ghi-123'
-        })
-      }
-      global.fetch.mockResolvedValue(mockResponse)
-
-      const { caseId, error } = await createCase('Bearer token', 'contact-id', 'account-id')
-
-      expect(caseId).toBe('abc-def-ghi-123')
-      expect(error).toBeNull()
-    })
-
-    test('should handle error and log to console', async () => {
-      const mockError = new Error('Network error')
-      global.fetch.mockRejectedValue(mockError)
-
-      const { caseId, error } = await createCase('Bearer token', 'contact-id', 'account-id')
-
-      expect(caseId).toBeNull()
-      expect(error).toBe('Network error')
-    })
-  })
-
   describe('createCaseWithOnlineSubmission', () => {
     test('should create case with online submission activity using correct payload and return caseId', async () => {
       const mockResponse = {
@@ -298,8 +235,8 @@ describe('CRM repository', () => {
       expect(submission.rpa_onlinesubmission_rpa_activitymetadata[0]).toEqual({
         rpa_name: 'test-document.pdf',
         rpa_fileabsoluteurl: 'https://files.example.com/original.pdf',
-        rpa_copiedfileurl: 'https://files.example.com/copied.pdf',
-        'rpa_DocumentTypeMetaId@odata.bind': '/rpa_documenttypeses(doc-type-789)'
+        rpa_copiedfileurl: 'https://files.example.com/original.pdf',
+        'rpa_DocumentTypeMetaId@odata.bind': '/rpa_documenttypeses(4e88916b-aae2-ee11-904c-000d3adc1ec9)'
       })
 
       expect(caseId).toBe('8bb8b45b-aba2-f011-bbd2-7ced8d4645a2')

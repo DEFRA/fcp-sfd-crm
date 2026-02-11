@@ -51,46 +51,12 @@ const getAccountIdFromSbi = async (authToken, sbi) => {
   }
 }
 
-const createCase = async (authToken, contactId, accountId) => {
-  try {
-    const payload = {
-      caseorigincode: 100000002,
-      casetypecode: 927350013,
-      'customerid_contact@odata.bind': `/contacts(${contactId})`,
-      'rpa_Contact@odata.bind': `/contacts(${contactId})`,
-      'rpa_Organisation@odata.bind': `/accounts(${accountId})`,
-      rpa_isunknowncontact: false,
-      rpa_isunknownorganisation: false,
-      title: 'fcp-sfd-crm test case'
-    }
-
-    const response = await fetch(`${baseUrl}/incidents`, {
-      method: 'POST',
-      headers: { Authorization: authToken, ...baseHeaders },
-      body: JSON.stringify(payload)
-    })
-
-    const data = await response.json()
-    const caseId = data.incidentid
-
-    return {
-      caseId,
-      error: null
-    }
-  } catch (err) {
-    return {
-      caseId: null,
-      error: err.message
-    }
-  }
-}
-
 const createCaseWithOnlineSubmission = async (request) => {
   try {
     const { authToken, case: caseData, onlineSubmissionActivity } = request
     const { title, caseDescription, contactId, accountId } = caseData
     const { subject, description, scheduledStart, scheduledEnd, stateCode, statusCode, metadata } = onlineSubmissionActivity
-    const { name, documentType, fileUrl, copiedFileUrl } = metadata
+    const { name, fileUrl } = metadata
 
     const payload = {
       title,
@@ -116,8 +82,8 @@ const createCaseWithOnlineSubmission = async (request) => {
             {
               rpa_name: name,
               rpa_fileabsoluteurl: fileUrl,
-              rpa_copiedfileurl: copiedFileUrl,
-              'rpa_DocumentTypeMetaId@odata.bind': `/rpa_documenttypeses(${documentType})`
+              rpa_copiedfileurl: fileUrl,
+              'rpa_DocumentTypeMetaId@odata.bind': '/rpa_documenttypeses(4e88916b-aae2-ee11-904c-000d3adc1ec9)'
             }
           ]
         }
@@ -152,6 +118,5 @@ const createCaseWithOnlineSubmission = async (request) => {
 export {
   getContactIdFromCrn,
   getAccountIdFromSbi,
-  createCase,
   createCaseWithOnlineSubmission
 }
