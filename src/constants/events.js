@@ -5,7 +5,7 @@ export const crmEvents = {
   DOCUMENT_UPLOAD: 'uk.gov.fcp.sfd.document.uploaded'
 }
 
-export const typeToEventMap = {
-  [caseTypes.CASE_CREATED]: crmEvents.CASE_CREATED,
-  [caseTypes.DOCUMENT_UPLOAD]: crmEvents.DOCUMENT_UPLOAD
+export const eventToTypeMap = {
+  [crmEvents.CASE_CREATED]: caseTypes.CASE_CREATED,
+  [crmEvents.DOCUMENT_UPLOAD]: caseTypes.DOCUMENT_UPLOAD
 }
