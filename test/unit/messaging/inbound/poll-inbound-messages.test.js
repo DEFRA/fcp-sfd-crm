@@ -89,4 +89,24 @@ describe('pollInboundMessages', () => {
 
     expect(mockLogger.error).toHaveBeenCalledWith('Failed to create case via CRM API', expect.any(Error))
   })
+
+  test('should use default delayFn with setTimeout when no delayFn provided', async () => {
+    vi.useFakeTimers()
+    mockSend
+      .mockResolvedValueOnce({
+        Messages: [{ Body: JSON.stringify({ data: { correlationId: 'corr-1' } }), ReceiptHandle: 'handle-1' }]
+      })
+      .mockResolvedValue({})
+
+    createCase.mockResolvedValue({ caseId: 'case-1' })
+
+    const pollPromise = pollInboundMessages()
+
+    await vi.advanceTimersByTimeAsync(1000)
+
+    await pollPromise
+
+    expect(createCase).toHaveBeenCalledWith({ data: { correlationId: 'corr-1' } })
+    vi.useRealTimers()
+  })
 })
