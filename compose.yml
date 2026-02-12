@@ -38,7 +38,7 @@ services:
       AWS_REGION: ${AWS_REGION:-eu-west-2}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-test}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-test}
-      CRM_EVENTS_TOPIC_ARN: arn:aws:sns:eu-west-2:000000000000:fcp_sfd_crm_events
+      CRM_EVENTS_TOPIC_ARN: ${CRM_EVENTS_TOPIC_ARN}
     networks:
       - cdp-tenant
 

@@ -15,7 +15,7 @@ const { getCrmAuthToken } = await import('../../../src/auth/get-crm-auth-token.j
 const { getToken, setToken } = await import('../../../src/repos/token.js')
 const { generateCrmAuthToken } = await import('../../../src/auth/generate-crm-auth-token.js')
 
-describe.only('getCrmAuthToken', () => {
+describe('getCrmAuthToken', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })

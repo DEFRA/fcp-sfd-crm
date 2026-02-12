@@ -17,4 +17,10 @@ create_queue() {
   }'
 }
 
+create_topic() {
+  local TOPIC_NAME_TO_CREATE=$1
+  awslocal --endpoint-url=http://${LOCALSTACK_HOST}:${PORT} sns create-topic --name ${TOPIC_NAME_TO_CREATE} --region ${AWS_REGION}
+}
+
 create_queue "fcp_sfd_crm_requests"
+create_topic "fcp_sfd_crm_events"

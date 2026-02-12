@@ -13,8 +13,16 @@ export default defineConfig({
         '**/node_modules/**',
         '**/test/**',
         '.server',
-        'src/index.js'
-      ]
+        'src/index.js',
+        'src/data/db.js',
+        'src/messaging/sqs/client.js'
+      ],
+      thresholds: {
+        statements: 100,
+        branches: 100,
+        functions: 97,
+        lines: 100
+      }
     }
   }
 })

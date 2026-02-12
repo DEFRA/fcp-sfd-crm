@@ -1,6 +1,8 @@
 import { createLogger } from '../logging/logger.js'
 import { getCrmAuthToken } from '../auth/get-crm-auth-token.js'
 import { createCaseWithOnlineSubmissionInCrm } from './create-case-with-online-submission-in-crm.js'
+import { findByCorrelationId, create } from '../repos/cases.js'
+import { MONGO_DUPLICATE_KEY_ERROR_CODE } from '../constants/mongodb.js'
 
 const logger = createLogger()
 
@@ -50,10 +52,22 @@ export function transformPayload (cloudEventPayload) {
 }
 
 /**
- * Create a case in CRM via the existing API service
+ * Create a case in CRM via the existing API service.
+ * Deduplicates by correlationId using MongoDB unique index.
  * @param {object} payload - parsed CloudEvents message payload
  */
 export async function createCase (payload) {
+  const { correlationId } = payload.data
+
+  // Check if case already exists for this correlationId
+  const existingCase = await findByCorrelationId(correlationId)
+
+  if (existingCase) {
+    logger.info({ caseId: existingCase.caseId }, 'Skipped: case already exists')
+
+    return { caseId: existingCase.caseId }
+  }
+
   try {
     // Get auth token
     const authToken = await getCrmAuthToken()
@@ -67,7 +81,17 @@ export async function createCase (payload) {
       ...transformedPayload
     })
 
-    logger.info('Case successfully created via CRM API', { caseId: response.caseId, response })
+    try {
+      await create({ correlationId, caseId: response.caseId })
+    } catch (err) {
+      if (err.code === MONGO_DUPLICATE_KEY_ERROR_CODE) {
+        logger.info({ correlationId }, 'Duplicate correlationId, case already saved by concurrent request')
+        return { caseId: response.caseId }
+      }
+      throw err
+    }
+
+    logger.info({ correlationId, caseId: response.caseId }, 'Case created')
     return response
   } catch (err) {
     logger.error('Failed to create case via CRM API', err)
