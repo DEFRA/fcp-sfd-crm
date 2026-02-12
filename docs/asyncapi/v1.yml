@@ -1,7 +1,7 @@
 asyncapi: 3.0.0
 info: 
   title: Single Front Door CRM orchestration service
-  version: 1.1.0
+  version: 1.2.0
   description: Publish CRM event when new cases are created to the Farming Data Model (FDM) service.
   license:
     name: Open Government License v3.0
@@ -64,7 +64,6 @@ components:
               - crn
               - sbi
               - caseId
-              - caseType
             properties:
               correlationId:
                 $ref: '#/components/schemas/correlationId'
@@ -97,7 +96,7 @@ components:
     type: 
       type: string
       description: The type of event in reverse DNS notation
-      enum: ['uk.gov.fcp.sfd.crm.case.created', 'uk.gov.fcp.sfd.crm.case.updated'] 
+      enum: ['uk.gov.fcp.sfd.crm.case.created', 'uk.gov.fcp.sfd.document.uploaded'] 
     datacontenttype:
       type: string
       description: Format of the CloudEvent data
@@ -131,7 +130,7 @@ components:
     caseType:
       type: string
       description: Descriptor to provide context on what the case relates to e.g. document upload
-      enum: ['DOCUMENT_UPLOAD']
+      enum: ['CASE_CREATED', 'DOCUMENT_UPLOAD']
       example: 'DOCUMENT_UPLOAD'
     onlineSubmissionActivity:
       type: object
