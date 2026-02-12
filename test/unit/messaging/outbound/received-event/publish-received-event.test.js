@@ -45,7 +45,8 @@ describe('Publish received request', () => {
       expect.objectContaining({
         data: {
           ...mockCrmRequest.data,
-          correlationId: mockCrmRequest.id
+          correlationId: mockCrmRequest.id,
+          caseType: 'case-created'
         }
       })
     )
@@ -62,5 +63,27 @@ describe('Publish received request', () => {
       mockError,
       'Error publishing received CRM request event'
     )
+  })
+
+  test('should throw and log error when CloudEvent type is missing', async () => {
+    await expect(
+      publishReceivedEvent({
+        ...mockCrmRequest,
+        type: null
+      })
+    ).rejects.toThrow('CloudEvent type is required to publish CRM event')
+
+    expect(mockLogger.error).toHaveBeenCalledWith('Cannot publish event, message.type is missing')
+  })
+
+  test('should throw and log error when trying to process unsupported caseType', async () => {
+    await expect(
+      publishReceivedEvent({
+        ...mockCrmRequest,
+        type: 'unsupported-event-type'
+      })
+    ).rejects.toThrow('Unsupported CloudEvent type: unsupported-event-type')
+
+    expect(mockLogger.error).toHaveBeenCalledWith('Unsupported CloudEvent type: unsupported-event-type')
   })
 })

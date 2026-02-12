@@ -6,6 +6,7 @@ import {
   getAccountIdFromSbi,
   createCaseWithOnlineSubmission
 } from '../repos/crm.js'
+import { crmEvents } from '../constants/events.js'
 import { publishReceivedEvent } from '../messaging/outbound/received-event/publish-received-event.js'
 
 const { constants: httpConstants } = http2
@@ -17,12 +18,11 @@ const unprocessableEntity = (message) => {
   return boomify(error, { statusCode: httpConstants.HTTP_STATUS_UNPROCESSABLE_ENTITY })
 }
 
-export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi, caseType, caseData, onlineSubmissionActivity, correlationId }) => {
+export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi, caseData, onlineSubmissionActivity, correlationId }) => {
   const requiredParams = {
     authToken,
     crn,
     sbi,
-    caseType,
     caseData,
     onlineSubmissionActivity,
     correlationId
@@ -69,12 +69,16 @@ export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi,
   const eventData = {
     correlationId,
     caseId,
-    caseType,
     crn,
     sbi
   }
 
-  publishReceivedEvent({ data: eventData })
+  publishReceivedEvent(
+    {
+      type: crmEvents.CASE_CREATED,
+      data: eventData
+    }
+  )
 
   return {
     contactId,

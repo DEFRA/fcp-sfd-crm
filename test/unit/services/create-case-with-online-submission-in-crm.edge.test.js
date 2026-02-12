@@ -39,7 +39,6 @@ describe('createCaseWithOnlineSubmissionInCrm edge cases', () => {
       authToken: 't',
       crn: 'c',
       sbi: 's',
-      caseType: 'testType',
       caseData: {},
       onlineSubmissionActivity: {},
       correlationId: 'test-correlation-id'
@@ -51,7 +50,6 @@ describe('createCaseWithOnlineSubmissionInCrm edge cases', () => {
       authToken: 't',
       crn: 'c',
       sbi: 's',
-      caseType: 'testType',
       caseData: {},
       onlineSubmissionActivity: {},
       correlationId: 'test-correlation-id'
@@ -67,7 +65,6 @@ describe('createCaseWithOnlineSubmissionInCrm edge cases', () => {
       authToken: 't',
       crn: 'c',
       sbi: 's',
-      caseType: 'testType',
       caseData: {},
       onlineSubmissionActivity: {},
       correlationId: 'test-correlation-id'
@@ -83,7 +80,6 @@ describe('createCaseWithOnlineSubmissionInCrm edge cases', () => {
       authToken: 't',
       crn: 'c',
       sbi: 's',
-      caseType: 'testType',
       caseData: {},
       onlineSubmissionActivity: {},
       correlationId: 'test-correlation-id'
