@@ -1,6 +1,21 @@
 import { vi, describe, test, expect, beforeEach, afterAll } from 'vitest'
 
+vi.mock('../../../../src/data/db.js', () => ({
+  default: {
+    collection: () => ({
+      createIndex: vi.fn().mockResolvedValue(),
+      findOne: vi.fn().mockResolvedValue(null),
+      insertOne: vi.fn().mockResolvedValue({ acknowledged: true })
+    })
+  }
+}))
+
+vi.mock('../../../../src/services/case.js', () => ({
+  createCase: vi.fn()
+}))
+
 let mockLoggerRef = null
+let capturedHandleMessage = null
 const mockConsumer = {
   start: vi.fn(),
   stop: vi.fn(),
@@ -26,7 +41,10 @@ const mockConsumer = {
 
 vi.mock('sqs-consumer', () => ({
   Consumer: {
-    create: vi.fn(() => mockConsumer)
+    create: vi.fn((opts) => {
+      capturedHandleMessage = opts.handleMessage
+      return mockConsumer
+    })
   }
 }))
 
@@ -50,6 +68,7 @@ beforeEach(async () => {
   stopCRMListener = consumerModule.stopCRMListener
   setLogger = consumerModule.setLogger
   setLogger(mockLogger)
+  capturedHandleMessage = null
 })
 
 describe('CRM request sqs consumer', () => {
@@ -156,6 +175,39 @@ describe('CRM request sqs consumer', () => {
         mockError,
         'CRM request processing has reached configured timeout'
       )
+    })
+
+    test('should call createCase when handleMessage receives valid JSON', async () => {
+      const { createCase } = await import('../../../../src/services/case.js')
+      const { startCRMListener: start } = await setupAndImportConsumer()
+      const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
+      start(mockSqsClient)
+
+      await capturedHandleMessage({ Body: JSON.stringify({ data: { correlationId: 'corr-1' } }) })
+
+      expect(createCase).toHaveBeenCalledWith({ data: { correlationId: 'corr-1' } })
+    })
+
+    test('should log error for invalid JSON in handleMessage', async () => {
+      const { startCRMListener: start } = await setupAndImportConsumer()
+      const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
+      start(mockSqsClient)
+
+      await capturedHandleMessage({ Body: 'invalid-json' })
+
+      expect(mockLogger.error).toHaveBeenCalledWith('Invalid JSON in inbound message', expect.any(SyntaxError))
+    })
+
+    test('should log error when createCase fails in handleMessage', async () => {
+      const { createCase } = await import('../../../../src/services/case.js')
+      const { startCRMListener: start } = await setupAndImportConsumer()
+      const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
+      start(mockSqsClient)
+      createCase.mockRejectedValueOnce(new Error('CRM API failed'))
+
+      await capturedHandleMessage({ Body: JSON.stringify({ data: { correlationId: 'corr-1' } }) })
+
+      expect(mockLogger.error).toHaveBeenCalledWith('Failed to create case via CRM API', expect.any(Error))
     })
   })
 })

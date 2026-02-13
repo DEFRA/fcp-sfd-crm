@@ -1,5 +1,6 @@
 import { vi, describe, beforeEach, test, expect } from 'vitest'
 import { createLogger } from '../../../../../src/logging/logger.js'
+import { config } from '../../../../../src/config/index.js'
 import { snsClient } from '../../../../../src/messaging/sns/client.js'
 import { publish } from '../../../../../src/messaging/sns/publish.js'
 import { publishReceivedEvent } from '../../../../../src/messaging/outbound/received-event/publish-received-event.js'
@@ -29,7 +30,7 @@ describe('Publish received request', () => {
 
     expect(publish).toHaveBeenCalledWith(
       snsClient,
-      'arn:aws:sns:eu-west-2:000000000000:fcp_sfd_crm_events',
+      config.get('messaging.crmEvents.topicArn'),
       expect.objectContaining({
         type: 'uk.gov.fcp.sfd.crm.case.created'
       })
@@ -41,13 +42,31 @@ describe('Publish received request', () => {
 
     expect(publish).toHaveBeenCalledWith(
       snsClient,
-      'arn:aws:sns:eu-west-2:000000000000:fcp_sfd_crm_events',
+      config.get('messaging.crmEvents.topicArn'),
       expect.objectContaining({
         data: {
           ...mockCrmRequest.data,
           correlationId: mockCrmRequest.id,
           caseType: 'case-created'
         }
+      })
+    )
+  })
+
+  test('should use message.id as correlationId when data.correlationId is missing', async () => {
+    const messageWithoutCorrelationId = {
+      id: 'msg-id-123',
+      data: { caseId: 'case-1', crn: 123 }
+    }
+    await publishReceivedEvent(messageWithoutCorrelationId)
+
+    expect(publish).toHaveBeenCalledWith(
+      snsClient,
+      config.get('messaging.crmEvents.topicArn'),
+      expect.objectContaining({
+        data: expect.objectContaining({
+          correlationId: 'msg-id-123'
+        })
       })
     )
   })
