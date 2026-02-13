@@ -56,6 +56,7 @@ describe('Publish received request', () => {
   test('should use message.id as correlationId when data.correlationId is missing', async () => {
     const messageWithoutCorrelationId = {
       id: 'msg-id-123',
+      type: 'uk.gov.fcp.sfd.crm.case.created',
       data: { caseId: 'case-1', crn: 123 }
     }
     await publishReceivedEvent(messageWithoutCorrelationId)
