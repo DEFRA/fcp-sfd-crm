@@ -44,8 +44,8 @@ jobs:
           docker compose -f compose.yml -f compose.test.yml run --rm "fcp-sfd-crm"
 
       - name: SonarQube Cloud Scan
-        uses: SonarSource/sonarqube-scan-action@v6
-        env: 
+        uses: SonarSource/sonarqube-scan-action@v7
+        env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
       - name: Snyk Scan
