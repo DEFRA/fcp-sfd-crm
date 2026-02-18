@@ -90,6 +90,21 @@ const createCaseWithOnlineSubmission = async (request) => {
       ]
     }
 
+    const createMetadataForExistingCase = async (request) => {
+      try {
+        const { authToken, caseId, metadata } = request
+        const { name, fileUrl } = metadata
+
+        const payload = {
+          rpa_name: name,
+          rpa_fileabsoluteurl: fileUrl,
+          rpa_copiedfileurl: fileUrl,
+          'rpa_DocumentTypeMetaId@odata.bind': '/rpa_documenttypeses(4e88916b-aae2-ee11-904c-000d3adc1ec9)'
+        }
+      }
+      catch (err) { }
+    }
+
     const response = await fetch(`${baseUrl}/incidents`, {
       method: 'POST',
       headers: {
@@ -118,5 +133,6 @@ const createCaseWithOnlineSubmission = async (request) => {
 export {
   getContactIdFromCrn,
   getAccountIdFromSbi,
-  createCaseWithOnlineSubmission
+  createCaseWithOnlineSubmission,
+  createMetadataForExistingCase
 }
