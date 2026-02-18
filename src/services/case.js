@@ -2,7 +2,6 @@ import { createLogger } from '../logging/logger.js'
 import { getCrmAuthToken } from '../auth/get-crm-auth-token.js'
 import { createCaseWithOnlineSubmissionInCrm } from './create-case-with-online-submission-in-crm.js'
 import { upsertCase, updateCaseId, markFileProcessed } from '../repos/cases.js'
-import { addMetadataToCase } from '../repos/crm.js'
 
 const logger = createLogger()
 
@@ -98,11 +97,6 @@ export async function createCase (payload) {
   }
 
   // Case exists — add metadata for this new file
-  await addMetadataToCase({
-    authToken,
-    caseId,
-    onlineSubmissionActivity: transformedPayload.onlineSubmissionActivity
-  })
 
   await markFileProcessed(correlationId, fileId)
 

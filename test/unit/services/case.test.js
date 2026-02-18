@@ -20,15 +20,10 @@ vi.mock('../../../src/repos/cases.js', () => ({
   markFileProcessed: vi.fn()
 }))
 
-vi.mock('../../../src/repos/crm.js', () => ({
-  addMetadataToCase: vi.fn(async () => ({ activityId: 'mock-activity-id', error: null }))
-}))
-
 const { createCase, transformPayload } = await import('../../../src/services/case.js')
 const { getCrmAuthToken } = await import('../../../src/auth/get-crm-auth-token.js')
 const { createCaseWithOnlineSubmissionInCrm } = await import('../../../src/services/create-case-with-online-submission-in-crm.js')
 const { upsertCase, updateCaseId, markFileProcessed } = await import('../../../src/repos/cases.js')
-const { addMetadataToCase } = await import('../../../src/repos/crm.js')
 
 const validPayload = {
   data: {
@@ -131,34 +126,9 @@ describe('case service', () => {
       expect(response).toEqual({ skipped: true })
       expect(getCrmAuthToken).not.toHaveBeenCalled()
       expect(createCaseWithOnlineSubmissionInCrm).not.toHaveBeenCalled()
-      expect(addMetadataToCase).not.toHaveBeenCalled()
       expect(mockLogger.info).toHaveBeenCalledWith(
         { correlationId: 'corr-1', fileId: 'file-1' },
         'Skipped: duplicate message'
-      )
-    })
-
-    it('should add metadata to existing case for a new file (different fileId, case created)', async () => {
-      upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: 'existing-case-id', isCreator: false })
-
-      const response = await createCase(validPayload)
-
-      expect(getCrmAuthToken).toHaveBeenCalled()
-      expect(createCaseWithOnlineSubmissionInCrm).not.toHaveBeenCalled()
-      expect(addMetadataToCase).toHaveBeenCalledWith(
-        expect.objectContaining({
-          authToken: 'mock-token',
-          caseId: 'existing-case-id',
-          onlineSubmissionActivity: expect.objectContaining({
-            subject: expect.stringContaining('file.pdf')
-          })
-        })
-      )
-      expect(markFileProcessed).toHaveBeenCalledWith('corr-1', 'file-1')
-      expect(response).toEqual({ caseId: 'existing-case-id' })
-      expect(mockLogger.info).toHaveBeenCalledWith(
-        { correlationId: 'corr-1', caseId: 'existing-case-id', fileId: 'file-1' },
-        'Metadata added to existing case'
       )
     })
 
@@ -200,13 +170,15 @@ describe('case service', () => {
       expect(markFileProcessed).not.toHaveBeenCalled()
     })
 
-    it('should not mark file processed if addMetadataToCase fails', async () => {
+    it('should mark file processed', async () => {
       upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: 'existing-case-id', isCreator: false })
-      addMetadataToCase.mockRejectedValue(new Error('Metadata failed'))
 
-      await expect(createCase(validPayload)).rejects.toThrow('Metadata failed')
+      await expect(createCase(validPayload)).resolves.toEqual({ caseId: 'existing-case-id' })
 
-      expect(markFileProcessed).not.toHaveBeenCalled()
+      expect(markFileProcessed).toHaveBeenCalledWith(
+        'corr-1',
+        'file-1'
+      )
     })
   })
 })
