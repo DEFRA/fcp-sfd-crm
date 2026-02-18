@@ -1,8 +1,7 @@
 import { createLogger } from '../logging/logger.js'
 import { getCrmAuthToken } from '../auth/get-crm-auth-token.js'
 import { createCaseWithOnlineSubmissionInCrm } from './create-case-with-online-submission-in-crm.js'
-import { findByCorrelationId, create } from '../repos/cases.js'
-import { MONGO_DUPLICATE_KEY_ERROR_CODE } from '../constants/mongodb.js'
+import { upsertCase, updateCaseId, markFileProcessed } from '../repos/cases.js'
 
 const logger = createLogger()
 
@@ -52,49 +51,55 @@ export function transformPayload (cloudEventPayload) {
 }
 
 /**
- * Create a case in CRM via the existing API service.
- * Deduplicates by correlationId using MongoDB unique index.
+ * Process a file upload event with two-level deduplication.
+ *
+ * Level 1 — correlationId:  first file creates a CRM case; subsequent
+ *           files for the same correlationId add metadata to it.
+ * Level 2 — correlationId + fileId:  exact duplicate messages are skipped.
+ *
  * @param {object} payload - parsed CloudEvents message payload
  */
 export async function createCase (payload) {
-  const { correlationId } = payload.data
+  const { correlationId, file } = payload.data
+  const fileId = file?.fileId
 
-  // Check if case already exists for this correlationId
-  const existingCase = await findByCorrelationId(correlationId)
+  // Step 1 — atomic upsert: determine our role
+  const { isNew, isDuplicateFile, caseId, isCreator } = await upsertCase(correlationId, fileId)
 
-  if (existingCase) {
-    logger.info({ caseId: existingCase.caseId }, 'Skipped: case already exists')
-
-    return { caseId: existingCase.caseId }
+  // Exact duplicate message (same correlationId + fileId already processed)
+  if (isDuplicateFile) {
+    logger.info({ correlationId, fileId }, 'Skipped: duplicate message')
+    return { skipped: true }
   }
 
-  try {
-    // Get auth token
-    const authToken = await getCrmAuthToken()
+  // Another message is still creating the case — let SQS retry later (we're not the creator)
+  if (!caseId && !isNew && !isCreator) {
+    logger.info({ correlationId, fileId }, 'Case creation in progress, will retry')
+    const error = new Error('Case creation in progress for this correlationId')
+    error.retryable = true
+    throw error
+  }
 
-    // Transform CloudEvents payload to expected format
-    const transformedPayload = transformPayload(payload)
-
-    // Create case with auth token
+  const authToken = await getCrmAuthToken()
+  const transformedPayload = transformPayload(payload)
+  // First message OR creator retrying after a previous failure
+  if (isNew || (!caseId && isCreator)) {
     const response = await createCaseWithOnlineSubmissionInCrm({
       authToken,
       ...transformedPayload
     })
 
-    try {
-      await create({ correlationId, caseId: response.caseId })
-    } catch (err) {
-      if (err.code === MONGO_DUPLICATE_KEY_ERROR_CODE) {
-        logger.info({ correlationId }, 'Duplicate correlationId, case already saved by concurrent request')
-        return { caseId: response.caseId }
-      }
-      throw err
-    }
+    await updateCaseId(correlationId, response.caseId)
+    await markFileProcessed(correlationId, fileId)
 
     logger.info({ correlationId, caseId: response.caseId }, 'Case created')
     return response
-  } catch (err) {
-    logger.error('Failed to create case via CRM API', err)
-    throw err
   }
+
+  // Case exists — add metadata for this new file
+
+  await markFileProcessed(correlationId, fileId)
+
+  logger.info({ correlationId, caseId, fileId }, 'Metadata added to existing case')
+  return { caseId }
 }

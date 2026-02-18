@@ -1,7 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach } from 'vitest'
-import { ensureIndex, findByCorrelationId, create } from '../../../../src/repos/cases.js'
+import { setCorrelationIdIndex as ensureIndex, upsertCase, markFileProcessed, updateCaseId } from '../../../../src/repos/cases.js'
 import db from '../../../../src/data/db.js'
-import { MONGO_DUPLICATE_KEY_ERROR_CODE } from '../../../../src/constants/mongodb.js'
 
 const COLLECTION = 'cases'
 
@@ -27,64 +26,100 @@ describe('Cases repository - Database integration', () => {
     })
   })
 
-  describe('create', () => {
-    test('should insert a case record with correlationId, caseId, and createdAt', async () => {
-      await create({ correlationId: 'corr-1', caseId: 'case-1' })
+  describe('upsertCase', () => {
+    test('should insert a new document on first call for a correlationId', async () => {
+      const result = await upsertCase('corr-1', 'file-1')
 
-      const record = await db.collection(COLLECTION).findOne({ correlationId: 'corr-1' })
+      expect(result.isNew).toBe(true)
+      expect(result.isDuplicateFile).toBe(false)
+      expect(result.caseId).toBeNull()
+      expect(result.isCreator).toBe(true)
 
-      expect(record).toBeDefined()
-      expect(record.correlationId).toBe('corr-1')
-      expect(record.caseId).toBe('case-1')
-      expect(record.createdAt).toBeInstanceOf(Date)
+      const doc = await db.collection(COLLECTION).findOne({ correlationId: 'corr-1' })
+      expect(doc).toBeDefined()
+      expect(doc.correlationId).toBe('corr-1')
+      expect(doc.caseId).toBeNull()
+      expect(doc.creatorFileId).toBe('file-1')
+      expect(doc.processedFileIds).toEqual([])
+      expect(doc.createdAt).toBeInstanceOf(Date)
     })
 
-    test('should reject duplicate correlationId when unique index exists', async () => {
-      await ensureIndex()
+    test('should return existing document for subsequent calls with different fileId', async () => {
+      await upsertCase('corr-1', 'file-1')
+      await markFileProcessed('corr-1', 'file-1')
+      await updateCaseId('corr-1', 'case-1')
 
-      await create({ correlationId: 'corr-dup', caseId: 'case-1' })
+      const result = await upsertCase('corr-1', 'file-2')
 
-      const duplicateInsert = create({ correlationId: 'corr-dup', caseId: 'case-2' })
-
-      await expect(duplicateInsert).rejects.toMatchObject({ code: MONGO_DUPLICATE_KEY_ERROR_CODE })
+      expect(result.isNew).toBe(false)
+      expect(result.isDuplicateFile).toBe(false)
+      expect(result.caseId).toBe('case-1')
+      expect(result.isCreator).toBe(false)
     })
 
-    test('concurrent inserts with same correlationId should result in only one record', async () => {
+    test('should detect duplicate fileId', async () => {
+      await upsertCase('corr-1', 'file-1')
+      await markFileProcessed('corr-1', 'file-1')
+
+      const result = await upsertCase('corr-1', 'file-1')
+
+      expect(result.isNew).toBe(false)
+      expect(result.isDuplicateFile).toBe(true)
+    })
+
+    test('should detect creator on retry when caseId is still null', async () => {
+      await upsertCase('corr-1', 'file-1')
+
+      const result = await upsertCase('corr-1', 'file-1')
+
+      expect(result.isNew).toBe(false)
+      expect(result.isDuplicateFile).toBe(false)
+      expect(result.caseId).toBeNull()
+      expect(result.isCreator).toBe(true)
+    })
+
+    test('concurrent upserts with same correlationId should both succeed without error', async () => {
       await ensureIndex()
 
       const results = await Promise.allSettled([
-        create({ correlationId: 'corr-race', caseId: 'case-a' }),
-        create({ correlationId: 'corr-race', caseId: 'case-b' })
+        upsertCase('corr-race', 'file-a'),
+        upsertCase('corr-race', 'file-b')
       ])
 
       const fulfilled = results.filter(r => r.status === 'fulfilled')
-      const rejected = results.filter(r => r.status === 'rejected')
-
-      expect(fulfilled).toHaveLength(1)
-      expect(rejected).toHaveLength(1)
-      expect(rejected[0].reason.code).toBe(MONGO_DUPLICATE_KEY_ERROR_CODE)
+      expect(fulfilled).toHaveLength(2)
 
       const count = await db.collection(COLLECTION).countDocuments({ correlationId: 'corr-race' })
       expect(count).toBe(1)
     })
   })
 
-  describe('findByCorrelationId', () => {
-    test('should return the case record when it exists', async () => {
-      await create({ correlationId: 'corr-find', caseId: 'case-find' })
+  describe('markFileProcessed', () => {
+    test('should add fileId to processedFileIds array', async () => {
+      await upsertCase('corr-1', 'file-1')
+      await markFileProcessed('corr-1', 'file-1')
 
-      const result = await findByCorrelationId('corr-find')
-
-      expect(result).toBeDefined()
-      expect(result.correlationId).toBe('corr-find')
-      expect(result.caseId).toBe('case-find')
-      expect(result.createdAt).toBeInstanceOf(Date)
+      const doc = await db.collection(COLLECTION).findOne({ correlationId: 'corr-1' })
+      expect(doc.processedFileIds).toContain('file-1')
     })
 
-    test('should return null when no case exists for the correlationId', async () => {
-      const result = await findByCorrelationId('non-existent')
+    test('should not duplicate fileId with $addToSet', async () => {
+      await upsertCase('corr-1', 'file-1')
+      await markFileProcessed('corr-1', 'file-1')
+      await markFileProcessed('corr-1', 'file-1')
 
-      expect(result).toBeNull()
+      const doc = await db.collection(COLLECTION).findOne({ correlationId: 'corr-1' })
+      expect(doc.processedFileIds.filter(id => id === 'file-1')).toHaveLength(1)
+    })
+  })
+
+  describe('updateCaseId', () => {
+    test('should set caseId on the document', async () => {
+      await upsertCase('corr-1', 'file-1')
+      await updateCaseId('corr-1', 'case-1')
+
+      const doc = await db.collection(COLLECTION).findOne({ correlationId: 'corr-1' })
+      expect(doc.caseId).toBe('case-1')
     })
   })
 })

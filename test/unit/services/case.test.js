@@ -15,22 +15,22 @@ vi.mock('../../../src/services/create-case-with-online-submission-in-crm.js', ()
 }))
 
 vi.mock('../../../src/repos/cases.js', () => ({
-  findByCorrelationId: vi.fn(),
-  create: vi.fn()
+  upsertCase: vi.fn(),
+  updateCaseId: vi.fn(),
+  markFileProcessed: vi.fn()
 }))
 
 const { createCase, transformPayload } = await import('../../../src/services/case.js')
-const { MONGO_DUPLICATE_KEY_ERROR_CODE } = await import('../../../src/constants/mongodb.js')
 const { getCrmAuthToken } = await import('../../../src/auth/get-crm-auth-token.js')
 const { createCaseWithOnlineSubmissionInCrm } = await import('../../../src/services/create-case-with-online-submission-in-crm.js')
-const { findByCorrelationId, create } = await import('../../../src/repos/cases.js')
+const { upsertCase, updateCaseId, markFileProcessed } = await import('../../../src/repos/cases.js')
 
 const validPayload = {
   data: {
     crn: 'crn1',
     sbi: 'sbi1',
     crm: { title: 'Test Title' },
-    file: { fileName: 'file.pdf', url: 'http://file' },
+    file: { fileId: 'file-1', fileName: 'file.pdf', url: 'http://file' },
     correlationId: 'corr-1'
   }
 }
@@ -38,8 +38,9 @@ const validPayload = {
 describe('case service', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    findByCorrelationId.mockResolvedValue(null)
-    create.mockResolvedValue({ acknowledged: true })
+    upsertCase.mockResolvedValue({ isNew: true, isDuplicateFile: false, caseId: null, isCreator: true })
+    updateCaseId.mockResolvedValue({ modifiedCount: 1 })
+    markFileProcessed.mockResolvedValue({ modifiedCount: 1 })
     createCaseWithOnlineSubmissionInCrm.mockResolvedValue({ caseId: 'mock-case-id', contactId: 'c1', accountId: 'a1' })
   })
 
@@ -78,10 +79,10 @@ describe('case service', () => {
   })
 
   describe('createCase', () => {
-    it('should create a new case in CRM and save mapping to MongoDB on first message', async () => {
+    it('should create a new case in CRM when isNew is true (first message)', async () => {
       const response = await createCase(validPayload)
 
-      expect(findByCorrelationId).toHaveBeenCalledWith('corr-1')
+      expect(upsertCase).toHaveBeenCalledWith('corr-1', 'file-1')
       expect(getCrmAuthToken).toHaveBeenCalled()
       expect(createCaseWithOnlineSubmissionInCrm).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -91,11 +92,12 @@ describe('case service', () => {
           correlationId: 'corr-1'
         })
       )
-      expect(create).toHaveBeenCalledWith({ correlationId: 'corr-1', caseId: 'mock-case-id' })
+      expect(updateCaseId).toHaveBeenCalledWith('corr-1', 'mock-case-id')
+      expect(markFileProcessed).toHaveBeenCalledWith('corr-1', 'file-1')
       expect(response.caseId).toBe('mock-case-id')
     })
 
-    it('should emit a minimal log when a new case is created', async () => {
+    it('should log when a new case is created', async () => {
       await createCase(validPayload)
 
       expect(mockLogger.info).toHaveBeenCalledWith(
@@ -104,78 +106,79 @@ describe('case service', () => {
       )
     })
 
-    it('should not create a new case when correlationId already exists in MongoDB', async () => {
-      findByCorrelationId.mockResolvedValue({
-        correlationId: 'corr-1',
-        caseId: 'existing-case-id',
-        createdAt: new Date()
-      })
+    it('should retry case creation when creator retries after failure (isCreator, caseId null)', async () => {
+      upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: null, isCreator: true })
 
       const response = await createCase(validPayload)
 
-      expect(response).toEqual({ caseId: 'existing-case-id' })
+      expect(getCrmAuthToken).toHaveBeenCalled()
+      expect(createCaseWithOnlineSubmissionInCrm).toHaveBeenCalled()
+      expect(updateCaseId).toHaveBeenCalledWith('corr-1', 'mock-case-id')
+      expect(markFileProcessed).toHaveBeenCalledWith('corr-1', 'file-1')
+      expect(response.caseId).toBe('mock-case-id')
+    })
+
+    it('should skip processing when message is an exact duplicate (same correlationId + fileId)', async () => {
+      upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: true, caseId: 'existing-case-id', isCreator: true })
+
+      const response = await createCase(validPayload)
+
+      expect(response).toEqual({ skipped: true })
       expect(getCrmAuthToken).not.toHaveBeenCalled()
       expect(createCaseWithOnlineSubmissionInCrm).not.toHaveBeenCalled()
-      expect(create).not.toHaveBeenCalled()
       expect(mockLogger.info).toHaveBeenCalledWith(
-        { caseId: 'existing-case-id' },
-        'Skipped: case already exists'
+        { correlationId: 'corr-1', fileId: 'file-1' },
+        'Skipped: duplicate message'
       )
     })
 
-    it('should not emit case.created event when correlationId already exists', async () => {
-      findByCorrelationId.mockResolvedValue({
-        correlationId: 'corr-1',
-        caseId: 'existing-case-id',
-        createdAt: new Date()
-      })
+    it('should throw retryable error when case creation is in progress by another message', async () => {
+      upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: null, isCreator: false })
 
-      await createCase(validPayload)
+      await expect(createCase(validPayload)).rejects.toThrow('Case creation in progress for this correlationId')
 
+      const thrownError = await createCase(validPayload).catch(e => e)
+      expect(thrownError.retryable).toBe(true)
+
+      expect(getCrmAuthToken).not.toHaveBeenCalled()
       expect(createCaseWithOnlineSubmissionInCrm).not.toHaveBeenCalled()
-    })
-
-    it('should handle race condition via unique index (duplicate key error)', async () => {
-      const duplicateError = new Error('E11000 duplicate key error')
-      duplicateError.code = MONGO_DUPLICATE_KEY_ERROR_CODE
-      create.mockRejectedValue(duplicateError)
-
-      const response = await createCase(validPayload)
-
-      expect(response).toEqual({ caseId: 'mock-case-id' })
       expect(mockLogger.info).toHaveBeenCalledWith(
-        { correlationId: 'corr-1' },
-        'Duplicate correlationId, case already saved by concurrent request'
+        { correlationId: 'corr-1', fileId: 'file-1' },
+        'Case creation in progress, will retry'
       )
     })
 
-    it('should not emit a creation log on duplicate key error', async () => {
-      const duplicateError = new Error('E11000 duplicate key error')
-      duplicateError.code = MONGO_DUPLICATE_KEY_ERROR_CODE
-      create.mockRejectedValue(duplicateError)
-
-      await createCase(validPayload)
-
-      expect(mockLogger.info).not.toHaveBeenCalledWith(
-        expect.objectContaining({ caseId: 'mock-case-id' }),
-        'Case created'
-      )
-    })
-
-    it('should propagate non-duplicate-key errors from MongoDB', async () => {
-      const dbError = new Error('Connection lost')
-      create.mockRejectedValue(dbError)
-
-      await expect(createCase(validPayload)).rejects.toThrow('Connection lost')
-      expect(mockLogger.error).toHaveBeenCalledWith('Failed to create case via CRM API', dbError)
-    })
-
-    it('should log and throw when CRM API fails', async () => {
+    it('should propagate CRM API errors', async () => {
       const error = new Error('CRM unavailable')
       createCaseWithOnlineSubmissionInCrm.mockRejectedValue(error)
 
       await expect(createCase(validPayload)).rejects.toThrow('CRM unavailable')
-      expect(mockLogger.error).toHaveBeenCalledWith('Failed to create case via CRM API', error)
+    })
+
+    it('should propagate MongoDB errors from upsertCase', async () => {
+      const dbError = new Error('Connection lost')
+      upsertCase.mockRejectedValue(dbError)
+
+      await expect(createCase(validPayload)).rejects.toThrow('Connection lost')
+    })
+
+    it('should not mark file processed if CRM case creation fails', async () => {
+      createCaseWithOnlineSubmissionInCrm.mockRejectedValue(new Error('CRM down'))
+
+      await expect(createCase(validPayload)).rejects.toThrow('CRM down')
+
+      expect(markFileProcessed).not.toHaveBeenCalled()
+    })
+
+    it('should mark file processed', async () => {
+      upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: 'existing-case-id', isCreator: false })
+
+      await expect(createCase(validPayload)).resolves.toEqual({ caseId: 'existing-case-id' })
+
+      expect(markFileProcessed).toHaveBeenCalledWith(
+        'corr-1',
+        'file-1'
+      )
     })
   })
 })

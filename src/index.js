@@ -2,12 +2,15 @@ import process from 'node:process'
 import { createLogger } from './logging/logger.js'
 import { startServer } from './api/common/helpers/start-server.js'
 import { startMessaging, stopMessaging } from './messaging/inbound/index.js'
+import { setCorrelationIdIndex } from './repos/cases.js'
 
 const logger = createLogger()
 
 const server = await startServer()
 
 logger.info('HTTP server started')
+
+await setCorrelationIdIndex()
 
 startMessaging()
 
