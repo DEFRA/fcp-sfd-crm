@@ -64,16 +64,30 @@ export async function createCase(payload) {
   const { correlationId, file } = payload.data
   const fileId = file?.fileId
 
-  // Step 1 — atomic upsert: determine our role
-  const { isNew, isDuplicateFile, caseId, isCreator } = await upsertCase(correlationId, fileId)
+  const prep = await prepareCase({ correlationId, fileId })
 
-  // Exact duplicate message (same correlationId + fileId already processed)
-  if (isDuplicateFile) {
+  if (prep.action === 'skip') {
     logger.info({ correlationId, fileId }, 'Skipped: duplicate message')
     return { skipped: true }
   }
 
-  // Another message is still creating the case — let SQS retry later (we're not the creator)
+  const authToken = await getCrmAuthToken()
+  const transformedPayload = transformPayload(payload)
+
+  if (prep.action === 'create') {
+    return createNewCase({ authToken, transformedPayload, correlationId, fileId })
+  }
+
+  return addMetadataToExistingCase({ authToken, caseId: prep.caseId, correlationId, file, fileId })
+}
+
+async function prepareCase({ correlationId, fileId }) {
+  const { isNew, isDuplicateFile, caseId, isCreator } = await upsertCase(correlationId, fileId)
+
+  if (isDuplicateFile) {
+    return { action: 'skip' }
+  }
+
   if (!caseId && !isNew && !isCreator) {
     logger.info({ correlationId, fileId }, 'Case creation in progress, will retry')
     const error = new Error('Case creation in progress for this correlationId')
@@ -81,16 +95,11 @@ export async function createCase(payload) {
     throw error
   }
 
-  const authToken = await getCrmAuthToken()
-  const transformedPayload = transformPayload(payload)
-
-  // First message OR creator retrying after a previous failure
   if (isNew || (!caseId && isCreator)) {
-    return createNewCase({ authToken, transformedPayload, correlationId, fileId })
+    return { action: 'create' }
   }
 
-  // Case exists — add metadata for this new file
-  return addMetadataToExistingCase({ authToken, caseId, correlationId, file, fileId })
+  return { action: 'addMetadata', caseId }
 }
 
 async function createNewCase({ authToken, transformedPayload, correlationId, fileId }) {
