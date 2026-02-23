@@ -11,7 +11,7 @@ const logger = createLogger()
  * @param {object} cloudEventPayload - CloudEvents format payload with data property
  * @returns {object} Transformed payload
  */
-export function transformPayload (cloudEventPayload) {
+export function transformPayload(cloudEventPayload) {
   // Extract data from CloudEvents format
   const { data } = cloudEventPayload
 
@@ -60,7 +60,7 @@ export function transformPayload (cloudEventPayload) {
  *
  * @param {object} payload - parsed CloudEvents message payload
  */
-export async function createCase (payload) {
+export async function createCase(payload) {
   const { correlationId, file } = payload.data
   const fileId = file?.fileId
 
@@ -83,23 +83,27 @@ export async function createCase (payload) {
 
   const authToken = await getCrmAuthToken()
   const transformedPayload = transformPayload(payload)
+
   // First message OR creator retrying after a previous failure
   if (isNew || (!caseId && isCreator)) {
-    const response = await createCaseWithOnlineSubmissionInCrm({
-      authToken,
-      ...transformedPayload
-    })
-
-    await updateCaseId(correlationId, response.caseId)
-    await markFileProcessed(correlationId, fileId)
-
-    logger.info({ correlationId, caseId: response.caseId }, 'Case created')
-    return response
+    return createNewCase({ authToken, transformedPayload, correlationId, fileId })
   }
 
   // Case exists — add metadata for this new file
+  return addMetadataToExistingCase({ authToken, caseId, correlationId, file, fileId })
+}
 
-  // Retrieve the rpa_onlinesubmissionid for the existing case
+async function createNewCase({ authToken, transformedPayload, correlationId, fileId }) {
+  const response = await createCaseWithOnlineSubmissionInCrm({ authToken, ...transformedPayload })
+
+  await updateCaseId(correlationId, response.caseId)
+  await markFileProcessed(correlationId, fileId)
+
+  logger.info({ correlationId, caseId: response.caseId }, 'Case created')
+  return response
+}
+
+async function addMetadataToExistingCase({ authToken, caseId, correlationId, file, fileId }) {
   const { rpaOnlinesubmissionid, error: getOnlineSubmissionError } = await getOnlineSubmissionIds(authToken, caseId)
 
   if (getOnlineSubmissionError || !rpaOnlinesubmissionid) {
