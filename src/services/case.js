@@ -2,6 +2,7 @@ import { createLogger } from '../logging/logger.js'
 import { getCrmAuthToken } from '../auth/get-crm-auth-token.js'
 import { createCaseWithOnlineSubmissionInCrm } from './create-case-with-online-submission-in-crm.js'
 import { upsertCase, updateCaseId, markFileProcessed } from '../repos/cases.js'
+import { getOnlineSubmissionIds, createMetadataForOnlineSubmission } from '../repos/crm.js'
 
 const logger = createLogger()
 
@@ -98,8 +99,37 @@ export async function createCase (payload) {
 
   // Case exists — add metadata for this new file
 
+  // Retrieve the rpa_onlinesubmissionid for the existing case
+  const { rpaOnlinesubmissionid, error: getOnlineSubmissionError } = await getOnlineSubmissionIds(authToken, caseId)
+
+  if (getOnlineSubmissionError || !rpaOnlinesubmissionid) {
+    logger.error({ correlationId, caseId, error: getOnlineSubmissionError }, 'Failed to retrieve online submission id')
+    const error = new Error('Failed to retrieve online submission id')
+    error.retryable = false
+    throw error
+  }
+
+  const metadata = {
+    name: file?.fileName || 'unknown',
+    fileUrl: file?.url || '',
+    documentTypeId: undefined
+  }
+
+  const { metadataId, error: metadataError } = await createMetadataForOnlineSubmission({
+    authToken,
+    rpaOnlinesubmissionid,
+    metadata
+  })
+
+  if (metadataError) {
+    logger.error({ correlationId, caseId, fileId, error: metadataError }, 'Failed to add metadata for additional file')
+    const error = new Error('Failed to add metadata for additional file')
+    error.retryable = false
+    throw error
+  }
+
   await markFileProcessed(correlationId, fileId)
 
-  logger.info({ correlationId, caseId, fileId }, 'Metadata added to existing case')
+  logger.info({ correlationId, caseId, fileId, metadataId }, 'Metadata added to existing case')
   return { caseId }
 }

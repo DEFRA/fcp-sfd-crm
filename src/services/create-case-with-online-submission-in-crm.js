@@ -4,7 +4,8 @@ import { createLogger } from '../logging/logger.js'
 import {
   getContactIdFromCrn,
   getAccountIdFromSbi,
-  createCaseWithOnlineSubmission
+  createCaseWithOnlineSubmission,
+  getOnlineSubmissionIds
 } from '../repos/crm.js'
 import { crmEvents } from '../constants/events.js'
 import { publishReceivedEvent } from '../messaging/outbound/received-event/publish-received-event.js'
@@ -66,6 +67,14 @@ export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi,
     throw internal('Unable to create case with online submission activity in CRM')
   }
 
+  // Retrieve rpa_onlinesubmissionid for the created case
+  const { rpaOnlinesubmissionid, error: getOnlineSubmissionError } = await getOnlineSubmissionIds(authToken, caseId)
+
+  if (getOnlineSubmissionError || !rpaOnlinesubmissionid) {
+    logger.error(`Unable to retrieve online submission id for case ${caseId}: ${getOnlineSubmissionError}`)
+    throw internal('Unable to retrieve online submission for created case')
+  }
+
   const eventData = {
     correlationId,
     caseId,
@@ -83,6 +92,7 @@ export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi,
   return {
     contactId,
     accountId,
-    caseId
+    caseId,
+    rpaOnlinesubmissionid
   }
 }

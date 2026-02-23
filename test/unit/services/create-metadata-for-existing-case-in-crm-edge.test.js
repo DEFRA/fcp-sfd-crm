@@ -9,7 +9,9 @@ vi.mock('../../../src/logging/logger.js', () => ({
 vi.mock('../../../src/repos/crm.js', () => ({
   getContactIdFromCrn: vi.fn(),
   getAccountIdFromSbi: vi.fn(),
-  createMetadataForExistingCase: vi.fn()
+  createMetadataForExistingCase: vi.fn(),
+  getOnlineSubmissionIds: vi.fn(),
+  createMetadataForOnlineSubmission: vi.fn()
 }))
 
 vi.mock('../../../src/messaging/outbound/received-event/publish-received-event.js', () => ({
@@ -63,7 +65,7 @@ describe('createMetadataForExistingCaseinCrm - edge cases', () => {
     ).rejects.toThrow(`Missing required parameter: ${field}`)
 
     expect(mockLogger.error).toHaveBeenCalledWith(
-            `Missing required parameter: ${field}`
+      `Missing required parameter: ${field}`
     )
 
     expect(getContactIdFromCrn).not.toHaveBeenCalled()

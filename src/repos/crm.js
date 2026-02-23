@@ -113,18 +113,50 @@ const createCaseWithOnlineSubmission = async (request) => {
   }
 }
 
-const createMetadataForExistingCase = async (request) => {
+const getOnlineSubmissionIds = async (authToken, caseId) => {
   try {
-    const { authToken, metadata } = request
-    const { name, fileUrl } = metadata
+    const query = `/incidents(${caseId})?%24select=incidentid,title&%24expand=incident_rpa_onlinesubmissions(%24select=rpa_onlinesubmissionid)`
+    const response = await fetch(`${baseUrl}${query}`, {
+      method: 'GET',
+      headers: { Authorization: authToken, ...baseHeaders }
+    })
+
+    const data = await response.json()
+
+    const rpaId = data?.incident_rpa_onlinesubmissions?.[0]?.rpa_onlinesubmissionid || null
+
+    return {
+      rpaOnlinesubmissionid: rpaId,
+      error: null
+    }
+  } catch (err) {
+    return {
+      rpaOnlinesubmissionid: null,
+      error: err.message
+    }
+  }
+}
+
+const createMetadataForOnlineSubmission = async (request) => {
+  try {
+    const { authToken, rpaOnlinesubmissionid, metadata } = request
+    const { name, fileUrl, documentTypeId } = metadata
+
     const payload = {
       rpa_name: name,
       rpa_fileabsoluteurl: fileUrl,
-      rpa_copiedfileurl: fileUrl,
-      'rpa_DocumentTypeMetaId@odata.bind': '/rpa_documenttypeses(4e88916b-aae2-ee11-904c-000d3adc1ec9)'
+      rpa_copiedfileurl: fileUrl
     }
 
-    const response = await fetch(`${baseUrl}/incidents`, {
+    if (documentTypeId) {
+      payload['rpa_DocumentTypeMetaId@odata.bind'] = `/rpa_documenttypeses(${documentTypeId})`
+    } else {
+      payload['rpa_DocumentTypeMetaId@odata.bind'] = '/rpa_documenttypeses(4e88916b-aae2-ee11-904c-000d3adc1ec9)'
+    }
+
+    const endpoint = `${baseUrl}/rpa_onlinesubmissions(${rpaOnlinesubmissionid})/rpa_onlinesubmission_rpa_activitymetadata`
+
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         Authorization: authToken,
@@ -136,12 +168,12 @@ const createMetadataForExistingCase = async (request) => {
     const data = await response.json()
 
     return {
-      caseId: data.incidentid,
+      metadataId: data?.rpa_activitymetadataid || null,
       error: null
     }
   } catch (err) {
     return {
-      caseId: null,
+      metadataId: null,
       error: err.message
     }
   }
@@ -152,5 +184,6 @@ export {
   getContactIdFromCrn,
   getAccountIdFromSbi,
   createCaseWithOnlineSubmission,
-  createMetadataForExistingCase
+  getOnlineSubmissionIds,
+  createMetadataForOnlineSubmission
 }
