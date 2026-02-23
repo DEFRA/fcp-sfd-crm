@@ -1,23 +1,14 @@
-import http2 from 'node:http2'
 import Boom from '@hapi/boom'
 import { createLogger } from '../logging/logger.js'
 import {
-  getContactIdFromCrn,
-  getAccountIdFromSbi,
   createCaseWithOnlineSubmission
 } from '../repos/crm.js'
-import { fetchRpaOnlineSubmissionIdOrThrow } from './crm-helpers.js'
+import { assertRequiredParams, ensureContactAndAccount, fetchRpaOnlineSubmissionIdOrThrow } from './crm-helpers.js'
 import { crmEvents } from '../constants/events.js'
 import { publishReceivedEvent } from '../messaging/outbound/received-event/publish-received-event.js'
 
-const { constants: httpConstants } = http2
-const { badRequest, boomify, internal } = Boom
+const { internal } = Boom
 const logger = createLogger()
-
-const unprocessableEntity = (message) => {
-  const error = new Error(message)
-  return boomify(error, { statusCode: httpConstants.HTTP_STATUS_UNPROCESSABLE_ENTITY })
-}
 
 export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi, caseData, onlineSubmissionActivity, correlationId }) => {
   const requiredParams = {
@@ -29,28 +20,9 @@ export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi,
     correlationId
   }
 
-  for (const [param, value] of Object.entries(requiredParams)) {
-    const errorMessage = `Missing required parameter: ${param}`
+  assertRequiredParams(requiredParams)
 
-    if (!value) {
-      logger.error(errorMessage)
-      throw badRequest(errorMessage)
-    }
-  }
-
-  const { contactId, error: contactError } = await getContactIdFromCrn(authToken, crn)
-
-  if (contactError || !contactId) {
-    logger.error(`No contact found for CRN: ${crn}, error: ${contactError}`)
-    throw unprocessableEntity('Contact ID not found')
-  }
-
-  const { accountId, error: accountError } = await getAccountIdFromSbi(authToken, sbi)
-
-  if (accountError || !accountId) {
-    logger.error(`No account found for SBI: ${sbi}, error: ${accountError}`)
-    throw unprocessableEntity('Account ID not found')
-  }
+  const { contactId, accountId } = await ensureContactAndAccount(authToken, crn, sbi)
 
   const { caseId, error: caseError } = await createCaseWithOnlineSubmission({
     authToken,
