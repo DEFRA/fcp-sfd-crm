@@ -119,7 +119,7 @@ async function addMetadataToExistingCase ({ authToken, caseId, correlationId, fi
   const metadata = {
     name: file?.fileName || 'unknown',
     fileUrl: file?.url || '',
-    documentTypeId: undefined
+    documentTypeId: null
   }
 
   const { metadataId, error: metadataError } = await createMetadataForOnlineSubmission({
