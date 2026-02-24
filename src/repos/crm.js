@@ -7,8 +7,25 @@ const baseHeaders = {
   Prefer: 'return=representation'
 }
 
+const buildQuery = (params) =>
+  Object.entries(params)
+    .map(([k, v]) => {
+      const encodedKey = encodeURIComponent(k)
+      const encodedValue = encodeURIComponent(v)
+        .replace(/%27/g, "'")
+        .replace(/%2C/g, ',')
+        .replace(/%28/g, '(')
+        .replace(/%29/g, ')')
+        .replace(/%3D/g, '=')
+      return `${encodedKey}=${encodedValue}`
+    })
+    .join('&')
+
 const getContactIdFromCrn = async (authToken, crn) => {
-  const query = `/contacts?%24select=contactid&%24filter=rpa_capcustomerid%20eq%20'${crn}'`
+  const query = `/contacts?${buildQuery({
+    $select: 'contactid',
+    $filter: `rpa_capcustomerid eq '${crn}'`
+  })}`
 
   try {
     const response = await fetch(`${baseUrl}${query}`, {
@@ -30,7 +47,10 @@ const getContactIdFromCrn = async (authToken, crn) => {
 
 // get business from SBI - we can also get FRN from here if needed
 const getAccountIdFromSbi = async (authToken, sbi) => {
-  const query = `/accounts?%24select=accountid&%24filter=rpa_sbinumber%20eq%20'${sbi}'`
+  const query = `/accounts?${buildQuery({
+    $select: 'accountid',
+    $filter: `rpa_sbinumber eq '${sbi}'`
+  })}`
 
   try {
     const response = await fetch(`${baseUrl}${query}`, {
@@ -115,7 +135,10 @@ const createCaseWithOnlineSubmission = async (request) => {
 
 const getOnlineSubmissionIds = async (authToken, caseId) => {
   try {
-    const query = `/incidents(${caseId})?%24select=incidentid,title&%24expand=incident_rpa_onlinesubmissions(%24select=rpa_onlinesubmissionid)`
+    const query = `/incidents(${caseId})?${buildQuery({
+      $select: 'incidentid,title',
+      $expand: 'incident_rpa_onlinesubmissions($select=rpa_onlinesubmissionid)'
+    })}`
     const response = await fetch(`${baseUrl}${query}`, {
       method: 'GET',
       headers: { Authorization: authToken, ...baseHeaders }
