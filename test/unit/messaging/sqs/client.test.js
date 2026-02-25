@@ -39,7 +39,7 @@ describe('sqs client', () => {
       path: '/',
       port: 4566,
       protocol: 'https:',
-      query: undefined,
+      query: undefined
     })
   })
 })

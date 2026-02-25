@@ -308,4 +308,95 @@ describe('CRM repository', () => {
       expect(error).toBe('Invalid JSON')
     })
   })
+
+  describe('getOnlineSubmissionIds', () => {
+    test('should fetch online submission id for case', async () => {
+      const mockResponse = {
+        ok: true,
+        json: vi.fn().mockResolvedValue({ incident_rpa_onlinesubmissions: [{ rpa_onlinesubmissionid: 'OLS-2026-0001' }] })
+      }
+      global.fetch.mockResolvedValue(mockResponse)
+
+      const { getOnlineSubmissionIds } = await import('../../../src/repos/crm.js')
+
+      const result = await getOnlineSubmissionIds('Bearer token', 'case-123')
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        'https://crm.example.com/api/incidents(case-123)?%24select=incidentid,title&%24expand=incident_rpa_onlinesubmissions(%24select=rpa_onlinesubmissionid)',
+        {
+          method: 'GET',
+          headers: { Authorization: 'Bearer token', Prefer: 'return=representation', 'Content-Type': 'application/json' }
+        }
+      )
+
+      expect(result).toEqual({ rpaOnlinesubmissionid: 'OLS-2026-0001', error: null })
+    })
+
+    test('should return error when fetch fails', async () => {
+      global.fetch.mockRejectedValue(new Error('Network error'))
+      const { getOnlineSubmissionIds } = await import('../../../src/repos/crm.js')
+      const result = await getOnlineSubmissionIds('Bearer token', 'case-123')
+      expect(result).toEqual({ rpaOnlinesubmissionid: null, error: 'Network error' })
+    })
+
+    test('should handle empty online submissions array', async () => {
+      const mockResponse = { ok: true, json: vi.fn().mockResolvedValue({ incident_rpa_onlinesubmissions: [] }) }
+      global.fetch.mockResolvedValue(mockResponse)
+      const { getOnlineSubmissionIds } = await import('../../../src/repos/crm.js')
+      const result = await getOnlineSubmissionIds('Bearer token', 'case-123')
+      expect(result).toEqual({ rpaOnlinesubmissionid: null, error: null })
+    })
+  })
+
+  describe('createMetadataForOnlineSubmission', () => {
+    test('should post metadata to online submission and return metadataId', async () => {
+      const mockResponse = {
+        ok: true,
+        json: vi.fn().mockResolvedValue({ rpa_activitymetadataid: 'meta-123' })
+      }
+      global.fetch.mockResolvedValue(mockResponse)
+
+      const { createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
+
+      const result = await createMetadataForOnlineSubmission({
+        authToken: 'Bearer token',
+        rpaOnlinesubmissionid: 'OLS-2026-0001',
+        metadata: { name: 'file.pdf', fileUrl: 'http://file' }
+      })
+
+      expect(result).toEqual({ metadataId: 'meta-123', error: null })
+    })
+
+    test('should return error when fetch fails', async () => {
+      global.fetch.mockRejectedValue(new Error('Network error'))
+      const { createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
+      const result = await createMetadataForOnlineSubmission({ authToken: 'Bearer token', rpaOnlinesubmissionid: 'ols', metadata: {} })
+      expect(result).toEqual({ metadataId: null, error: 'Network error' })
+    })
+
+    test('should handle response without metadata id', async () => {
+      const mockResponse = { ok: true, json: vi.fn().mockResolvedValue({}) }
+      global.fetch.mockResolvedValue(mockResponse)
+      const { createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
+      const result = await createMetadataForOnlineSubmission({ authToken: 'Bearer token', rpaOnlinesubmissionid: 'ols', metadata: { name: 'a' } })
+      expect(result).toEqual({ metadataId: null, error: null })
+    })
+
+    test('should include provided documentTypeId in payload', async () => {
+      const mockResponse = { ok: true, json: vi.fn().mockResolvedValue({ rpa_activitymetadataid: 'meta-456' }) }
+      global.fetch.mockResolvedValue(mockResponse)
+      const { createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
+
+      const result = await createMetadataForOnlineSubmission({
+        authToken: 'Bearer token',
+        rpaOnlinesubmissionid: 'OLS-2026-0001',
+        metadata: { name: 'file.pdf', fileUrl: 'http://file', documentTypeId: 'abcd-1234' }
+      })
+
+      expect(result).toEqual({ metadataId: 'meta-456', error: null })
+      const lastCall = global.fetch.mock.calls[0]
+      const body = JSON.parse(lastCall[1].body)
+      expect(body['rpa_DocumentTypeMetaId@odata.bind']).toBe('/rpa_documenttypeses(abcd-1234)')
+    })
+  })
 })

@@ -7,8 +7,25 @@ const baseHeaders = {
   Prefer: 'return=representation'
 }
 
+const buildQuery = (params) =>
+  Object.entries(params)
+    .map(([k, v]) => {
+      const encodedKey = encodeURIComponent(k)
+      const encodedValue = encodeURIComponent(v)
+        .replaceAll(/%27/g, "'")
+        .replaceAll(/%2C/g, ',')
+        .replaceAll(/%28/g, '(')
+        .replaceAll(/%29/g, ')')
+        .replaceAll(/%3D/g, '=')
+      return `${encodedKey}=${encodedValue}`
+    })
+    .join('&')
+
 const getContactIdFromCrn = async (authToken, crn) => {
-  const query = `/contacts?%24select=contactid&%24filter=rpa_capcustomerid%20eq%20'${crn}'`
+  const query = `/contacts?${buildQuery({
+    $select: 'contactid',
+    $filter: `rpa_capcustomerid eq '${crn}'`
+  })}`
 
   try {
     const response = await fetch(`${baseUrl}${query}`, {
@@ -30,7 +47,10 @@ const getContactIdFromCrn = async (authToken, crn) => {
 
 // get business from SBI - we can also get FRN from here if needed
 const getAccountIdFromSbi = async (authToken, sbi) => {
-  const query = `/accounts?%24select=accountid&%24filter=rpa_sbinumber%20eq%20'${sbi}'`
+  const query = `/accounts?${buildQuery({
+    $select: 'accountid',
+    $filter: `rpa_sbinumber eq '${sbi}'`
+  })}`
 
   try {
     const response = await fetch(`${baseUrl}${query}`, {
@@ -113,10 +133,80 @@ const createCaseWithOnlineSubmission = async (request) => {
   }
 }
 
-// Future: get document type
+const getOnlineSubmissionIds = async (authToken, caseId) => {
+  try {
+    const query = `/incidents(${caseId})?${buildQuery({
+      $select: 'incidentid,title',
+      $expand: 'incident_rpa_onlinesubmissions($select=rpa_onlinesubmissionid)'
+    })}`
+    const response = await fetch(`${baseUrl}${query}`, {
+      method: 'GET',
+      headers: { Authorization: authToken, ...baseHeaders }
+    })
 
+    const data = await response.json()
+
+    const rpaId = data?.incident_rpa_onlinesubmissions?.[0]?.rpa_onlinesubmissionid || null
+
+    return {
+      rpaOnlinesubmissionid: rpaId,
+      error: null
+    }
+  } catch (err) {
+    return {
+      rpaOnlinesubmissionid: null,
+      error: err.message
+    }
+  }
+}
+
+const createMetadataForOnlineSubmission = async (request) => {
+  try {
+    const { authToken, rpaOnlinesubmissionid, metadata } = request
+    const { name, fileUrl, documentTypeId } = metadata
+
+    const payload = {
+      rpa_name: name,
+      rpa_fileabsoluteurl: fileUrl,
+      rpa_copiedfileurl: fileUrl
+    }
+
+    if (documentTypeId) {
+      payload['rpa_DocumentTypeMetaId@odata.bind'] = `/rpa_documenttypeses(${documentTypeId})`
+    } else {
+      payload['rpa_DocumentTypeMetaId@odata.bind'] = '/rpa_documenttypeses(4e88916b-aae2-ee11-904c-000d3adc1ec9)'
+    }
+
+    const endpoint = `${baseUrl}/rpa_onlinesubmissions(${rpaOnlinesubmissionid})/rpa_onlinesubmission_rpa_activitymetadata`
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        Authorization: authToken,
+        ...baseHeaders
+      },
+      body: JSON.stringify(payload)
+    })
+
+    const data = await response.json()
+
+    return {
+      metadataId: data?.rpa_activitymetadataid || null,
+      error: null
+    }
+  } catch (err) {
+    return {
+      metadataId: null,
+      error: err.message
+    }
+  }
+}
+
+// Future: get document type
 export {
   getContactIdFromCrn,
   getAccountIdFromSbi,
-  createCaseWithOnlineSubmission
+  createCaseWithOnlineSubmission,
+  getOnlineSubmissionIds,
+  createMetadataForOnlineSubmission
 }

@@ -10,7 +10,9 @@ vi.mock('../../../src/logging/logger.js', () => ({
 vi.mock('../../../src/repos/crm.js', () => ({
   getContactIdFromCrn: vi.fn(),
   getAccountIdFromSbi: vi.fn(),
-  createCaseWithOnlineSubmission: vi.fn()
+  createCaseWithOnlineSubmission: vi.fn(),
+  getOnlineSubmissionIds: vi.fn(),
+  createMetadataForOnlineSubmission: vi.fn()
 }))
 
 vi.mock('../../../src/messaging/outbound/received-event/publish-received-event.js', () => ({
@@ -18,7 +20,7 @@ vi.mock('../../../src/messaging/outbound/received-event/publish-received-event.j
 }))
 
 const { createCaseWithOnlineSubmissionInCrm } = await import('../../../src/services/create-case-with-online-submission-in-crm.js')
-const { getContactIdFromCrn, getAccountIdFromSbi, createCaseWithOnlineSubmission } = await import('../../../src/repos/crm.js')
+const { getContactIdFromCrn, getAccountIdFromSbi, createCaseWithOnlineSubmission, getOnlineSubmissionIds } = await import('../../../src/repos/crm.js')
 const { publishReceivedEvent } = await import('../../../src/messaging/outbound/received-event/publish-received-event.js')
 
 describe('createCaseWithOnlineSubmissionInCrm service', () => {
@@ -30,6 +32,8 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: 'mock-contact-id' })
     getAccountIdFromSbi.mockResolvedValue({ accountId: 'mock-account-id' })
     createCaseWithOnlineSubmission.mockResolvedValue({ caseId: 'mock-case-id', error: null })
+    getOnlineSubmissionIds.mockResolvedValue({ rpaOnlinesubmissionid: 'mock-ols-id', error: null })
+    getOnlineSubmissionIds.mockResolvedValue({ rpaOnlinesubmissionid: 'mock-ols-id', error: null })
 
     const request = {
       authToken: 'mock-bearer-token',
@@ -54,7 +58,8 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     expect(result).toEqual({
       contactId: 'mock-contact-id',
       accountId: 'mock-account-id',
-      caseId: 'mock-case-id'
+      caseId: 'mock-case-id',
+      rpaOnlinesubmissionid: 'mock-ols-id'
     })
   })
 
@@ -156,5 +161,21 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     })).rejects.toThrow('Unable to create case with online submission activity in CRM')
 
     expect(mockLogger.error).toHaveBeenCalledWith('Error creating case with online submission activity: CRM service failed')
+  })
+
+  test('throws error if unable to retrieve online submission id', async () => {
+    getContactIdFromCrn.mockResolvedValue({ contactId: 'mock-contact-id' })
+    getAccountIdFromSbi.mockResolvedValue({ accountId: 'mock-account-id' })
+    createCaseWithOnlineSubmission.mockResolvedValue({ caseId: 'mock-case-id', error: null })
+    getOnlineSubmissionIds.mockResolvedValue({ rpaOnlinesubmissionid: null, error: 'Not found' })
+
+    await expect(createCaseWithOnlineSubmissionInCrm({
+      authToken: 'mock-bearer-token',
+      correlationId: 'mock-correlation-id',
+      crn: 'mock-crn',
+      sbi: 'mock-sbi',
+      caseData: { title: 'Test Case', caseDescription: 'Test description' },
+      onlineSubmissionActivity: { subject: 'Test', description: 'Test submission' }
+    })).rejects.toThrow('Unable to retrieve online submission for created case')
   })
 })
