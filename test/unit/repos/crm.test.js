@@ -399,4 +399,59 @@ describe('CRM repository', () => {
       expect(body['rpa_DocumentTypeMetaId@odata.bind']).toBe('/rpa_documenttypeses(abcd-1234)')
     })
   })
+
+  describe('createMetadataForExistingCase', () => {
+    test('should post metadata for existing case and return metadataId with contact/account binds', async () => {
+      const mockResponse = { ok: true, json: vi.fn().mockResolvedValue({ rpa_activitymetadataid: 'meta-existing-123' }) }
+      global.fetch.mockResolvedValue(mockResponse)
+
+      const { createMetadataForExistingCase } = await import('../../../src/repos/crm.js')
+
+      const result = await createMetadataForExistingCase({
+        authToken: 'Bearer token',
+        caseId: 'case-789',
+        metadata: { name: 'file.pdf', fileUrl: 'http://file', contactId: 'contact-1', accountId: 'account-1' }
+      })
+
+      expect(result).toEqual({ metadataId: 'meta-existing-123', error: null })
+      const lastCall = global.fetch.mock.calls[0]
+      expect(lastCall[0]).toBe('https://crm.example.com/api/incidents(case-789)/incident_rpa_activitymetadata')
+      const body = JSON.parse(lastCall[1].body)
+      expect(body.rpa_name).toBe('file.pdf')
+      expect(body['rpa_Contact@odata.bind']).toBe('/contacts(contact-1)')
+      expect(body['rpa_Organisation@odata.bind']).toBe('/accounts(account-1)')
+    })
+
+    test('should return error when fetch fails', async () => {
+      global.fetch.mockRejectedValue(new Error('Network error'))
+      const { createMetadataForExistingCase } = await import('../../../src/repos/crm.js')
+      const result = await createMetadataForExistingCase({ authToken: 'Bearer token', caseId: 'case-1', metadata: { name: 'a' } })
+      expect(result).toEqual({ metadataId: null, error: 'Network error' })
+    })
+
+    test('should handle response without metadata id', async () => {
+      const mockResponse = { ok: true, json: vi.fn().mockResolvedValue({}) }
+      global.fetch.mockResolvedValue(mockResponse)
+      const { createMetadataForExistingCase } = await import('../../../src/repos/crm.js')
+      const result = await createMetadataForExistingCase({ authToken: 'Bearer token', caseId: 'case-2', metadata: { name: 'a' } })
+      expect(result).toEqual({ metadataId: null, error: null })
+    })
+
+    test('should include provided documentTypeId in payload', async () => {
+      const mockResponse = { ok: true, json: vi.fn().mockResolvedValue({ rpa_activitymetadataid: 'meta-999' }) }
+      global.fetch.mockResolvedValue(mockResponse)
+      const { createMetadataForExistingCase } = await import('../../../src/repos/crm.js')
+
+      const result = await createMetadataForExistingCase({
+        authToken: 'Bearer token',
+        caseId: 'case-3',
+        metadata: { name: 'file.pdf', fileUrl: 'http://file', documentTypeId: 'doc-999' }
+      })
+
+      expect(result).toEqual({ metadataId: 'meta-999', error: null })
+      const lastCall = global.fetch.mock.calls[0]
+      const body = JSON.parse(lastCall[1].body)
+      expect(body['rpa_DocumentTypeMetaId@odata.bind']).toBe('/rpa_documenttypeses(doc-999)')
+    })
+  })
 })
