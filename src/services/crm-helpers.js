@@ -58,9 +58,3 @@ export async function fetchRpaOnlineSubmissionIdOrThrow (authToken, caseId, cont
 
   return rpaOnlinesubmissionid
 }
-
-export default {
-  assertRequiredParams,
-  ensureContactAndAccount,
-  fetchRpaOnlineSubmissionIdOrThrow
-}
