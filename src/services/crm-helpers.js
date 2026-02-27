@@ -19,7 +19,7 @@ export function assertRequiredParams (requiredParams) {
   for (const [param, value] of Object.entries(requiredParams)) {
     const errorMessage = `Missing required parameter: ${param}`
 
-    if (!value) {
+    if (value === null || value === undefined) {
       logger.error(errorMessage)
       throw Boom.badRequest(errorMessage)
     }
