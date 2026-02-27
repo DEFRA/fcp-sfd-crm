@@ -11,7 +11,7 @@ vi.mock('../../../src/repos/crm.js', () => ({
   getContactIdFromCrn: vi.fn(),
   getAccountIdFromSbi: vi.fn(),
   createCaseWithOnlineSubmission: vi.fn(),
-  getOnlineSubmissionIds: vi.fn(),
+  getOnlineSubmissionId: vi.fn(),
   createMetadataForOnlineSubmission: vi.fn()
 }))
 
@@ -20,7 +20,7 @@ vi.mock('../../../src/messaging/outbound/received-event/publish-received-event.j
 }))
 
 const { createCaseWithOnlineSubmissionInCrm } = await import('../../../src/services/create-case-with-online-submission-in-crm.js')
-const { getContactIdFromCrn, getAccountIdFromSbi, createCaseWithOnlineSubmission, getOnlineSubmissionIds } = await import('../../../src/repos/crm.js')
+const { getContactIdFromCrn, getAccountIdFromSbi, createCaseWithOnlineSubmission, getOnlineSubmissionId } = await import('../../../src/repos/crm.js')
 const { publishReceivedEvent } = await import('../../../src/messaging/outbound/received-event/publish-received-event.js')
 
 describe('createCaseWithOnlineSubmissionInCrm service', () => {
@@ -32,8 +32,7 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: 'mock-contact-id' })
     getAccountIdFromSbi.mockResolvedValue({ accountId: 'mock-account-id' })
     createCaseWithOnlineSubmission.mockResolvedValue({ caseId: 'mock-case-id', error: null })
-    getOnlineSubmissionIds.mockResolvedValue({ rpaOnlinesubmissionid: 'mock-ols-id', error: null })
-    getOnlineSubmissionIds.mockResolvedValue({ rpaOnlinesubmissionid: 'mock-ols-id', error: null })
+    getOnlineSubmissionId.mockResolvedValue({ rpaOnlinesubmissionid: 'mock-ols-id', error: null })
 
     const request = {
       authToken: 'mock-bearer-token',
@@ -167,7 +166,7 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: 'mock-contact-id' })
     getAccountIdFromSbi.mockResolvedValue({ accountId: 'mock-account-id' })
     createCaseWithOnlineSubmission.mockResolvedValue({ caseId: 'mock-case-id', error: null })
-    getOnlineSubmissionIds.mockResolvedValue({ rpaOnlinesubmissionid: null, error: 'Not found' })
+    getOnlineSubmissionId.mockResolvedValue({ rpaOnlinesubmissionid: null, error: 'Not found' })
 
     await expect(createCaseWithOnlineSubmissionInCrm({
       authToken: 'mock-bearer-token',

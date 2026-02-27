@@ -2,7 +2,7 @@ import http2 from 'node:http2'
 import Boom from '@hapi/boom'
 import { createLogger } from '../logging/logger.js'
 import {
-  getOnlineSubmissionIds,
+  getOnlineSubmissionId,
   getContactIdFromCrn,
   getAccountIdFromSbi
 } from '../repos/crm.js'
@@ -19,7 +19,7 @@ export function assertRequiredParams (requiredParams) {
   for (const [param, value] of Object.entries(requiredParams)) {
     const errorMessage = `Missing required parameter: ${param}`
 
-    if (!value) {
+    if (value === null || value === undefined) {
       logger.error(errorMessage)
       throw Boom.badRequest(errorMessage)
     }
@@ -47,7 +47,7 @@ export async function ensureContactAndAccount (authToken, crn, sbi) {
 export async function fetchRpaOnlineSubmissionIdOrThrow (authToken, caseId, context = {}) {
   const { correlationId } = context
 
-  const { rpaOnlinesubmissionid, error } = await getOnlineSubmissionIds(authToken, caseId)
+  const { rpaOnlinesubmissionid, error } = await getOnlineSubmissionId(authToken, caseId)
 
   if (error || !rpaOnlinesubmissionid) {
     logger.error({ correlationId, caseId, error }, 'Failed to retrieve online submission id')
@@ -57,10 +57,4 @@ export async function fetchRpaOnlineSubmissionIdOrThrow (authToken, caseId, cont
   }
 
   return rpaOnlinesubmissionid
-}
-
-export default {
-  assertRequiredParams,
-  ensureContactAndAccount,
-  fetchRpaOnlineSubmissionIdOrThrow
 }

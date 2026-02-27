@@ -10,12 +10,12 @@ vi.mock('../../../src/repos/crm.js', () => ({
   getContactIdFromCrn: vi.fn(),
   getAccountIdFromSbi: vi.fn(),
   createCaseWithOnlineSubmission: vi.fn(),
-  getOnlineSubmissionIds: vi.fn(),
+  getOnlineSubmissionId: vi.fn(),
   createMetadataForOnlineSubmission: vi.fn()
 }))
 
 const { createCaseWithOnlineSubmissionInCrm } = await import('../../../src/services/create-case-with-online-submission-in-crm.js')
-const { getContactIdFromCrn, getAccountIdFromSbi, createCaseWithOnlineSubmission, getOnlineSubmissionIds } = await import('../../../src/repos/crm.js')
+const { getContactIdFromCrn, getAccountIdFromSbi, createCaseWithOnlineSubmission, getOnlineSubmissionId } = await import('../../../src/repos/crm.js')
 
 describe('createCaseWithOnlineSubmissionInCrm edge cases', () => {
   beforeEach(() => {
@@ -78,7 +78,7 @@ describe('createCaseWithOnlineSubmissionInCrm edge cases', () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: 'id' })
     getAccountIdFromSbi.mockResolvedValue({ accountId: 'aid' })
     createCaseWithOnlineSubmission.mockResolvedValue({ caseId: 'cid', error: null })
-    getOnlineSubmissionIds.mockResolvedValue({ rpaOnlinesubmissionid: 'ols-1', error: null })
+    getOnlineSubmissionId.mockResolvedValue({ rpaOnlinesubmissionid: 'ols-1', error: null })
     const result = await createCaseWithOnlineSubmissionInCrm({
       authToken: 't',
       crn: 'c',

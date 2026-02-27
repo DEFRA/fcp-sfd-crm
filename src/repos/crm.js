@@ -1,6 +1,7 @@
 import { config } from '../config/index.js'
 
 const baseUrl = config.get('crm.baseUrl')
+const DEFAULT_DOCUMENT_TYPE_ID = '4e88916b-aae2-ee11-904c-000d3adc1ec9'
 
 const baseHeaders = {
   'Content-Type': 'application/json',
@@ -12,11 +13,8 @@ const buildQuery = (params) =>
     .map(([k, v]) => {
       const encodedKey = encodeURIComponent(k)
       const encodedValue = encodeURIComponent(v)
-        .replaceAll(/%27/g, "'")
-        .replaceAll(/%2C/g, ',')
-        .replaceAll(/%28/g, '(')
-        .replaceAll(/%29/g, ')')
-        .replaceAll(/%3D/g, '=')
+        .replaceAll('%2C', ',')
+        .replaceAll('%3D', '=')
       return `${encodedKey}=${encodedValue}`
     })
     .join('&')
@@ -103,7 +101,7 @@ const createCaseWithOnlineSubmission = async (request) => {
               rpa_name: name,
               rpa_fileabsoluteurl: fileUrl,
               rpa_copiedfileurl: fileUrl,
-              'rpa_DocumentTypeMetaId@odata.bind': '/rpa_documenttypeses(4e88916b-aae2-ee11-904c-000d3adc1ec9)'
+              'rpa_DocumentTypeMetaId@odata.bind': `/rpa_documenttypeses(${DEFAULT_DOCUMENT_TYPE_ID})`
             }
           ]
         }
@@ -133,7 +131,7 @@ const createCaseWithOnlineSubmission = async (request) => {
   }
 }
 
-const getOnlineSubmissionIds = async (authToken, caseId) => {
+const getOnlineSubmissionId = async (authToken, caseId) => {
   try {
     const query = `/incidents(${caseId})?${buildQuery({
       $select: 'incidentid,title',
@@ -174,10 +172,59 @@ const createMetadataForOnlineSubmission = async (request) => {
     if (documentTypeId) {
       payload['rpa_DocumentTypeMetaId@odata.bind'] = `/rpa_documenttypeses(${documentTypeId})`
     } else {
-      payload['rpa_DocumentTypeMetaId@odata.bind'] = '/rpa_documenttypeses(4e88916b-aae2-ee11-904c-000d3adc1ec9)'
+      payload['rpa_DocumentTypeMetaId@odata.bind'] = `/rpa_documenttypeses(${DEFAULT_DOCUMENT_TYPE_ID})`
     }
 
     const endpoint = `${baseUrl}/rpa_onlinesubmissions(${rpaOnlinesubmissionid})/rpa_onlinesubmission_rpa_activitymetadata`
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        Authorization: authToken,
+        ...baseHeaders
+      },
+      body: JSON.stringify(payload)
+    })
+
+    const data = await response.json()
+
+    return {
+      metadataId: data?.rpa_activitymetadataid || null,
+      error: null
+    }
+  } catch (err) {
+    return {
+      metadataId: null,
+      error: err.message
+    }
+  }
+}
+
+const createMetadataForExistingCase = async (request) => {
+  try {
+    const { authToken, caseId, metadata } = request
+    const { name, fileUrl, documentTypeId, contactId, accountId } = metadata
+
+    const payload = {
+      rpa_name: name,
+      rpa_fileabsoluteurl: fileUrl,
+      rpa_copiedfileurl: fileUrl
+    }
+
+    if (documentTypeId) {
+      payload['rpa_DocumentTypeMetaId@odata.bind'] = `/rpa_documenttypeses(${documentTypeId})`
+    } else {
+      payload['rpa_DocumentTypeMetaId@odata.bind'] = `/rpa_documenttypeses(${DEFAULT_DOCUMENT_TYPE_ID})`
+    }
+
+    if (contactId) {
+      payload['rpa_Contact@odata.bind'] = `/contacts(${contactId})`
+    }
+    if (accountId) {
+      payload['rpa_Organisation@odata.bind'] = `/accounts(${accountId})`
+    }
+
+    const endpoint = `${baseUrl}/incidents(${caseId})/incident_rpa_activitymetadata`
 
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -207,6 +254,8 @@ export {
   getContactIdFromCrn,
   getAccountIdFromSbi,
   createCaseWithOnlineSubmission,
-  getOnlineSubmissionIds,
+  getOnlineSubmissionId,
   createMetadataForOnlineSubmission
+  ,
+  createMetadataForExistingCase
 }
