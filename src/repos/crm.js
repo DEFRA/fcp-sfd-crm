@@ -1,6 +1,7 @@
 import { config } from '../config/index.js'
 
 const baseUrl = config.get('crm.baseUrl')
+const DEFAULT_DOCUMENT_TYPE_ID = '4e88916b-aae2-ee11-904c-000d3adc1ec9'
 
 const baseHeaders = {
   'Content-Type': 'application/json',
@@ -103,7 +104,7 @@ const createCaseWithOnlineSubmission = async (request) => {
               rpa_name: name,
               rpa_fileabsoluteurl: fileUrl,
               rpa_copiedfileurl: fileUrl,
-              'rpa_DocumentTypeMetaId@odata.bind': '/rpa_documenttypeses(4e88916b-aae2-ee11-904c-000d3adc1ec9)'
+              'rpa_DocumentTypeMetaId@odata.bind': `/rpa_documenttypeses(${DEFAULT_DOCUMENT_TYPE_ID})`
             }
           ]
         }
@@ -174,7 +175,7 @@ const createMetadataForOnlineSubmission = async (request) => {
     if (documentTypeId) {
       payload['rpa_DocumentTypeMetaId@odata.bind'] = `/rpa_documenttypeses(${documentTypeId})`
     } else {
-      payload['rpa_DocumentTypeMetaId@odata.bind'] = '/rpa_documenttypeses(4e88916b-aae2-ee11-904c-000d3adc1ec9)'
+      payload['rpa_DocumentTypeMetaId@odata.bind'] = `/rpa_documenttypeses(${DEFAULT_DOCUMENT_TYPE_ID})`
     }
 
     const endpoint = `${baseUrl}/rpa_onlinesubmissions(${rpaOnlinesubmissionid})/rpa_onlinesubmission_rpa_activitymetadata`
