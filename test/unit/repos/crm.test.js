@@ -309,7 +309,7 @@ describe('CRM repository', () => {
     })
   })
 
-  describe('getOnlineSubmissionIds', () => {
+  describe('getOnlineSubmissionId', () => {
     test('should fetch online submission id for case', async () => {
       const mockResponse = {
         ok: true,
@@ -317,9 +317,9 @@ describe('CRM repository', () => {
       }
       global.fetch.mockResolvedValue(mockResponse)
 
-      const { getOnlineSubmissionIds } = await import('../../../src/repos/crm.js')
+      const { getOnlineSubmissionId } = await import('../../../src/repos/crm.js')
 
-      const result = await getOnlineSubmissionIds('Bearer token', 'case-123')
+      const result = await getOnlineSubmissionId('Bearer token', 'case-123')
 
       expect(global.fetch).toHaveBeenCalledWith(
         'https://crm.example.com/api/incidents(case-123)?%24select=incidentid,title&%24expand=incident_rpa_onlinesubmissions(%24select=rpa_onlinesubmissionid)',
@@ -334,16 +334,16 @@ describe('CRM repository', () => {
 
     test('should return error when fetch fails', async () => {
       global.fetch.mockRejectedValue(new Error('Network error'))
-      const { getOnlineSubmissionIds } = await import('../../../src/repos/crm.js')
-      const result = await getOnlineSubmissionIds('Bearer token', 'case-123')
+      const { getOnlineSubmissionId } = await import('../../../src/repos/crm.js')
+      const result = await getOnlineSubmissionId('Bearer token', 'case-123')
       expect(result).toEqual({ rpaOnlinesubmissionid: null, error: 'Network error' })
     })
 
     test('should handle empty online submissions array', async () => {
       const mockResponse = { ok: true, json: vi.fn().mockResolvedValue({ incident_rpa_onlinesubmissions: [] }) }
       global.fetch.mockResolvedValue(mockResponse)
-      const { getOnlineSubmissionIds } = await import('../../../src/repos/crm.js')
-      const result = await getOnlineSubmissionIds('Bearer token', 'case-123')
+      const { getOnlineSubmissionId } = await import('../../../src/repos/crm.js')
+      const result = await getOnlineSubmissionId('Bearer token', 'case-123')
       expect(result).toEqual({ rpaOnlinesubmissionid: null, error: null })
     })
   })

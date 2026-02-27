@@ -133,7 +133,7 @@ const createCaseWithOnlineSubmission = async (request) => {
   }
 }
 
-const getOnlineSubmissionIds = async (authToken, caseId) => {
+const getOnlineSubmissionId = async (authToken, caseId) => {
   try {
     const query = `/incidents(${caseId})?${buildQuery({
       $select: 'incidentid,title',
@@ -252,7 +252,7 @@ export {
   getContactIdFromCrn,
   getAccountIdFromSbi,
   createCaseWithOnlineSubmission,
-  getOnlineSubmissionIds,
+  getOnlineSubmissionId,
   createMetadataForOnlineSubmission
   ,
   createMetadataForExistingCase
