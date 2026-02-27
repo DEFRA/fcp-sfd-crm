@@ -13,11 +13,8 @@ const buildQuery = (params) =>
     .map(([k, v]) => {
       const encodedKey = encodeURIComponent(k)
       const encodedValue = encodeURIComponent(v)
-        .replaceAll(/%27/g, "'")
-        .replaceAll(/%2C/g, ',')
-        .replaceAll(/%28/g, '(')
-        .replaceAll(/%29/g, ')')
-        .replaceAll(/%3D/g, '=')
+        .replaceAll('%2C', ',')
+        .replaceAll('%3D', '=')
       return `${encodedKey}=${encodedValue}`
     })
     .join('&')
