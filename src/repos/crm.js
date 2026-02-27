@@ -214,7 +214,7 @@ const createMetadataForExistingCase = async (request) => {
     if (documentTypeId) {
       payload['rpa_DocumentTypeMetaId@odata.bind'] = `/rpa_documenttypeses(${documentTypeId})`
     } else {
-      payload['rpa_DocumentTypeMetaId@odata.bind'] = '/rpa_documenttypeses(4e88916b-aae2-ee11-904c-000d3adc1ec9)'
+      payload['rpa_DocumentTypeMetaId@odata.bind'] = `/rpa_documenttypeses(${DEFAULT_DOCUMENT_TYPE_ID})`
     }
 
     if (contactId) {
