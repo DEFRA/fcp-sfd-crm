@@ -220,8 +220,12 @@ const createMetadataForExistingCase = async (request) => {
       payload['rpa_DocumentTypeMetaId@odata.bind'] = '/rpa_documenttypeses(4e88916b-aae2-ee11-904c-000d3adc1ec9)'
     }
 
-    if (contactId) payload['rpa_Contact@odata.bind'] = `/contacts(${contactId})`
-    if (accountId) payload['rpa_Organisation@odata.bind'] = `/accounts(${accountId})`
+    if (contactId) {
+      payload['rpa_Contact@odata.bind'] = `/contacts(${contactId})`
+    }
+    if (accountId) {
+      payload['rpa_Organisation@odata.bind'] = `/accounts(${accountId})`
+    }
 
     const endpoint = `${baseUrl}/incidents(${caseId})/incident_rpa_activitymetadata`
 
