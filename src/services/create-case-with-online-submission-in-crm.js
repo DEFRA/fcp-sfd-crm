@@ -44,7 +44,7 @@ export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi,
   try {
     rpaOnlinesubmissionid = await fetchRpaOnlineSubmissionIdOrThrow(authToken, caseId, { correlationId })
   } catch (err) {
-    logger.error(`Unable to retrieve online submission id for case ${caseId}: ${err.message}`)
+    logger.error({ caseId, error }, 'Unable to retrieve online submission id')
     throw internal('Unable to retrieve online submission for created case')
   }
 
