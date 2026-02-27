@@ -37,7 +37,7 @@
     "aws4": "1.13.2",
     "convict": "6.2.4",
     "convict-format-with-validator": "6.2.0",
-    "fast-xml-parser": "5.3.6",
+    "fast-xml-parser": "5.3.8",
     "global-agent": "3.0.0",
     "hapi-pino": "12.1.0",
     "hapi-pulse": "3.0.1",
@@ -62,6 +62,6 @@
     "vitest": "3.1.4"
   },
   "overrides": {
-    "fast-xml-parser": "5.3.6"
+    "fast-xml-parser": "5.3.8"
   }
 }
