@@ -15,7 +15,7 @@ const unprocessableEntity = (message) => {
   return Boom.boomify(error, { statusCode: httpConstants.HTTP_STATUS_UNPROCESSABLE_ENTITY })
 }
 
-export function assertRequiredParams(requiredParams) {
+export function assertRequiredParams (requiredParams) {
   for (const [param, value] of Object.entries(requiredParams)) {
     const errorMessage = `Missing required parameter: ${param}`
 
@@ -26,7 +26,7 @@ export function assertRequiredParams(requiredParams) {
   }
 }
 
-export async function ensureContactAndAccount(authToken, crn, sbi) {
+export async function ensureContactAndAccount (authToken, crn, sbi) {
   const { contactId, error: contactError } = await getContactIdFromCrn(authToken, crn)
 
   if (contactError || !contactId) {
@@ -44,7 +44,7 @@ export async function ensureContactAndAccount(authToken, crn, sbi) {
   return { contactId, accountId }
 }
 
-export async function fetchRpaOnlineSubmissionIdOrThrow(authToken, caseId, context = {}) {
+export async function fetchRpaOnlineSubmissionIdOrThrow (authToken, caseId, context = {}) {
   const { correlationId } = context
 
   const { rpaOnlinesubmissionid, error } = await getOnlineSubmissionId(authToken, caseId)
