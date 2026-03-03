@@ -40,7 +40,7 @@ services:
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-test}
       CRM_EVENTS_TOPIC_ARN: ${CRM_EVENTS_TOPIC_ARN}
     networks:
-      - cdp-tenant
+      - fcp-sfd
 
   localstack:
     image: localstack/localstack:3.0.2
@@ -66,12 +66,12 @@ services:
       start_period: 5s
       retries: 3
     networks:
-      - cdp-tenant
+      - fcp-sfd
 
   mongodb:
     image: mongo:6.0.13
     networks:
-      - cdp-tenant
+      - fcp-sfd
     ports:
       - '27017:27017'
     volumes:
@@ -82,5 +82,6 @@ volumes:
   mongodb-data:
 
 networks:
-  cdp-tenant:
+  fcp-sfd:
     driver: bridge
+    name: fcp-sfd
