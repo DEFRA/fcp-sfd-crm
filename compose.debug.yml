@@ -4,5 +4,6 @@ services:
     command: npm run start:debug
 
 networks:
-  cdp-tenant:
+  fcp-sfd:
     driver: bridge
+    name: fcp-sfd
