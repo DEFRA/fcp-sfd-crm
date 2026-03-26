@@ -8,11 +8,48 @@
 CRM orchestration service for Single Front Door.
 This service is part of the [Single Front Door (SFD)](https://github.com/defra/fcp-sfd-core) service.
 
-## Environment variables
+## Prerequisites
+
+### Environment variables
 
 Create a `.env` file in the root of the project based on `.env.example`.
 
+### SonarQube Cloud token
+
+`npm run sonar` enables local SonarQube Cloud scanning. To set it up:
+
+1. Log in to [SonarQube Cloud](https://sonarcloud.io)
+2. Go to **My Account → Security → Generate Tokens** and create a personal token
+3. Add `SONAR_TOKEN=<your-token>` to your `.env` file
+
+### Pre-commit hooks
+
+This repo includes pre-commit hooks:
+- **detect-secrets** — scans for accidentally committed secrets
+- **eslint-fix** — runs ESLint with neostandard and `--fix`
+
+Committing via the command line shows full hook output.
+
+To install the pre-commit framework, you need Python and pip:
+
+```bash
+pip3 install pre-commit
+```
+
+Then activate the hooks:
+
+```bash
+pre-commit install
+```
+
 ## Local development
+
+### VS Code tasks
+
+VS Code users can access tasks via the Command Palette → **Tasks: Run Task**.
+
+- macOS: `Cmd+Shift+P`
+- Windows: `Ctrl+Shift+P`
 
 ## Building and starting the service
 
@@ -21,14 +58,42 @@ This service has been configured to run in a Docker container and it is recommen
 Build the container:
 
 ```bash
-docker compose build
+npm run docker:build
 ```
 
 Start the container:
 
 ```bash
-docker compose up
+npm run docker:dev
 ```
+
+Start the container in detached mode:
+
+```bash
+npm run docker:dev:d
+```
+
+Stop the container:
+
+```bash
+npm run docker:stop
+```
+
+Stop the container and delete volumes:
+
+```bash
+npm run docker:stop:v
+```
+
+## Debugging
+
+Start in debug mode:
+
+```bash
+npm run docker:debug
+```
+
+Debug port: `9232`. Attach via VS Code or Chrome DevTools.
 
 ## Testing
 
@@ -44,6 +109,28 @@ The test container can also be started in watch mode to support Test Driven Deve
 
 ```bash
 npm run docker:test:watch
+```
+
+## Linting
+
+Run the linter (neostandard):
+
+```bash
+npm run lint
+```
+
+Auto-fix linting issues:
+
+```bash
+npm run lint:fix
+```
+
+## SonarQube Cloud scan
+
+Run a local SonarQube Cloud scan (requires `SONAR_TOKEN` in `.env`):
+
+```bash
+npm run sonar
 ```
 
 ## Licence
