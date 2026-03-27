@@ -1,0 +1,6 @@
+ignore:
+  SNYK-JS-CONVICT-15182994:
+    - '*':
+        reason: Not exploitable
+        expires: 2026-04-26T15:57:00.000Z
+        created: 2026-03-27T15:57:00.00Z
