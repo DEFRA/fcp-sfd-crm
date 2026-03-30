@@ -11,7 +11,6 @@ services:
     environment:
       PORT: 3009
       NODE_ENV: development
-      LOCALSTACK_ENDPOINT: http://localstack:4566
       MONGO_URI: mongodb://mongodb:27017/
     volumes:
       - ./src/:/home/node/src
@@ -20,8 +19,3 @@ services:
       - ./coverage:/home/node/coverage
     networks:
       - fcp-sfd
-
-  localstack:
-    env_file:
-      - path: .env
-        required: false
