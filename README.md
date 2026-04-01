@@ -51,6 +51,49 @@ VS Code users can access tasks via the Command Palette → **Tasks: Run Task**.
 - macOS: `Cmd+Shift+P`
 - Windows: `Ctrl+Shift+P`
 
+### Floci
+
+The following instructions relate to interacting with Floci locally (outside of the Docker container) on host port `localhost:4566`.
+
+Prerequisites:
+- Docker stack is running (`npm run docker:dev`)
+- AWS CLI is installed (`aws --version`)
+
+Set these variables in your terminal session:
+
+```bash
+export AWS_ACCESS_KEY_ID=test
+export AWS_SECRET_ACCESS_KEY=test
+export AWS_ENDPOINT_URL=http://localhost:4566
+export AWS_REGION=eu-west-2
+```
+
+Examples:
+
+```bash
+# List queues
+aws sqs list-queues
+
+# List topics
+aws sns list-topics
+
+# Check approximate message counts on a queue
+aws sqs get-queue-attributes \
+	--queue-url http://localhost:4566/000000000000/fcp_sfd_crm_requests \
+	--attribute-names ApproximateNumberOfMessages ApproximateNumberOfMessagesNotVisible
+
+# Read a message (without deleting it)
+aws sqs receive-message \
+	--queue-url http://localhost:4566/000000000000/fcp_sfd_crm_requests \
+	--max-number-of-messages 1
+
+# Purge all messages from a queue
+aws sqs purge-queue \
+	--queue-url http://localhost:4566/000000000000/fcp_sfd_crm_requests
+```
+
+Note: use `http://localhost:4566` from your host shell. The `http://floci:4566` endpoint is only resolvable from within the Docker container(s).
+
 ## Building and starting the service
 
 This service has been configured to run in a Docker container and it is recommended to utilise Docker and Docker Compose for local development.
