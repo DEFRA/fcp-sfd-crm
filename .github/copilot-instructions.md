@@ -154,7 +154,7 @@ Configuration is centralized in `src/config/index.js` and loaded via environment
 - Always create indexes for frequently queried fields
 
 ### AWS Integration
-- SQS/SNS clients are configured with environment endpoint (supports LocalStack)
+- SQS/SNS clients are configured with environment endpoint (supports Floci)
 - Region and credentials from env vars (`AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`)
 
 ### Environment Variables
@@ -168,7 +168,7 @@ Create a `.env` file from `.env.example`. Key variables:
 
 ### Docker Development
 - Source code volume-mounted for hot reload (`./src/:/home/node/src`)
-- Dependent services: MongoDB, LocalStack (mocks S3, SQS, SNS)
+- Dependent services: MongoDB, Floci (mocks S3, SQS, SNS)
 - Tests run in isolated container with cleanup
 
 ## Common Tasks

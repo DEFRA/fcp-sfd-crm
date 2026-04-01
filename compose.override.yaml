@@ -1,0 +1,41 @@
+services:
+  fcp-sfd-crm:
+    ports:
+      - "3009:3009"
+      - "9232:9232"
+    volumes:
+      - ./src/:/home/node/src
+      - ./package.json:/home/node/package.json
+    networks:
+      - fcp-sfd
+
+  floci:
+    ports:
+      - "4566:4566"
+    volumes:
+      - floci-data:/app/data
+    networks:
+      - fcp-sfd
+
+  floci-init:
+    volumes:
+      - ./floci/init.sh:/setup/init.sh
+    networks:
+      - fcp-sfd
+
+  mongodb:
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-data:/data
+    networks:
+      - fcp-sfd
+
+volumes:
+  mongodb-data:
+  floci-data:
+
+networks:
+  fcp-sfd:
+    driver: bridge
+    name: fcp-sfd
