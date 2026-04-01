@@ -4,9 +4,6 @@ services:
       target: development
     image: fcp-sfd-crm-development
     container_name: fcp-sfd-crm-development
-    ports:
-      - "3009:3009"
-      - "9232:9232"
     links:
       - "floci:floci"
       - "mongodb:mongodb"
@@ -44,8 +41,6 @@ services:
 
   floci:
     image: hectorvent/floci:1.0.11
-    ports:
-      - "4566:4566"
     environment:
       FLOCI_HOSTNAME: floci
       FLOCI_DEFAULT_REGION: ${AWS_REGION:-eu-west-2}
@@ -77,8 +72,6 @@ services:
     image: mongo:6.0.13
     networks:
       - fcp-sfd
-    ports:
-      - "27017:27017"
     volumes:
       - mongodb-data:/data
     restart: always
