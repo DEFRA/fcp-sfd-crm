@@ -185,7 +185,8 @@ describe('CRM repository', () => {
             name: 'test-document.pdf',
             documentType: 'doc-type-789',
             fileUrl: 'https://files.example.com/original.pdf',
-            copiedFileUrl: 'https://files.example.com/copied.pdf'
+            copiedFileUrl: 'https://files.example.com/copied.pdf',
+            mimeType: 'application/pdf'
           }
         }
       }
@@ -236,7 +237,8 @@ describe('CRM repository', () => {
         rpa_name: 'test-document.pdf',
         rpa_fileabsoluteurl: 'https://files.example.com/original.pdf',
         rpa_copiedfileurl: 'https://files.example.com/original.pdf',
-        'rpa_DocumentTypeMetaId@odata.bind': '/rpa_documenttypeses(4e88916b-aae2-ee11-904c-000d3adc1ec9)'
+        'rpa_DocumentTypeMetaId@odata.bind': '/rpa_documenttypeses(4e88916b-aae2-ee11-904c-000d3adc1ec9)',
+        rpa_filemimetype: 'application/pdf'
       })
 
       expect(caseId).toBe('8bb8b45b-aba2-f011-bbd2-7ced8d4645a2')
@@ -361,10 +363,13 @@ describe('CRM repository', () => {
       const result = await createMetadataForOnlineSubmission({
         authToken: 'Bearer token',
         rpaOnlinesubmissionid: 'OLS-2026-0001',
-        metadata: { name: 'file.pdf', fileUrl: 'http://file' }
+        metadata: { name: 'file.pdf', fileUrl: 'http://file', mimeType: 'application/pdf' }
       })
 
       expect(result).toEqual({ metadataId: 'meta-123', error: null })
+      const lastCall = global.fetch.mock.calls[0]
+      const body = JSON.parse(lastCall[1].body)
+      expect(body.rpa_filemimetype).toBe('application/pdf')
     })
 
     test('should return error when fetch fails', async () => {
@@ -407,10 +412,11 @@ describe('CRM repository', () => {
 
       const { createMetadataForExistingCase } = await import('../../../src/repos/crm.js')
 
+
       const result = await createMetadataForExistingCase({
         authToken: 'Bearer token',
         caseId: 'case-789',
-        metadata: { name: 'file.pdf', fileUrl: 'http://file', contactId: 'contact-1', accountId: 'account-1' }
+        metadata: { name: 'file.pdf', fileUrl: 'http://file', contactId: 'contact-1', accountId: 'account-1', mimeType: 'application/pdf' }
       })
 
       expect(result).toEqual({ metadataId: 'meta-existing-123', error: null })
@@ -418,6 +424,7 @@ describe('CRM repository', () => {
       expect(lastCall[0]).toBe('https://crm.example.com/api/incidents(case-789)/incident_rpa_activitymetadata')
       const body = JSON.parse(lastCall[1].body)
       expect(body.rpa_name).toBe('file.pdf')
+      expect(body.rpa_filemimetype).toBe('application/pdf')
       expect(body['rpa_Contact@odata.bind']).toBe('/contacts(contact-1)')
       expect(body['rpa_Organisation@odata.bind']).toBe('/accounts(account-1)')
     })
