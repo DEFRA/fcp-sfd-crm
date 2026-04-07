@@ -85,6 +85,36 @@ describe('case service', () => {
       expect(result.onlineSubmissionActivity.metadata.name).toBe('unknown')
       expect(result.onlineSubmissionActivity.metadata.fileUrl).toBe('')
     })
+
+    it('should include mimeType when provided on file', () => {
+      const payloadWithMime = {
+        data: {
+          crn: 'crn1',
+          sbi: 'sbi1',
+          crm: { title: 'Test Title' },
+          file: { fileId: 'file-2', fileName: 'file.pdf', url: 'http://file', mimeType: 'application/pdf' },
+          correlationId: 'corr-2'
+        }
+      }
+
+      const result = transformPayload(payloadWithMime)
+      expect(result.onlineSubmissionActivity.metadata.mimeType).toBe('application/pdf')
+    })
+
+    it('should not include mimeType when file has no mimeType', () => {
+      const payloadWithoutMime = {
+        data: {
+          crn: 'crn1',
+          sbi: 'sbi1',
+          crm: { title: 'Test Title' },
+          file: { fileId: 'file-3', fileName: 'file-no-mime.pdf', url: 'http://file' },
+          correlationId: 'corr-3'
+        }
+      }
+
+      const result = transformPayload(payloadWithoutMime)
+      expect(result.onlineSubmissionActivity.metadata.mimeType).toBeNull()
+    })
   })
 
   describe('createCase', () => {
