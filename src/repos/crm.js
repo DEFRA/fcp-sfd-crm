@@ -76,6 +76,17 @@ const createCaseWithOnlineSubmission = async (request) => {
     const { subject, description, scheduledStart, scheduledEnd, stateCode, statusCode, metadata } = onlineSubmissionActivity
     const { name, fileUrl, mimeType } = metadata
 
+    const activityMetadataItem = {
+      rpa_name: name,
+      rpa_fileabsoluteurl: fileUrl,
+      rpa_copiedfileurl: fileUrl,
+      'rpa_DocumentTypeMetaId@odata.bind': `/rpa_documenttypeses(${DEFAULT_DOCUMENT_TYPE_ID})`
+    }
+
+    if (mimeType) {
+      activityMetadataItem.rpa_filemimetype = mimeType
+    }
+
     const payload = {
       title,
       description: caseDescription,
@@ -96,20 +107,7 @@ const createCaseWithOnlineSubmission = async (request) => {
           rpa_onlinesubmissiondate: new Date().toISOString(),
           statecode: stateCode,
           statuscode: statusCode,
-          rpa_onlinesubmission_rpa_activitymetadata: [
-            (() => {
-              const item = {
-                rpa_name: name,
-                rpa_fileabsoluteurl: fileUrl,
-                rpa_copiedfileurl: fileUrl,
-                'rpa_DocumentTypeMetaId@odata.bind': `/rpa_documenttypeses(${DEFAULT_DOCUMENT_TYPE_ID})`
-              }
-              if (mimeType) {
-                item.rpa_filemimetype = mimeType
-              }
-              return item
-            })()
-          ]
+          rpa_onlinesubmission_rpa_activitymetadata: [activityMetadataItem]
         }
       ]
     }
