@@ -74,7 +74,18 @@ const createCaseWithOnlineSubmission = async (request) => {
     const { authToken, case: caseData, onlineSubmissionActivity } = request
     const { title, caseDescription, contactId, accountId } = caseData
     const { subject, description, scheduledStart, scheduledEnd, stateCode, statusCode, metadata } = onlineSubmissionActivity
-    const { name, fileUrl } = metadata
+    const { name, fileUrl, mimeType } = metadata
+
+    const activityMetadataItem = {
+      rpa_name: name,
+      rpa_fileabsoluteurl: fileUrl,
+      rpa_copiedfileurl: fileUrl,
+      'rpa_DocumentTypeMetaId@odata.bind': `/rpa_documenttypeses(${DEFAULT_DOCUMENT_TYPE_ID})`
+    }
+
+    if (mimeType) {
+      activityMetadataItem.rpa_filemimetype = mimeType
+    }
 
     const payload = {
       title,
@@ -96,14 +107,7 @@ const createCaseWithOnlineSubmission = async (request) => {
           rpa_onlinesubmissiondate: new Date().toISOString(),
           statecode: stateCode,
           statuscode: statusCode,
-          rpa_onlinesubmission_rpa_activitymetadata: [
-            {
-              rpa_name: name,
-              rpa_fileabsoluteurl: fileUrl,
-              rpa_copiedfileurl: fileUrl,
-              'rpa_DocumentTypeMetaId@odata.bind': `/rpa_documenttypeses(${DEFAULT_DOCUMENT_TYPE_ID})`
-            }
-          ]
+          rpa_onlinesubmission_rpa_activitymetadata: [activityMetadataItem]
         }
       ]
     }
@@ -161,12 +165,16 @@ const getOnlineSubmissionId = async (authToken, caseId) => {
 const createMetadataForOnlineSubmission = async (request) => {
   try {
     const { authToken, rpaOnlinesubmissionid, metadata } = request
-    const { name, fileUrl, documentTypeId } = metadata
+    const { name, fileUrl, documentTypeId, mimeType } = metadata
 
     const payload = {
       rpa_name: name,
       rpa_fileabsoluteurl: fileUrl,
       rpa_copiedfileurl: fileUrl
+    }
+
+    if (mimeType) {
+      payload.rpa_filemimetype = mimeType
     }
 
     if (documentTypeId) {
@@ -203,12 +211,16 @@ const createMetadataForOnlineSubmission = async (request) => {
 const createMetadataForExistingCase = async (request) => {
   try {
     const { authToken, caseId, metadata } = request
-    const { name, fileUrl, documentTypeId, contactId, accountId } = metadata
+    const { name, fileUrl, documentTypeId, contactId, accountId, mimeType } = metadata
 
     const payload = {
       rpa_name: name,
       rpa_fileabsoluteurl: fileUrl,
       rpa_copiedfileurl: fileUrl
+    }
+
+    if (mimeType) {
+      payload.rpa_filemimetype = mimeType
     }
 
     if (documentTypeId) {

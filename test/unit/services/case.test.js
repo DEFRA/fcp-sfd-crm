@@ -36,7 +36,7 @@ const validPayload = {
     crn: 'crn1',
     sbi: 'sbi1',
     crm: { title: 'Test Title' },
-    file: { fileId: 'file-1', fileName: 'file.pdf', url: 'http://file' },
+    file: { fileId: 'file-1', fileName: 'file.pdf', url: 'http://file', mimeType: 'application/pdf' },
     correlationId: 'corr-1'
   }
 }
@@ -85,6 +85,36 @@ describe('case service', () => {
       expect(result.onlineSubmissionActivity.metadata.name).toBe('unknown')
       expect(result.onlineSubmissionActivity.metadata.fileUrl).toBe('')
     })
+
+    it('should include mimeType when provided on file', () => {
+      const payloadWithMime = {
+        data: {
+          crn: 'crn1',
+          sbi: 'sbi1',
+          crm: { title: 'Test Title' },
+          file: { fileId: 'file-2', fileName: 'file.pdf', url: 'http://file', mimeType: 'application/pdf' },
+          correlationId: 'corr-2'
+        }
+      }
+
+      const result = transformPayload(payloadWithMime)
+      expect(result.onlineSubmissionActivity.metadata.mimeType).toBe('application/pdf')
+    })
+
+    it('should not include mimeType when file has no mimeType', () => {
+      const payloadWithoutMime = {
+        data: {
+          crn: 'crn1',
+          sbi: 'sbi1',
+          crm: { title: 'Test Title' },
+          file: { fileId: 'file-3', fileName: 'file-no-mime.pdf', url: 'http://file' },
+          correlationId: 'corr-3'
+        }
+      }
+
+      const result = transformPayload(payloadWithoutMime)
+      expect(result.onlineSubmissionActivity.metadata.mimeType).toBeNull()
+    })
   })
 
   describe('createCase', () => {
@@ -104,6 +134,15 @@ describe('case service', () => {
       expect(updateCaseId).toHaveBeenCalledWith('corr-1', 'mock-case-id')
       expect(markFileProcessed).toHaveBeenCalledWith('corr-1', 'file-1')
       expect(response.caseId).toBe('mock-case-id')
+
+      // metadata should include mimeType from the file
+      expect(createCaseWithOnlineSubmissionInCrm).toHaveBeenCalledWith(
+        expect.objectContaining({
+          onlineSubmissionActivity: expect.objectContaining({
+            metadata: expect.objectContaining({ mimeType: 'application/pdf' })
+          })
+        })
+      )
     })
 
     it('should log when a new case is created', async () => {
@@ -227,7 +266,7 @@ describe('case service', () => {
       await expect(createCase(payloadMissingFileProps)).resolves.toEqual({ caseId: 'existing-case-id' })
 
       expect(createMetadataForOnlineSubmission).toHaveBeenCalledWith(expect.objectContaining({
-        metadata: expect.objectContaining({ name: 'unknown', fileUrl: '' })
+        metadata: expect.objectContaining({ name: 'unknown', fileUrl: '', mimeType: null })
       }))
 
       expect(markFileProcessed).toHaveBeenCalledWith('corr-2', 'file-2')

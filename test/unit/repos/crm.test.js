@@ -185,7 +185,8 @@ describe('CRM repository', () => {
             name: 'test-document.pdf',
             documentType: 'doc-type-789',
             fileUrl: 'https://files.example.com/original.pdf',
-            copiedFileUrl: 'https://files.example.com/copied.pdf'
+            copiedFileUrl: 'https://files.example.com/copied.pdf',
+            mimeType: 'application/pdf'
           }
         }
       }
@@ -236,11 +237,51 @@ describe('CRM repository', () => {
         rpa_name: 'test-document.pdf',
         rpa_fileabsoluteurl: 'https://files.example.com/original.pdf',
         rpa_copiedfileurl: 'https://files.example.com/original.pdf',
-        'rpa_DocumentTypeMetaId@odata.bind': '/rpa_documenttypeses(4e88916b-aae2-ee11-904c-000d3adc1ec9)'
+        'rpa_DocumentTypeMetaId@odata.bind': '/rpa_documenttypeses(4e88916b-aae2-ee11-904c-000d3adc1ec9)',
+        rpa_filemimetype: 'application/pdf'
       })
 
       expect(caseId).toBe('8bb8b45b-aba2-f011-bbd2-7ced8d4645a2')
       expect(error).toBeNull()
+    })
+
+    test('should omit rpa_filemimetype when mimeType not provided in createCaseWithOnlineSubmission', async () => {
+      const mockResponse = {
+        ok: true,
+        json: vi.fn().mockResolvedValue({ incidentid: '8bb8b45b-aba2-f011-bbd2-7ced8d4645a2' })
+      }
+
+      global.fetch.mockResolvedValue(mockResponse)
+
+      const request = {
+        authToken: 'Bearer token',
+        case: {
+          title: 'Test case title',
+          caseDescription: 'Test case description',
+          contactId: 'contact-123',
+          accountId: 'account-456'
+        },
+        onlineSubmissionActivity: {
+          subject: 'Test submission subject',
+          description: 'Test submission description',
+          scheduledStart: '2026-01-01T10:00:00Z',
+          scheduledEnd: '2026-01-01T11:00:00Z',
+          stateCode: 0,
+          statusCode: 1,
+          metadata: {
+            name: 'test-document.pdf',
+            documentType: 'doc-type-789',
+            fileUrl: 'https://files.example.com/original.pdf'
+          }
+        }
+      }
+
+      await createCaseWithOnlineSubmission(request)
+
+      const payload = JSON.parse(global.fetch.mock.calls[0][1].body)
+      const submission = payload.incident_rpa_onlinesubmissions[0]
+      const meta = submission.rpa_onlinesubmission_rpa_activitymetadata[0]
+      expect(meta.rpa_filemimetype).toBeUndefined()
     })
 
     test('should return error when fetch throws', async () => {
@@ -361,10 +402,33 @@ describe('CRM repository', () => {
       const result = await createMetadataForOnlineSubmission({
         authToken: 'Bearer token',
         rpaOnlinesubmissionid: 'OLS-2026-0001',
-        metadata: { name: 'file.pdf', fileUrl: 'http://file' }
+        metadata: { name: 'file.pdf', fileUrl: 'http://file', mimeType: 'application/pdf' }
       })
 
       expect(result).toEqual({ metadataId: 'meta-123', error: null })
+      const lastCall = global.fetch.mock.calls[0]
+      const body = JSON.parse(lastCall[1].body)
+      expect(body.rpa_filemimetype).toBe('application/pdf')
+    })
+
+    test('should omit rpa_filemimetype when mimeType not provided in createMetadataForOnlineSubmission', async () => {
+      const mockResponse = {
+        ok: true,
+        json: vi.fn().mockResolvedValue({ rpa_activitymetadataid: 'meta-124' })
+      }
+      global.fetch.mockResolvedValue(mockResponse)
+      const { createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
+
+      const result = await createMetadataForOnlineSubmission({
+        authToken: 'Bearer token',
+        rpaOnlinesubmissionid: 'OLS-2026-0002',
+        metadata: { name: 'file.pdf', fileUrl: 'http://file' }
+      })
+
+      expect(result).toEqual({ metadataId: 'meta-124', error: null })
+      const lastCall = global.fetch.mock.calls[0]
+      const body = JSON.parse(lastCall[1].body)
+      expect(body.rpa_filemimetype).toBeUndefined()
     })
 
     test('should return error when fetch fails', async () => {
@@ -407,10 +471,11 @@ describe('CRM repository', () => {
 
       const { createMetadataForExistingCase } = await import('../../../src/repos/crm.js')
 
+
       const result = await createMetadataForExistingCase({
         authToken: 'Bearer token',
         caseId: 'case-789',
-        metadata: { name: 'file.pdf', fileUrl: 'http://file', contactId: 'contact-1', accountId: 'account-1' }
+        metadata: { name: 'file.pdf', fileUrl: 'http://file', contactId: 'contact-1', accountId: 'account-1', mimeType: 'application/pdf' }
       })
 
       expect(result).toEqual({ metadataId: 'meta-existing-123', error: null })
@@ -418,8 +483,27 @@ describe('CRM repository', () => {
       expect(lastCall[0]).toBe('https://crm.example.com/api/incidents(case-789)/incident_rpa_activitymetadata')
       const body = JSON.parse(lastCall[1].body)
       expect(body.rpa_name).toBe('file.pdf')
+      expect(body.rpa_filemimetype).toBe('application/pdf')
       expect(body['rpa_Contact@odata.bind']).toBe('/contacts(contact-1)')
       expect(body['rpa_Organisation@odata.bind']).toBe('/accounts(account-1)')
+    })
+
+    test('should omit rpa_filemimetype when mimeType not provided in createMetadataForExistingCase', async () => {
+      const mockResponse = { ok: true, json: vi.fn().mockResolvedValue({ rpa_activitymetadataid: 'meta-existing-124' }) }
+      global.fetch.mockResolvedValue(mockResponse)
+
+      const { createMetadataForExistingCase } = await import('../../../src/repos/crm.js')
+
+      const result = await createMetadataForExistingCase({
+        authToken: 'Bearer token',
+        caseId: 'case-790',
+        metadata: { name: 'file.pdf', fileUrl: 'http://file', contactId: 'contact-1', accountId: 'account-1' }
+      })
+
+      expect(result).toEqual({ metadataId: 'meta-existing-124', error: null })
+      const lastCall = global.fetch.mock.calls[0]
+      const body = JSON.parse(lastCall[1].body)
+      expect(body.rpa_filemimetype).toBeUndefined()
     })
 
     test('should return error when fetch fails', async () => {
