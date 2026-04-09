@@ -70,7 +70,7 @@ export async function createCase(payload) {
 
   if (prep.action === 'skip') {
     logger.info({ correlationId, fileId }, 'Skipped: duplicate message')
-    return { skipped: true }
+    return { skipped: true, caseId: prep.caseId }
   }
 
   const authToken = await getCrmAuthToken()
@@ -87,7 +87,7 @@ async function prepareCase({ correlationId, fileId }) {
   const { isNew, isDuplicateFile, caseId, isCreator } = await upsertCase(correlationId, fileId)
 
   if (isDuplicateFile) {
-    return { action: 'skip' }
+    return { action: 'skip', caseId }
   }
 
   if (!caseId && !isNew && !isCreator) {
