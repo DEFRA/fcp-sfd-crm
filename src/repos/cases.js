@@ -20,6 +20,10 @@ const setCorrelationIdIndex = async () => {
  * @returns Promise<{{ isNew: boolean, isDuplicateFile: boolean, caseId: string|null, isCreator: boolean }}>
  */
 const upsertCase = async (correlationId, fileId) => {
+  // Attempt an atomic upsert and inspect the "before" document. This
+  // supports both the real driver (which returns an object with a
+  // `value` property) and unit tests that mock `findOneAndUpdate` to
+  // return either `null` or a document directly.
   const result = await db.collection(COLLECTION).findOneAndUpdate(
     { correlationId },
     {
@@ -34,14 +38,32 @@ const upsertCase = async (correlationId, fileId) => {
     { upsert: true, returnDocument: 'before' }
   )
 
-  if (!result) {
+  // result may be null (mocked tests), an object with `value` (real driver),
+  // or the document itself (some mocks). Normalize to `prevDoc`.
+  let prevDoc = null
+
+  if (result == null) {
+    // Mocked unit test indicates insert
     return { isNew: true, isDuplicateFile: false, caseId: null, isCreator: true }
   }
 
-  const isDuplicateFile = result.processedFileIds?.includes(fileId) ?? false
-  const isCreator = result.creatorFileId === fileId
+  if (result.value !== undefined) {
+    prevDoc = result.value
+  } else {
+    prevDoc = result
+  }
 
-  return { isNew: false, isDuplicateFile, caseId: result.caseId, isCreator }
+  if (!prevDoc) {
+    // This is unexpected in integration runs; log for debugging
+    // eslint-disable-next-line no-console
+    console.debug('upsertCase: previous document is null for', correlationId, 'result=', result)
+    return { isNew: true, isDuplicateFile: false, caseId: null, isCreator: true }
+  }
+
+  const isDuplicateFile = prevDoc.processedFileIds?.includes(fileId) ?? false
+  const isCreator = prevDoc.creatorFileId === fileId
+
+  return { isNew: false, isDuplicateFile, caseId: prevDoc.caseId ?? null, isCreator }
 }
 
 /**
