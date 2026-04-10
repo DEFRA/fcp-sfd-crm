@@ -53,8 +53,8 @@ const upsertCase = async (correlationId, fileId) => {
     prevDoc = result
   }
 
-  if (!prevDoc) {
-    // This is unexpected in integration runs; log for debugging
+  if (prevDoc == null) {
+    // prevDoc is null/undefined - unexpected in integration runs; log for debugging
     // eslint-disable-next-line no-console
     console.debug('upsertCase: previous document is null for', correlationId, 'result=', result)
     return { isNew: true, isDuplicateFile: false, caseId: null, isCreator: true }
