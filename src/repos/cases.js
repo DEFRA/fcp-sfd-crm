@@ -20,10 +20,7 @@ const setCorrelationIdIndex = async () => {
  * @returns Promise<{{ isNew: boolean, isDuplicateFile: boolean, caseId: string|null, isCreator: boolean }}>
  */
 const upsertCase = async (correlationId, fileId) => {
-  // Attempt an atomic upsert and inspect the "before" document. This
-  // supports both the real driver (which returns an object with a
-  // `value` property) and unit tests that mock `findOneAndUpdate` to
-  // return either `null` or a document directly.
+
   const result = await db.collection(COLLECTION).findOneAndUpdate(
     { correlationId },
     {
