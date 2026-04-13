@@ -171,7 +171,7 @@ describe('case service', () => {
 
       const response = await createCase(validPayload)
 
-      expect(response).toEqual({ skipped: true })
+      expect(response).toEqual({ skipped: true, caseId: 'existing-case-id' })
       expect(getCrmAuthToken).not.toHaveBeenCalled()
       expect(createCaseWithOnlineSubmissionInCrm).not.toHaveBeenCalled()
       expect(mockLogger.info).toHaveBeenCalledWith(
