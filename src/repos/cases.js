@@ -47,7 +47,7 @@ const upsertCase = async (correlationId, fileId) => {
     return { isNew: true, isDuplicateFile: false, caseId: null, isCreator: true }
   }
 
-  if (result.value !== undefined) {
+  if (Object.prototype.hasOwnProperty.call(result, 'value')) {
     prevDoc = result.value
   } else {
     prevDoc = result
