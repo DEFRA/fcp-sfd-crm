@@ -20,7 +20,6 @@ const setCorrelationIdIndex = async () => {
  * @returns Promise<{{ isNew: boolean, isDuplicateFile: boolean, caseId: string|null, isCreator: boolean }}>
  */
 const upsertCase = async (correlationId, fileId) => {
-
   const result = await db.collection(COLLECTION).findOneAndUpdate(
     { correlationId },
     {
