@@ -39,7 +39,6 @@ describe('SNS Client', () => {
     vi.resetModules()
     const { snsClient } = await import('../../../../src/messaging/sns/client.js')
     expect(snsClient).toBeDefined()
-    // In production, credentials may still be present in .env.test, so check for both possible calls
     const expectedProdCall = {
       endpoint: process.env.AWS_SNS_ENDPOINT,
       region: process.env.AWS_REGION
