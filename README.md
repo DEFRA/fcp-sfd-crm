@@ -140,7 +140,7 @@ Debug port: `9232`. Attach via VS Code or Chrome DevTools.
 
 ## Testing
 
-Tests have also been configured to run in a Docker container.
+Tests are configured to run in Docker.
 
 Start the test container:
 
@@ -153,6 +153,8 @@ The test container can also be started in watch mode to support Test Driven Deve
 ```bash
 npm run docker:test:watch
 ```
+
+Direct local execution with `npm run test` or `npm run test:watch` is not a supported workflow unless you manually provide all required environment variables in your shell.
 
 ## Linting
 
