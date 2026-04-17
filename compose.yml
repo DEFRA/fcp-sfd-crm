@@ -4,9 +4,6 @@ services:
       target: development
     image: fcp-sfd-crm-development
     container_name: fcp-sfd-crm-development
-    ports:
-      - '3009:3009'
-      - '9232:9232'
     links:
       - 'localstack:localstack'
       - 'mongodb:mongodb'
@@ -44,9 +41,6 @@ services:
 
   localstack:
     image: localstack/localstack:3.0.2
-    ports:
-      - '4566:4566' # LocalStack Gateway
-      - '4510-4559:4510-4559' # external services port range
     env_file:
       - .env
     environment:
@@ -72,11 +66,8 @@ services:
     image: mongo:6.0.13
     networks:
       - fcp-sfd
-    ports:
-      - '27017:27017'
     volumes:
       - mongodb-data:/data
-    restart: always
 
 volumes:
   mongodb-data:
