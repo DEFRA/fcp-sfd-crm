@@ -229,9 +229,12 @@ describe('CRM repository', () => {
         description: 'Test submission description',
         scheduledstart: '2026-01-01T10:00:00Z',
         scheduledend: '2026-01-01T11:00:00Z',
+        rpa_onlinesubmissionid: expect.any(String),
         statecode: 0,
         statuscode: 1
       })
+
+      expect(submission.rpa_onlinesubmissionid).toHaveLength(20)
 
       expect(submission.rpa_onlinesubmission_rpa_activitymetadata[0]).toEqual({
         rpa_name: 'test-document.pdf',
