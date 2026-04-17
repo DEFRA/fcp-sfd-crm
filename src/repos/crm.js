@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto'
 import { config } from '../config/index.js'
 
 const baseUrl = config.get('crm.baseUrl')
@@ -103,8 +104,8 @@ const createCaseWithOnlineSubmission = async (request) => {
           description,
           scheduledstart: scheduledStart,
           scheduledend: scheduledEnd,
-          rpa_onlinesubmissionid: 'OLS-2026-0001',
           rpa_onlinesubmissiondate: new Date().toISOString(),
+          rpa_onlinesubmissionid: randomBytes(10).toString('hex'),
           statecode: stateCode,
           statuscode: statusCode,
           rpa_onlinesubmission_rpa_activitymetadata: [activityMetadataItem]
