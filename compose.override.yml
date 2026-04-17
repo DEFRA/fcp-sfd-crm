@@ -1,0 +1,38 @@
+name: fcp-sfd
+
+services:
+  fcp-sfd-crm:
+    ports:
+      - "3009:3009"
+      - "9232:9232"
+    volumes:
+      - ./src/:/home/node/src
+      - ./package.json:/home/node/package.json
+    networks:
+      - fcp-sfd
+
+  localstack:
+    ports:
+      - '4566:4566' # LocalStack Gateway
+      - '4510-4559:4510-4559' # external services port range
+    volumes:
+      - '${TMPDIR:-/tmp}/localstack:/var/lib/localstack'
+      - ./compose/start-localstack.sh:/etc/localstack/init/ready.d/start-localstack.sh
+    networks:
+      - fcp-sfd
+
+  mongodb:
+    ports:
+        - "27017:27017"
+    volumes:
+        - mongodb-data:/data
+    networks:
+      - fcp-sfd
+
+volumes:
+  mongodb-data:
+
+networks:
+  fcp-sfd:
+    driver: bridge
+    name: fcp-sfd
