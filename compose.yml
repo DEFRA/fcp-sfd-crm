@@ -5,11 +5,11 @@ services:
     image: fcp-sfd-crm-development
     container_name: fcp-sfd-crm-development
     links:
-      - 'localstack:localstack'
-      - 'mongodb:mongodb'
+      - "floci:floci"
+      - "mongodb:mongodb"
     depends_on:
-      localstack:
-        condition: service_healthy
+      floci-init:
+        condition: service_completed_successfully
       mongodb:
         condition: service_started
     volumes:
@@ -21,7 +21,6 @@ services:
       PORT: 3009
       PORT_DEBUG: 9232
       NODE_ENV: development
-      LOCALSTACK_ENDPOINT: http://localstack:4566
       MONGO_URI: mongodb://mongodb:27017/
       CRM_AUTH_ENDPOINT: ${CRM_AUTH_ENDPOINT}
       CRM_AUTH_CLIENT_ID: ${CRM_AUTH_CLIENT_ID}
@@ -31,7 +30,8 @@ services:
       CRM_QUEUE_URL: ${CRM_QUEUE_URL}
       CRM_DEAD_LETTER_QUEUE_URL: ${CRM_DEAD_LETTER_QUEUE_URL}
       API_KEY_FOR_TESTING_CASE_CREATION: ${API_KEY_FOR_TESTING_CASE_CREATION}
-      SNS_ENDPOINT: http://localstack:4567
+      AWS_SQS_ENDPOINT: http://floci:4566
+      AWS_SNS_ENDPOINT: http://floci:4566
       AWS_REGION: ${AWS_REGION:-eu-west-2}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-test}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-test}
@@ -39,26 +39,32 @@ services:
     networks:
       - fcp-sfd
 
-  localstack:
-    image: localstack/localstack:3.0.2
-    env_file:
-      - .env
+  floci:
+    image: hectorvent/floci:1.0.11
     environment:
-      DEBUG: ${DEBUG:-1}
-      LS_LOG: WARN # Localstack DEBUG Level
-      SERVICES: s3,sqs,sns,firehose
-      LOCALSTACK_HOST: 127.0.0.1
+      FLOCI_HOSTNAME: floci
+      FLOCI_DEFAULT_REGION: ${AWS_REGION:-eu-west-2}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-test}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-test}
+    volumes:
+      - floci-data:/app/data
+    networks:
+      - fcp-sfd
+
+  floci-init:
+    image: amazon/aws-cli:latest
+    entrypoint: /bin/sh
+    command: /setup/init.sh
+    depends_on:
+      floci:
+        condition: service_started
+    environment:
+      AWS_ENDPOINT_URL: http://floci:4566
       AWS_REGION: ${AWS_REGION:-eu-west-2}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-test}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-test}
     volumes:
-      - '${TMPDIR:-/tmp}/localstack:/var/lib/localstack'
-      - ./compose/start-localstack.sh:/etc/localstack/init/ready.d/start-localstack.sh
-    healthcheck:
-      test: ['CMD', 'curl', 'localhost:4566']
-      interval: 5s
-      start_period: 5s
-      retries: 3
+      - ./floci/init.sh:/setup/init.sh
     networks:
       - fcp-sfd
 
@@ -71,6 +77,7 @@ services:
 
 volumes:
   mongodb-data:
+  floci-data:
 
 networks:
   fcp-sfd:
