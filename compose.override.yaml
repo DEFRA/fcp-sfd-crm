@@ -1,3 +1,4 @@
+name: fcp-sfd
 services:
   fcp-sfd-crm:
     ports:
