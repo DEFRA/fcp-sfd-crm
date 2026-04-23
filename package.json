@@ -69,6 +69,8 @@
   },
   "overrides": {
     "fast-xml-parser": "5.5.7",
-    "@hapi/content": "6.0.1"
+    "fast-xml-builder": "1.1.5",
+    "@hapi/content": "6.0.1",
+    "uuid": "14.0.0"
   }
 }
