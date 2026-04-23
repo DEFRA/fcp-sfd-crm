@@ -119,6 +119,29 @@ describe('cases repository', () => {
 
       expect(result.isDuplicateFile).toBe(false)
     })
+
+    test('should treat driver {value: null} as insert (isNew:true)', async () => {
+      mockCollection.findOneAndUpdate.mockResolvedValue({ value: null })
+
+      const result = await upsertCase('corr-1', 'file-1')
+
+      expect(result).toEqual({ isNew: true, isDuplicateFile: false, caseId: null, isCreator: true })
+    })
+
+    test('should handle real driver shape with value object for duplicate detection', async () => {
+      mockCollection.findOneAndUpdate.mockResolvedValue({
+        value: {
+          correlationId: 'corr-1',
+          caseId: 'case-1',
+          creatorFileId: 'file-1',
+          processedFileIds: ['file-1']
+        }
+      })
+
+      const result = await upsertCase('corr-1', 'file-1')
+
+      expect(result).toEqual({ isNew: false, isDuplicateFile: true, caseId: 'case-1', isCreator: true })
+    })
   })
 
   describe('markFileProcessed', () => {

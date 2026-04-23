@@ -11,8 +11,20 @@ services:
     environment:
       PORT: 3009
       NODE_ENV: development
-      LOCALSTACK_ENDPOINT: http://localstack:4566
       MONGO_URI: mongodb://mongodb:27017/
+      CRM_AUTH_ENDPOINT: https://dummy-token-endpoint
+      CRM_AUTH_CLIENT_ID: dummy-client-id
+      CRM_AUTH_CLIENT_SECRET: dummy-client-secret
+      CRM_AUTH_SCOPE: dummy-scope
+      CRM_API_BASE_URL: https://dummy-crm-url
+      CRM_QUEUE_URL: http://floci:4566/000000000000/fcp_sfd_crm_requests
+      CRM_DEAD_LETTER_QUEUE_URL: http://floci:4566/000000000000/fcp_sfd_crm_requests-deadletter
+      CRM_EVENTS_TOPIC_ARN: arn:aws:sns:eu-west-2:000000000000:fcp_sfd_crm_events
+      AWS_SQS_ENDPOINT: http://floci:4566
+      AWS_SNS_ENDPOINT: http://floci:4566
+      AWS_REGION: eu-west-2
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
     volumes:
       - ./src/:/home/node/src
       - ./test/:/home/node/test
@@ -20,8 +32,3 @@ services:
       - ./coverage:/home/node/coverage
     networks:
       - fcp-sfd
-
-  localstack:
-    env_file:
-      - path: .env
-        required: false

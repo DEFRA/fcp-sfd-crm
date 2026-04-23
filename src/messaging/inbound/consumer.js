@@ -29,12 +29,18 @@ const startCRMListener = (sqsClient) => {
         payload = JSON.parse(message.Body)
       } catch (err) {
         logger.error('Invalid JSON in inbound message', err)
-        return
+        return message
       }
       try {
         await createCase(payload)
+        return message
       } catch (err) {
+        if (err.retryable) {
+          logger.info('Retryable error, leaving message on queue', err)
+          return undefined
+        }
         logger.error('Failed to create case via CRM API', err)
+        return message
       }
     }
   })
