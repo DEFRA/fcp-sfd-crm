@@ -23,7 +23,7 @@ vi.mock('../../../../src/messaging/sqs/client.js', () => ({
   sqsClient: { send: mockSend }
 }))
 
-const { pollInboundMessages } = await import('../../../../src/messaging/inbound/index.js')
+const { pollInboundMessages } = await import('../../../../src/messaging/inbound/poll-inbound-messages.js')
 
 describe('pollInboundMessages', () => {
   beforeEach(() => {
