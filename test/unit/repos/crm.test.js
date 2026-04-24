@@ -474,7 +474,6 @@ describe('CRM repository', () => {
 
       const { createMetadataForExistingCase } = await import('../../../src/repos/crm.js')
 
-
       const result = await createMetadataForExistingCase({
         authToken: 'Bearer token',
         caseId: 'case-789',
