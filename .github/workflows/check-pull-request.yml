@@ -41,7 +41,7 @@ jobs:
         run: |
           mkdir -p coverage
           chmod -R a+rw ./coverage
-          docker compose -f compose.yml -f compose.test.yml run --rm "fcp-sfd-crm"
+          docker compose -f compose.yaml -f compose.test.yaml run --rm "fcp-sfd-crm"
 
       - name: SonarQube Cloud Scan
         uses: SonarSource/sonarqube-scan-action@v7

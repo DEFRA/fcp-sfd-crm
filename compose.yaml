@@ -74,7 +74,6 @@ services:
       - fcp-sfd
     volumes:
       - mongodb-data:/data
-    restart: always
 
 volumes:
   mongodb-data:
