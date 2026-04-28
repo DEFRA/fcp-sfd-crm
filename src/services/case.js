@@ -38,7 +38,7 @@ export function transformPayload (cloudEventPayload) {
     metadata: {
       name: file?.fileName || 'unknown',
       documentType: 'default',
-      fileUrl: file?.url || '',
+      blobFileId: file?.fileId || null,
       mimeType: file?.mimeType || null
     }
   }
@@ -119,7 +119,7 @@ async function addMetadataToExistingCase ({ authToken, caseId, correlationId, fi
 
   const metadata = {
     name: file?.fileName || 'unknown',
-    fileUrl: file?.url || '',
+    blobFileId: file?.fileId || null,
     documentTypeId: null,
     mimeType: file?.mimeType || null
   }

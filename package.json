@@ -23,7 +23,7 @@
     "start:watch": "nodemon --watch src --exec 'node --experimental-vm-modules --inspect=0.0.0.0:9232 src/index.js'",
     "start:debug": "nodemon --watch src --exec 'node --experimental-vm-modules --inspect-brk=0.0.0.0:9232 src/index.js'",
     "start": "node --experimental-vm-modules src/index.js",
-    "sonar": "node scripts/sonar-scan.js"
+    "sonar": "node scripts/local-sonar-scan.js"
   },
   "author": "Defra DDTS",
   "contributors": [

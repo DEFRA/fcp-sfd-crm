@@ -184,8 +184,7 @@ describe('CRM repository', () => {
           metadata: {
             name: 'test-document.pdf',
             documentType: 'doc-type-789',
-            fileUrl: 'https://files.example.com/original.pdf',
-            copiedFileUrl: 'https://files.example.com/copied.pdf',
+            blobFileId: 'blob-file-id-123',
             mimeType: 'application/pdf'
           }
         }
@@ -238,8 +237,7 @@ describe('CRM repository', () => {
 
       expect(submission.rpa_onlinesubmission_rpa_activitymetadata[0]).toEqual({
         rpa_name: 'test-document.pdf',
-        rpa_fileabsoluteurl: 'https://files.example.com/original.pdf',
-        rpa_copiedfileurl: 'https://files.example.com/original.pdf',
+        rpa_blobfileid: 'blob-file-id-123',
         'rpa_DocumentTypeMetaId@odata.bind': '/rpa_documenttypeses(4e88916b-aae2-ee11-904c-000d3adc1ec9)',
         rpa_filemimetype: 'application/pdf'
       })
@@ -274,7 +272,7 @@ describe('CRM repository', () => {
           metadata: {
             name: 'test-document.pdf',
             documentType: 'doc-type-789',
-            fileUrl: 'https://files.example.com/original.pdf'
+            blobFileId: 'blob-file-id-123'
           }
         }
       }
@@ -308,8 +306,7 @@ describe('CRM repository', () => {
           metadata: {
             name: 'file.pdf',
             documentType: 'doc-type',
-            fileUrl: 'url',
-            copiedFileUrl: 'copied-url'
+            blobFileId: 'blob-1'
           }
         }
       })
@@ -342,8 +339,7 @@ describe('CRM repository', () => {
           metadata: {
             name: 'file.pdf',
             documentType: 'doc-type',
-            fileUrl: 'url',
-            copiedFileUrl: 'copied-url'
+            blobFileId: 'blob-1'
           }
         }
       })
@@ -405,7 +401,7 @@ describe('CRM repository', () => {
       const result = await createMetadataForOnlineSubmission({
         authToken: 'Bearer token',
         rpaOnlinesubmissionid: 'OLS-2026-0001',
-        metadata: { name: 'file.pdf', fileUrl: 'http://file', mimeType: 'application/pdf' }
+        metadata: { name: 'file.pdf', blobFileId: 'blob-1', mimeType: 'application/pdf' }
       })
 
       expect(result).toEqual({ metadataId: 'meta-123', error: null })
@@ -425,7 +421,7 @@ describe('CRM repository', () => {
       const result = await createMetadataForOnlineSubmission({
         authToken: 'Bearer token',
         rpaOnlinesubmissionid: 'OLS-2026-0002',
-        metadata: { name: 'file.pdf', fileUrl: 'http://file' }
+        metadata: { name: 'file.pdf', blobFileId: 'blob-1' }
       })
 
       expect(result).toEqual({ metadataId: 'meta-124', error: null })
@@ -457,7 +453,7 @@ describe('CRM repository', () => {
       const result = await createMetadataForOnlineSubmission({
         authToken: 'Bearer token',
         rpaOnlinesubmissionid: 'OLS-2026-0001',
-        metadata: { name: 'file.pdf', fileUrl: 'http://file', documentTypeId: 'abcd-1234' }
+        metadata: { name: 'file.pdf', blobFileId: 'blob-1', documentTypeId: 'abcd-1234' }
       })
 
       expect(result).toEqual({ metadataId: 'meta-456', error: null })
@@ -477,7 +473,7 @@ describe('CRM repository', () => {
       const result = await createMetadataForExistingCase({
         authToken: 'Bearer token',
         caseId: 'case-789',
-        metadata: { name: 'file.pdf', fileUrl: 'http://file', contactId: 'contact-1', accountId: 'account-1', mimeType: 'application/pdf' }
+        metadata: { name: 'file.pdf', blobFileId: 'blob-1', contactId: 'contact-1', accountId: 'account-1', mimeType: 'application/pdf' }
       })
 
       expect(result).toEqual({ metadataId: 'meta-existing-123', error: null })
@@ -499,7 +495,7 @@ describe('CRM repository', () => {
       const result = await createMetadataForExistingCase({
         authToken: 'Bearer token',
         caseId: 'case-790',
-        metadata: { name: 'file.pdf', fileUrl: 'http://file', contactId: 'contact-1', accountId: 'account-1' }
+        metadata: { name: 'file.pdf', blobFileId: 'blob-1', contactId: 'contact-1', accountId: 'account-1' }
       })
 
       expect(result).toEqual({ metadataId: 'meta-existing-124', error: null })
@@ -531,7 +527,7 @@ describe('CRM repository', () => {
       const result = await createMetadataForExistingCase({
         authToken: 'Bearer token',
         caseId: 'case-3',
-        metadata: { name: 'file.pdf', fileUrl: 'http://file', documentTypeId: 'doc-999' }
+        metadata: { name: 'file.pdf', blobFileId: 'blob-1', documentTypeId: 'doc-999' }
       })
 
       expect(result).toEqual({ metadataId: 'meta-999', error: null })
