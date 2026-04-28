@@ -258,7 +258,7 @@ describe('case service', () => {
           crn: 'crn1',
           sbi: 'sbi1',
           crm: { title: 'Test Title' },
-          file: { fileId: 'file-2' }, // no fileName or url
+          file: {}, // no fileName, url, fileId, or mimeType
           correlationId: 'corr-2'
         }
       }
@@ -266,10 +266,10 @@ describe('case service', () => {
       await expect(createCase(payloadMissingFileProps)).resolves.toEqual({ caseId: 'existing-case-id' })
 
       expect(createMetadataForOnlineSubmission).toHaveBeenCalledWith(expect.objectContaining({
-        metadata: expect.objectContaining({ name: 'unknown', blobFileId: 'file-2', mimeType: null })
+        metadata: expect.objectContaining({ name: 'unknown', blobFileId: null, mimeType: null })
       }))
 
-      expect(markFileProcessed).toHaveBeenCalledWith('corr-2', 'file-2')
+      expect(markFileProcessed).toHaveBeenCalledWith('corr-2', undefined)
     })
   })
 })
