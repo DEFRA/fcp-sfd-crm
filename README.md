@@ -68,26 +68,34 @@ export AWS_ENDPOINT_URL=http://localhost:4566
 export AWS_REGION=eu-west-2
 ```
 
-Examples:
+#### Examples
 
+List queues:
 ```bash
-# List queues
-aws sqs list-queues
+aws sqs list-queues --endpoint-url http://localhost:4566
+```
 
-# List topics
-aws sns list-topics
+List topics:
+```bash
+aws sns list-topics --endpoint-url http://localhost:4566
+```
 
-# Check approximate message counts on a queue
+Check approximate message counts on a queue:
+```bash
 aws sqs get-queue-attributes \
 	--queue-url http://localhost:4566/000000000000/fcp_sfd_crm_requests \
 	--attribute-names ApproximateNumberOfMessages ApproximateNumberOfMessagesNotVisible
+```
 
-# Read a message (without deleting it)
+Read a message (without deleting it):
+``` bash
 aws sqs receive-message \
 	--queue-url http://localhost:4566/000000000000/fcp_sfd_crm_requests \
 	--max-number-of-messages 1
+```
 
-# Purge all messages from a queue
+Purge all messages from a queue:
+```bash
 aws sqs purge-queue \
 	--queue-url http://localhost:4566/000000000000/fcp_sfd_crm_requests
 ```

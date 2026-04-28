@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { execFileSync, spawn } from 'node:child_process'
 import { resolve } from 'node:path'
-import dotenv from 'dotenv'
 
 const SONARCLOUD_BASE_URL = 'https://sonarcloud.io'
 const BORDER = '═'.repeat(51)
@@ -42,6 +41,19 @@ const COMPARATOR_SYMBOLS = {
   NE: '≠'
 }
 
+const parseKeyValue = (content) =>
+  Object.fromEntries(
+    content
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith('#'))
+      .map((line) => {
+        const idx = line.indexOf('=')
+        return idx > 0 ? [line.slice(0, idx).trim(), line.slice(idx + 1).trim()] : null
+      })
+      .filter(Boolean)
+  )
+
 const getCurrentBranch = () =>
   execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { encoding: 'utf8' }).trim()
 
@@ -64,7 +76,8 @@ const runScanner = (sonarToken, cwd, branch) =>
     ]
 
     const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
-    const message = 'Code scan in progress using sonar-scanner-cli (to view logs in real-time a Docker client can be used e.g. Docker Desktop)'
+    const message =
+      'Code scan in progress using sonar-scanner-cli (to view logs in real-time a Docker client can be used e.g. Docker Desktop)'
     let i = 0
 
     const spinner = setInterval(() => {
@@ -78,6 +91,7 @@ const runScanner = (sonarToken, cwd, branch) =>
       process.stdout.write('\r')
       reject(err)
     })
+
     // Always resolve with the exit code — a non-zero exit may simply mean the
     // quality gate failed (analysis was still uploaded). We check the gate
     // status via the API after the scan and exit accordingly.
@@ -158,13 +172,15 @@ const printFailedConditions = (qualityGate) => {
     const label = METRIC_LABELS[condition.metricKey] ?? condition.metricKey
     const comparator = COMPARATOR_SYMBOLS[condition.comparator] ?? condition.comparator
 
-    const actual = condition.metricKey.includes('coverage') || condition.metricKey.includes('duplicat')
-      ? formatPercent(condition.actualValue)
-      : condition.actualValue
+    const actual =
+      condition.metricKey.includes('coverage') || condition.metricKey.includes('duplicat')
+        ? formatPercent(condition.actualValue)
+        : condition.actualValue
 
-    const threshold = condition.metricKey.includes('coverage') || condition.metricKey.includes('duplicat')
-      ? formatPercent(condition.errorThreshold)
-      : condition.errorThreshold
+    const threshold =
+      condition.metricKey.includes('coverage') || condition.metricKey.includes('duplicat')
+        ? formatPercent(condition.errorThreshold)
+        : condition.errorThreshold
 
     console.log(`    ${label}: ${actual} (threshold ${comparator} ${threshold})`)
   }
@@ -177,9 +193,7 @@ const printIssues = (issuesResponse, projectKey) => {
   if (issues.length === 0) return
 
   // Sort by severity
-  issues.sort((a, b) =>
-    SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity)
-  )
+  issues.sort((a, b) => SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity))
 
   // Group by file
   const byFile = new Map()
@@ -212,7 +226,6 @@ const printIssues = (issuesResponse, projectKey) => {
       console.log(`    ${icon} L${issue.line ?? '?'} ${issue.message}${rule}`)
 
       const issueUrl = `${SONARCLOUD_BASE_URL}/project/issues?id=${encodeURIComponent(projectKey)}&open=${encodeURIComponent(issue.key)}`
-
       console.log(`       ${issueUrl}`)
 
       displayed++
@@ -252,7 +265,6 @@ const printHotspots = (hotspotsResponse, projectKey) => {
     console.log(`    ${icon} [${probability}] L${hotspot.line ?? '?'} ${hotspot.message}`)
 
     const hotspotUrl = `${SONARCLOUD_BASE_URL}/security_hotspots?id=${encodeURIComponent(projectKey)}&hotspots=${encodeURIComponent(hotspot.key)}`
-
     console.log(`       ${hotspotUrl}`)
 
     displayed++
@@ -263,7 +275,6 @@ const printHotspots = (hotspotsResponse, projectKey) => {
   }
 
   const hotspotsUrl = `${SONARCLOUD_BASE_URL}/security_hotspots?id=${encodeURIComponent(projectKey)}&inNewCodePeriod=true`
-
   console.log(THIN_BORDER)
   console.log(` 🔗 ${hotspotsUrl}`)
   console.log(`${BORDER}\n`)
@@ -314,20 +325,25 @@ const sonarScan = async () => {
   const cwd = resolve('.')
 
   // Load .env if present (mirrors `source .env` from the old npm script)
-  dotenv.config()
+  try {
+    const envVars = parseKeyValue(readFileSync(resolve(cwd, '.env'), 'utf8'))
+    for (const [key, value] of Object.entries(envVars)) {
+      process.env[key] ??= value
+    }
+  } catch {
+    // .env file is optional — SONAR_TOKEN may already be in the environment
+  }
+
   const sonarToken = process.env.SONAR_TOKEN
 
   if (!sonarToken) {
-    console.error(
-      'Error: SONAR_TOKEN is not set. Add it to your .env file.'
-    )
-
+    console.error('Error: SONAR_TOKEN is not set. Add it to your .env file.')
     process.exit(1)
   }
 
   // Read project config from sonar-project.properties
   const propsPath = resolve(cwd, 'sonar-project.properties')
-  const props = dotenv.parse(readFileSync(propsPath))
+  const props = parseKeyValue(readFileSync(propsPath, 'utf8'))
   const projectKey = props['sonar.projectKey']
 
   if (!projectKey) {

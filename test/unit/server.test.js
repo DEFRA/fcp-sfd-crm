@@ -104,8 +104,7 @@ describe('POST methods for creating cases in CRM', () => {
           metadata: {
             name: 'mock-file.pdf',
             documentType: 'mock-doc-type',
-            fileUrl: 'https://file.url',
-            copiedFileUrl: 'https://copied.file.url'
+            blobFileId: 'mock-blob-file-id'
           }
         }
       }
@@ -136,8 +135,7 @@ describe('POST methods for creating cases in CRM', () => {
           metadata: {
             name: 'mock-file.pdf',
             documentType: 'mock-doc-type',
-            fileUrl: 'https://file.url',
-            copiedFileUrl: 'https://copied.file.url'
+            blobFileId: 'mock-blob-file-id'
           }
         }
       })
