@@ -44,6 +44,7 @@ jobs:
           docker compose -f compose.yaml -f compose.test.yaml run --rm "fcp-sfd-crm"
 
       - name: SonarQube Cloud Scan
+        if: github.actor != 'dependabot[bot]'
         uses: SonarSource/sonarqube-scan-action@v7
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
