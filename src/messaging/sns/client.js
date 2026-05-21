@@ -7,18 +7,19 @@ import { config } from '../../config/index.js'
 const currentEnv = process.env.NODE_ENV || config.get('env')
 
 // Use explicit process.env values where tests set them; do not fall back to convict defaults
+const isProduction = currentEnv === environments.PRODUCTION
 const snsConfig = {
   endpoint: process.env.AWS_SNS_ENDPOINT,
   region: process.env.AWS_REGION,
-  ...(currentEnv !== environments.PRODUCTION
-    ? {
+  ...(isProduction
+    ? {}
+    : {
       // Always pass credentials object (may contain undefined values) so unit tests can assert on it
       credentials: {
         accessKeyId: process.env.AWS_ACCESS_KEY_ID,
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
       }
-    }
-    : {})
+    })
 }
 
 const snsClient = new SNSClient(snsConfig)
