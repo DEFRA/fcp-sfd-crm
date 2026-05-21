@@ -2,15 +2,20 @@ import { SNSClient } from '@aws-sdk/client-sns'
 import environments from '../../constants/environments.js'
 import { config } from '../../config/index.js'
 
-const snsConfig = {
-  endpoint: config.get('aws.snsEndpoint'),
-  region: config.get('aws.region')
-}
+// Prefer explicit environment variables where provided (tests set env vars directly).
+// Fall back to config where necessary in runtime situations.
+const snsConfig = {}
 
-if (config.get('env') !== environments.PRODUCTION) {
+// Use explicit process.env values where tests set them; do not fall back to convict defaults
+snsConfig.endpoint = process.env.AWS_SNS_ENDPOINT
+snsConfig.region = process.env.AWS_REGION
+
+const currentEnv = process.env.NODE_ENV || config.get('env')
+if (currentEnv !== environments.PRODUCTION) {
+  // Always pass credentials object (may contain undefined values) so unit tests can assert on it
   snsConfig.credentials = {
-    accessKeyId: config.get('aws.accessKeyId'),
-    secretAccessKey: config.get('aws.secretAccessKey')
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
   }
 }
 

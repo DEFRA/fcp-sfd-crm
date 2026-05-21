@@ -34,6 +34,18 @@ export const publishReceivedEvent = async (message) => {
     },
     type
   )
+  // Validate outbound event payload
+  try {
+    const { receivedEventSchema, validationOptions } = await import('../../../api/schemas/index.js')
+    const { error } = receivedEventSchema.validate(receivedRequest, validationOptions)
+    if (error) {
+      logger.error({ details: error.details }, 'Outbound SNS event failed validation')
+      throw new Error('Invalid outbound SNS event payload: ' + JSON.stringify(error.details))
+    }
+  } catch (err) {
+    logger.error(err, 'Error validating outbound event payload')
+    throw err
+  }
 
   try {
     await publish(snsClient, snsTopic, receivedRequest)

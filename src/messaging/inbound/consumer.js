@@ -23,7 +23,7 @@ const startCRMListener = (sqsClient) => {
     waitTimeSeconds: config.get('messaging.waitTimeSeconds'),
     pollingWaitTime: config.get('messaging.pollingWaitTime'),
     sqs: sqsClient,
-    async handleMessage (message) {
+    async handleMessage(message) {
       let payload
       try {
         payload = JSON.parse(message.Body)
@@ -31,6 +31,21 @@ const startCRMListener = (sqsClient) => {
         logger.error('Invalid JSON in inbound message', err)
         return message
       }
+
+      // Validate inbound CloudEvents payload
+      try {
+        const { inboundCloudEventSchema, validationOptions } = await import('../../api/schemas/index.js')
+        const { error } = inboundCloudEventSchema.validate(payload, validationOptions)
+        if (error) {
+          logger.error({ details: error.details }, 'Inbound message failed validation')
+          // drop or move to DLQ by returning message so it's not retried here
+          return message
+        }
+      } catch (err) {
+        logger.error('Error validating inbound message', err)
+        return message
+      }
+
       try {
         await createCase(payload)
         return message
