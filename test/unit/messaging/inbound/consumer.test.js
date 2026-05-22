@@ -200,6 +200,32 @@ describe('CRM request sqs consumer', () => {
       expect(result).toEqual(message)
     })
 
+    test('should not call createCase for schema-invalid but parseable payload', async () => {
+      const { createCase } = await import('../../../../src/services/case.js')
+      const { startCRMListener: start } = await setupAndImportConsumer()
+      const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
+      start(mockSqsClient)
+
+      // payload missing required file.fileId/fileName to fail schema validation
+      const message = {
+        Body: JSON.stringify({
+          id: 'evt-invalid',
+          source: '/test',
+          specversion: '1.0',
+          type: 'test.type',
+          datacontenttype: 'application/json',
+          time: new Date().toISOString(),
+          data: { crn: '123', sbi: '321', file: {}, correlationId: 'corr-1' }
+        })
+      }
+
+      const result = await capturedHandleMessage(message)
+
+      expect(createCase).not.toHaveBeenCalled()
+      // on validation failure, handler returns the original message
+      expect(result).toEqual(message)
+    })
+
     test('should log error for invalid JSON in handleMessage', async () => {
       const { startCRMListener: start } = await setupAndImportConsumer()
       const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }

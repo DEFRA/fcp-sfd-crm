@@ -72,5 +72,7 @@ describe('Create case payload validation', () => {
         expect(body).toHaveProperty('error', 'Invalid request payload')
         expect(body).toHaveProperty('details')
         expect(Array.isArray(body.details)).toBe(true)
+        const { createCaseWithOnlineSubmissionInCrm } = await import('../../../src/services/create-case-with-online-submission-in-crm.js')
+        expect(createCaseWithOnlineSubmissionInCrm).not.toHaveBeenCalled()
     })
 })

@@ -106,4 +106,19 @@ describe('Publish received request', () => {
 
     expect(mockLogger.error).toHaveBeenCalledWith('Unsupported CloudEvent type: unsupported-event-type')
   })
+
+  test('should not call publish when outbound payload is invalid', async () => {
+    const invalidMessage = {
+      id: 'msg-1',
+      type: 'uk.gov.fcp.sfd.crm.case.created',
+      data: {
+        // include an onlineSubmissionActivities entry missing required fields to fail validation
+        onlineSubmissionActivities: [{ id: 'oa-1' }]
+      }
+    }
+
+    await expect(publishReceivedEvent(invalidMessage)).rejects.toThrow()
+
+    expect(publish).not.toHaveBeenCalled()
+  })
 })
