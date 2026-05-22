@@ -18,8 +18,8 @@ export const receivedEventSchema = Joi.object({
             fileId: Joi.string().required(),
             time: Joi.string().isoDate().required()
         })).optional()
-    }).required().unknown(true)
-}).required().unknown(true)
+    }).required()
+}).required()
 
 // named exports only
 
