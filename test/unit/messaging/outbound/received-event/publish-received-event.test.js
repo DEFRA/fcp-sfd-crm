@@ -57,7 +57,7 @@ describe('Publish received request', () => {
     const messageWithoutCorrelationId = {
       id: 'msg-id-123',
       type: 'uk.gov.fcp.sfd.crm.case.created',
-      data: { caseId: 'case-1', crn: 123 }
+      data: { caseId: 'case-1', crn: 123, sbi: 321 }
     }
     await publishReceivedEvent(messageWithoutCorrelationId)
 

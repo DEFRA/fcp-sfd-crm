@@ -10,7 +10,7 @@ describe('Outbound received event schema validation', () => {
             type: 'crm.case.created',
             datacontenttype: 'application/json',
             time: new Date().toISOString(),
-            data: { correlationId: 'corr-1', caseId: 'case-1' }
+            data: { correlationId: 'corr-1', caseId: 'case-1', crn: '123', sbi: '456' }
         }
 
         const { error } = receivedEventSchema.validate(valid, validationOptions)
