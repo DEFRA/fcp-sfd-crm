@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import Joi from 'joi'
-import schemas, { validationOptions } from '../../../../src/api/common/schemas.js'
-
-const { createCasePayloadSchema, inboundCloudEventSchema, receivedEventSchema } = schemas
+import {
+    createCasePayloadSchema,
+    inboundCloudEventSchema,
+    receivedEventSchema,
+    validationOptions
+} from '../../../../src/api/schemas/index.js'
 
 describe('api/common/schemas', () => {
     it('createCasePayloadSchema accepts valid payload', () => {
@@ -105,7 +108,10 @@ describe('api/common/schemas', () => {
             datacontenttype: 'application/json',
             time: new Date().toISOString(),
             data: {
-                correlationId: 'cid'
+                correlationId: 'cid',
+                caseId: 'case-1',
+                crn: '123',
+                sbi: '456'
             }
         }
 
