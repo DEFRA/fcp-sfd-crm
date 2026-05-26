@@ -4,6 +4,7 @@ import { snsClient } from '../../sns/client.js'
 import { publish } from '../../sns/publish.js'
 import { eventToTypeMap } from '../../../constants/events.js'
 import { buildReceivedEvent } from './build-received-event.js'
+import { receivedEventSchema, validationOptions } from '../../../api/schemas/index.js'
 
 const snsTopic = config.get('messaging.crmEvents.topicArn')
 
@@ -36,7 +37,6 @@ export const publishReceivedEvent = async (message) => {
   )
   // Validate outbound event payload
   try {
-    const { receivedEventSchema, validationOptions } = await import('../../../api/schemas/index.js')
     const { error } = receivedEventSchema.validate(receivedRequest, validationOptions)
     if (error) {
       logger.error({ details: error.details }, 'Outbound SNS event failed validation')
