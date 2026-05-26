@@ -18,7 +18,7 @@ export const inboundCloudEventSchema = Joi.object({
         }).required(),
         correlationId: Joi.string().required()
     }).required()
-}).required().unknown(true)
+}).required()
 
 export const validationOptions = { convert: false, abortEarly: false }
 
