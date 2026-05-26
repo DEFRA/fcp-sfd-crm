@@ -3,6 +3,7 @@ import { Consumer } from 'sqs-consumer'
 import { createLogger } from '../../logging/logger.js'
 import { config } from '../../config/index.js'
 import { createCase } from '../../services/case.js'
+import { inboundCloudEventSchema, validationOptions } from '../../api/schemas/index.js'
 
 // Allow injection of logger for testing
 let logger = createLogger()
@@ -34,7 +35,6 @@ const startCRMListener = (sqsClient) => {
 
       // Validate inbound CloudEvents payload
       try {
-        const { inboundCloudEventSchema, validationOptions } = await import('../../api/schemas/index.js')
         const { error } = inboundCloudEventSchema.validate(payload, validationOptions)
         if (error) {
           logger.error({ details: error.details }, 'Inbound message failed validation')
