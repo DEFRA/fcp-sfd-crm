@@ -9,9 +9,9 @@ export const receivedEventSchema = Joi.object({
     time: Joi.string().isoDate().required(),
     data: Joi.object({
         correlationId: Joi.string().required(),
-        caseId: Joi.alternatives().try(Joi.string(), Joi.number()).required(),
-        crn: Joi.alternatives().try(Joi.string(), Joi.number()).required(),
-        sbi: Joi.alternatives().try(Joi.string(), Joi.number()).required(),
+        caseId: Joi.string().guid({ version: 'uuidv4' }).required(),
+        crn: Joi.number().integer().min(1050000000).max(9999999999).required(),
+        sbi: Joi.number().integer().min(105000000).max(999999999).required(),
         caseType: Joi.string().optional(),
         onlineSubmissionActivities: Joi.array().items(Joi.object({
             id: Joi.string().required(),
