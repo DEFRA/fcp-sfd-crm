@@ -25,4 +25,3 @@ export const receivedEventSchema = Joi.object({
 
 export const validationOptions = { convert: false, abortEarly: false }
 
-export default { receivedEventSchema, validationOptions }
