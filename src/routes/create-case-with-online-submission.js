@@ -13,7 +13,7 @@ export const postCreateCaseWithOnlineSubmission = () => ({
       ...validateApiKeyHeader(),
       payload: createCasePayloadSchema,
       options: validationOptions,
-      failAction: async (_request, h, error) => {
+      failAction: async (request, h, error) => {
         const { constants: httpConstants } = http2
         const headerError = Array.isArray(error?.details) &&
           error.details.some(d => d?.context?.key === 'x-api-key')
