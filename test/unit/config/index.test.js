@@ -36,7 +36,7 @@ describe('src/config/index.js', () => {
         const { config } = await import('../../../src/config/index.js')
 
         expect(addFormats).toHaveBeenCalled()
-        expect(validate).not.toHaveBeenCalled()
+        expect(validate).toHaveBeenCalled()
         expect(config).toBeDefined()
     })
 })
