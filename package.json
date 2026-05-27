@@ -69,7 +69,7 @@
   },
   "overrides": {
     "fast-xml-builder": "1.2.0",
-    "@hapi/content": "6.0.1",
+    "@hapi/content": "6.0.2",
     "uuid": "14.0.0"
   }
 }
