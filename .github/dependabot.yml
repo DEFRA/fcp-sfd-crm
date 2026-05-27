@@ -20,6 +20,17 @@ updates:
       dependency-type: production
       patterns:
       - "*"
+    vitest:
+      applies-to: version-updates
+      patterns:
+      - "vitest"
+      - "@vitest/*"
+    linting:
+      applies-to: version-updates
+      patterns:
+      - "eslint"
+      - "eslint-*"
+      - "neostandard"
 - package-ecosystem: github-actions
   directory: "/"
   schedule:
