@@ -69,7 +69,7 @@ services:
       - fcp-sfd
 
   mongodb:
-    image: mongo:6.0.13
+    image: mongo:8.2.9
     networks:
       - fcp-sfd
     volumes:
