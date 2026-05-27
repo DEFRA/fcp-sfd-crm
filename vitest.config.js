@@ -17,10 +17,10 @@ export default defineConfig({
         'src/messaging/sqs/client.js'
       ],
       thresholds: {
-        statements: 94,
-        branches: 96,
+        statements: 100,
+        branches: 100,
         functions: 97,
-        lines: 94
+        lines: 100
       }
     }
   }
