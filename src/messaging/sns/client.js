@@ -3,7 +3,7 @@ import environments from '../../constants/environments.js'
 import { config } from '../../config/index.js'
 
 // Use convict-backed configuration for AWS values so env var mappings are respected
-const currentEnv = process.env.NODE_ENV || config.get('env')
+const currentEnv = config.get('env')
 
 const isProduction = currentEnv === environments.PRODUCTION
 const snsConfig = {

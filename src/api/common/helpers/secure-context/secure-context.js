@@ -8,7 +8,7 @@ export const createSecureContext = (logger) => {
     const originalTlsCreateSecureContext = tls.createSecureContext
 
     tls.createSecureContext = function (options = {}) {
-      const trustStoreCerts = getTrustStoreCerts(process.env)
+      const trustStoreCerts = getTrustStoreCerts(config)
 
       if (!trustStoreCerts.length) {
         logger.info('Could not find any TRUSTSTORE_ certificates')
@@ -32,7 +32,7 @@ export const createSecureContext = (logger) => {
 export const secureContext = {
   plugin: {
     name: 'secure-context',
-    register (server) {
+    register(server) {
       const context = createSecureContext(server.logger)
 
       if (context) {
