@@ -33,16 +33,9 @@ const startCRMListener = (sqsClient) => {
         return message
       }
 
-      // Validate inbound CloudEvents payload
-      try {
-        const { error } = inboundCloudEventSchema.validate(payload, validationOptions)
-        if (error) {
-          logger.error({ details: error.details }, 'Inbound message failed validation')
-          // drop or move to DLQ by returning message so it's not retried here
-          return message
-        }
-      } catch (err) {
-        logger.error('Error validating inbound message', err)
+      const { error } = inboundCloudEventSchema.validate(payload, validationOptions)
+      if (error) {
+        logger.error({ details: error.details }, 'Inbound message failed validation')
         return message
       }
 
