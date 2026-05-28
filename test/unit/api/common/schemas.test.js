@@ -101,14 +101,14 @@ describe('api/common/schemas', () => {
 
     it('receivedEventSchema accepts minimal valid received event', () => {
         const evt = {
-            id: 'r1',
-            source: '/src',
+            id: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+            source: 'fcp-sfd-crm',
             specversion: '1.0',
-            type: 'received',
+            type: 'uk.gov.fcp.sfd.crm.case.created',
             datacontenttype: 'application/json',
             time: new Date().toISOString(),
             data: {
-                correlationId: 'cid',
+                correlationId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
                 caseId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
                 crn: 1050000000,
                 sbi: 105000000
@@ -119,15 +119,152 @@ describe('api/common/schemas', () => {
         expect(error).toBeUndefined()
     })
 
-    it('receivedEventSchema rejects missing data.correlationId', () => {
+    it('receivedEventSchema accepts event with caseType and onlineSubmissionActivities', () => {
         const evt = {
-            id: 'r1',
-            source: '/src',
+            id: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+            source: 'fcp-sfd-crm',
             specversion: '1.0',
-            type: 'received',
+            type: 'uk.gov.fcp.sfd.crm.case.created',
             datacontenttype: 'application/json',
             time: new Date().toISOString(),
-            data: {}
+            data: {
+                correlationId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+                caseId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+                crn: 1050000000,
+                sbi: 105000000,
+                caseType: 'case-created',
+                onlineSubmissionActivities: [{
+                    id: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+                    fileId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+                    time: new Date().toISOString()
+                }]
+            }
+        }
+
+        const { error } = receivedEventSchema.validate(evt, validationOptions)
+        expect(error).toBeUndefined()
+    })
+
+    it('receivedEventSchema rejects non-UUID id', () => {
+        const evt = {
+            id: 'not-a-uuid',
+            source: 'fcp-sfd-crm',
+            specversion: '1.0',
+            type: 'uk.gov.fcp.sfd.crm.case.created',
+            datacontenttype: 'application/json',
+            time: new Date().toISOString(),
+            data: {
+                correlationId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+                caseId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+                crn: 1050000000,
+                sbi: 105000000
+            }
+        }
+
+        const { error } = receivedEventSchema.validate(evt, validationOptions)
+        expect(error).toBeTruthy()
+        expect(error.details.some(d => d.message.includes('"id"'))).toBeTruthy()
+    })
+
+    it('receivedEventSchema rejects invalid specversion', () => {
+        const evt = {
+            id: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+            source: 'fcp-sfd-crm',
+            specversion: '2.0',
+            type: 'uk.gov.fcp.sfd.crm.case.created',
+            datacontenttype: 'application/json',
+            time: new Date().toISOString(),
+            data: {
+                correlationId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+                caseId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+                crn: 1050000000,
+                sbi: 105000000
+            }
+        }
+
+        const { error } = receivedEventSchema.validate(evt, validationOptions)
+        expect(error).toBeTruthy()
+        expect(error.details.some(d => d.message.includes('specversion'))).toBeTruthy()
+    })
+
+    it('receivedEventSchema rejects invalid event type', () => {
+        const evt = {
+            id: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+            source: 'fcp-sfd-crm',
+            specversion: '1.0',
+            type: 'uk.gov.fcp.sfd.crm.case.deleted',
+            datacontenttype: 'application/json',
+            time: new Date().toISOString(),
+            data: {
+                correlationId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+                caseId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+                crn: 1050000000,
+                sbi: 105000000
+            }
+        }
+
+        const { error } = receivedEventSchema.validate(evt, validationOptions)
+        expect(error).toBeTruthy()
+        expect(error.details.some(d => d.message.includes('type'))).toBeTruthy()
+    })
+
+    it('receivedEventSchema rejects unknown properties on root', () => {
+        const evt = {
+            id: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+            source: 'fcp-sfd-crm',
+            specversion: '1.0',
+            type: 'uk.gov.fcp.sfd.crm.case.created',
+            datacontenttype: 'application/json',
+            time: new Date().toISOString(),
+            unexpected: 'field',
+            data: {
+                correlationId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+                caseId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+                crn: 1050000000,
+                sbi: 105000000
+            }
+        }
+
+        const { error } = receivedEventSchema.validate(evt, validationOptions)
+        expect(error).toBeTruthy()
+        expect(error.details.some(d => d.message.includes('unexpected'))).toBeTruthy()
+    })
+
+    it('receivedEventSchema rejects unknown properties on data', () => {
+        const evt = {
+            id: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+            source: 'fcp-sfd-crm',
+            specversion: '1.0',
+            type: 'uk.gov.fcp.sfd.crm.case.created',
+            datacontenttype: 'application/json',
+            time: new Date().toISOString(),
+            data: {
+                correlationId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+                caseId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+                crn: 1050000000,
+                sbi: 105000000,
+                extraField: 'not-allowed'
+            }
+        }
+
+        const { error } = receivedEventSchema.validate(evt, validationOptions)
+        expect(error).toBeTruthy()
+        expect(error.details.some(d => d.message.includes('extraField'))).toBeTruthy()
+    })
+
+    it('receivedEventSchema rejects missing data.correlationId', () => {
+        const evt = {
+            id: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+            source: 'fcp-sfd-crm',
+            specversion: '1.0',
+            type: 'uk.gov.fcp.sfd.crm.case.created',
+            datacontenttype: 'application/json',
+            time: new Date().toISOString(),
+            data: {
+                caseId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+                crn: 1050000000,
+                sbi: 105000000
+            }
         }
 
         const { error } = receivedEventSchema.validate(evt, validationOptions)

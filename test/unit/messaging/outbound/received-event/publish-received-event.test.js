@@ -55,7 +55,7 @@ describe('Publish received request', () => {
 
   test('should use message.id as correlationId when data.correlationId is missing', async () => {
     const messageWithoutCorrelationId = {
-      id: 'msg-id-123',
+      id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
       type: 'uk.gov.fcp.sfd.crm.case.created',
       data: {
         caseId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
@@ -70,7 +70,7 @@ describe('Publish received request', () => {
       config.get('messaging.crmEvents.topicArn'),
       expect.objectContaining({
         data: expect.objectContaining({
-          correlationId: 'msg-id-123'
+          correlationId: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
         })
       })
     )

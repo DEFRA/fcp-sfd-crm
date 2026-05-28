@@ -4,14 +4,14 @@ import { receivedEventSchema, validationOptions } from '../../../../src/api/sche
 describe('Outbound received event schema validation', () => {
     it('accepts a valid received event payload', () => {
         const valid = {
-            id: 'evt-1',
-            source: '/fcp-sfd-crm',
+            id: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+            source: 'fcp-sfd-crm',
             specversion: '1.0',
-            type: 'crm.case.created',
+            type: 'uk.gov.fcp.sfd.crm.case.created',
             datacontenttype: 'application/json',
             time: new Date().toISOString(),
             data: {
-                correlationId: 'corr-1',
+                correlationId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
                 caseId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
                 crn: 1050000000,
                 sbi: 105000000
@@ -27,5 +27,27 @@ describe('Outbound received event schema validation', () => {
         const { error } = receivedEventSchema.validate(invalid, validationOptions)
         expect(error).toBeDefined()
         expect(Array.isArray(error.details)).toBe(true)
+    })
+
+    it('rejects unknown properties', () => {
+        const withUnknown = {
+            id: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+            source: 'fcp-sfd-crm',
+            specversion: '1.0',
+            type: 'uk.gov.fcp.sfd.crm.case.created',
+            datacontenttype: 'application/json',
+            time: new Date().toISOString(),
+            data: {
+                correlationId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+                caseId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+                crn: 1050000000,
+                sbi: 105000000,
+                unknownField: 'should-fail'
+            }
+        }
+
+        const { error } = receivedEventSchema.validate(withUnknown, validationOptions)
+        expect(error).toBeDefined()
+        expect(error.details.some(d => d.message.includes('unknownField'))).toBe(true)
     })
 })
