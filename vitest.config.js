@@ -17,11 +17,14 @@ export default defineConfig({
         'src/data/db.js',
         'src/messaging/sqs/client.js'
       ],
+      // as documented here:
+      // https://eaflood.atlassian.net/wiki/spaces/SFD/pages/6123225232/SFD+Test+Strategy+Coverage
+      // https://eaflood.atlassian.net/wiki/spaces/SFD/pages/5280858150/Test+Strategy
       thresholds: {
-        statements: 100,
-        branches: 100,
-        functions: 97,
-        lines: 100
+        statements: 90,
+        branches: 90,
+        functions: 90,
+        lines: 90
       }
     }
   }
