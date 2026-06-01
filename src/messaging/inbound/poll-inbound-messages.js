@@ -1,6 +1,7 @@
 import { ReceiveMessageCommand, DeleteMessageCommand } from '@aws-sdk/client-sqs'
 import { sqsClient } from '../sqs/client.js'
 import { createLogger } from '../../logging/logger.js'
+import { config } from '../../config/index.js'
 import { createCase } from '../../services/case.js'
 
 const logger = createLogger()
@@ -9,8 +10,8 @@ const logger = createLogger()
  * Polls inbound SQS messages and processes them.
  * @param {Function} delayFn - Function to delay between polls (for testability)
  */
-export async function pollInboundMessages (delayFn = () => new Promise(resolve => setTimeout(resolve, 1000))) {
-  const queueUrl = process.env.CRM_QUEUE_URL
+export async function pollInboundMessages(delayFn = () => new Promise(resolve => setTimeout(resolve, 1000))) {
+  const queueUrl = config.get('queue.url')
 
   const receiveParams = {
     QueueUrl: queueUrl,
