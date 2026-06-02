@@ -70,8 +70,8 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     const request = {
       authToken: 'mock-bearer-token',
       correlationId: 'mock-correlation-id',
-      crn: 'mock-crn',
-      sbi: 'mock-sbi',
+      crn: '1050000001',
+      sbi: '105000001',
       caseData: { title: 'Test Case', caseDescription: 'Test description' },
       onlineSubmissionActivity: { subject: 'Test', description: 'Test submission' }
     }
@@ -83,8 +83,8 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
       data: expect.objectContaining({
         correlationId: 'mock-correlation-id',
         caseId: 'mock-case-id',
-        crn: 'mock-crn',
-        sbi: 'mock-sbi'
+        crn: 1050000001,
+        sbi: 105000001
       })
     })
   })
@@ -159,7 +159,10 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
       onlineSubmissionActivity: {}
     })).rejects.toThrow('Unable to create case with online submission activity in CRM')
 
-    expect(mockLogger.error).toHaveBeenCalledWith('Error creating case with online submission activity: CRM service failed')
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      { correlationId: 'mock-correlation-id', error: 'CRM service failed' },
+      'Error creating case with online submission activity'
+    )
   })
 
   test('throws error if unable to retrieve online submission id', async () => {

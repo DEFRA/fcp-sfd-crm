@@ -50,9 +50,14 @@ export const logValidationFailure = (logger, joiError, payload, direction = 'inb
   const failedFields = validationErrors.map(e => e.field).join(', ')
   const label = direction === 'outbound' ? 'Outbound SNS event failed validation' : 'Inbound message failed validation'
 
+  const errorDetails = validationErrors
+    .map(e => `${e.field}: ${e.message} (received: ${JSON.stringify(e.value)})`)
+    .join('; ')
+
   const err = new Error(
     `${label} — ${validationErrors.length} error(s) on [${failedFields}]. ` +
-    `Message from '${payload?.source || 'unknown'}' (id: '${payload?.id || 'unknown'}') was discarded.`
+    `Message from '${payload?.source || 'unknown'}' (id: '${payload?.id || 'unknown'}') was discarded. ` +
+    `Details: ${errorDetails}`
   )
   err.validationErrors = validationErrors
   err.source = payload?.source

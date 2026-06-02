@@ -41,7 +41,7 @@ describe('logInboundValidationFailure', () => {
     const longValue = 'x'.repeat(200)
     const joiError = {
       details: [
-        { path: ['data', 'crn'], type: 'string.max', context: { value: longValue }, message: '"data.crn" exceeds max length' }
+        { path: ['data', 'file', 'url'], type: 'string.max', context: { value: longValue }, message: '"data.file.url" exceeds max length' }
       ]
     }
 

@@ -35,7 +35,7 @@ export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi,
   })
 
   if (caseError) {
-    logger.error(`Error creating case with online submission activity: ${caseError}`)
+    logger.error({ correlationId, error: caseError }, 'Error creating case with online submission activity')
     throw internal('Unable to create case with online submission activity in CRM')
   }
 
@@ -51,8 +51,8 @@ export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi,
   const eventData = {
     correlationId,
     caseId,
-    crn,
-    sbi
+    crn: Number(crn),
+    sbi: Number(sbi)
   }
 
   // Fire-and-forget publishing; handle any rejection to avoid unhandled rejections
@@ -62,7 +62,7 @@ export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi,
       data: eventData
     }
   )).catch(err => {
-    logger.error(err, 'Error publishing received CRM request event')
+    logger.error({ err, caseId, correlationId }, 'Error publishing received CRM request event')
   })
 
   return {
