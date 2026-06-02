@@ -7,6 +7,20 @@ const logger = createLogger()
 // Matches node-level network error codes that are safe to retry
 const RETRYABLE_NETWORK_ERROR = /ECONNRESET|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|EPIPE|EAI_AGAIN/i
 
+const HTTP_TOO_MANY_REQUESTS = 429
+const HTTP_SERVER_ERROR_MIN = 500
+const HTTP_CLIENT_ERROR_MIN = 400
+
+const classifyResponseStatus = (status) => {
+  if (status === HTTP_TOO_MANY_REQUESTS || status >= HTTP_SERVER_ERROR_MIN) {
+    return 'retryable'
+  }
+  if (status >= HTTP_CLIENT_ERROR_MIN) {
+    return 'nonRetryable'
+  }
+  return null
+}
+
 /**
  * Classify an ffetch RetryContext into one of three buckets:
  *   'retryable'    – known-safe to retry (network failures, timeouts, 5xx/429)
@@ -16,18 +30,24 @@ const RETRYABLE_NETWORK_ERROR = /ECONNRESET|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|EPI
 const classifyError = (ctx) => {
   const { error, response } = ctx
 
-  if (error instanceof AbortError) return 'nonRetryable'
-  if (error instanceof TimeoutError || error instanceof NetworkError) return 'retryable'
-  if (error instanceof Error && RETRYABLE_NETWORK_ERROR.test(error.message)) return 'retryable'
-
-  if (response) {
-    if (response.status === 429 || response.status >= 500) return 'retryable'
-    if (response.status >= 400) return 'nonRetryable'
+  if (error instanceof AbortError) {
+    return 'nonRetryable'
+  }
+  if (error instanceof TimeoutError || error instanceof NetworkError) {
+    return 'retryable'
+  }
+  if (error instanceof Error && RETRYABLE_NETWORK_ERROR.test(error.message)) {
+    return 'retryable'
   }
 
-  if (error) return 'unknown'
+  if (response) {
+    const statusClass = classifyResponseStatus(response.status)
+    if (statusClass) {
+      return statusClass
+    }
+  }
 
-  return 'nonRetryable'
+  return error ? 'unknown' : 'nonRetryable'
 }
 
 const calcDelay = (attempt, baseDelayMs, backoffMultiplier, jitterPct, capMs) => {
