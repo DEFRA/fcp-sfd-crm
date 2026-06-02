@@ -39,16 +39,13 @@ const url = 'http://test-crm/resource'
 const alwaysRespond = (status, body = '') =>
   createChaosClient({ global: [{ mock: { status, body } }] })
 
-const failFirstNThenOk = (n, status = 500) => {
-  let callCount = 0
-  return async (...args) => {
-    callCount++
-    if (callCount <= n) {
-      return new Response(`failed attempt ${callCount}`, { status })
-    }
-    return new Response('ok', { status: 200 })
-  }
-}
+const failFirstNThenOk = (n, status = 500) =>
+  createChaosClient({
+    global: [
+      { failFirstN: { n, status } },
+      { mock: { status: 200, body: 'ok' } }
+    ]
+  })
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
 

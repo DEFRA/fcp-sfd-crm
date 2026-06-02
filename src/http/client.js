@@ -21,12 +21,10 @@ const classifyResponseStatus = (status) => {
   return null
 }
 
-/**
- * Classify an ffetch RetryContext into one of three buckets:
- *   'retryable'    – known-safe to retry (network failures, timeouts, 5xx/429)
- *   'nonRetryable' – must not retry (4xx, user abort)
- *   'unknown'      – unrecognised; conservative retry applies
- */
+// Classify an ffetch RetryContext into one of three buckets:
+//   'retryable'    – known-safe to retry (network failures, timeouts, 5xx/429)
+//   'nonRetryable' – must not retry (4xx, user abort)
+//   'unknown'      – unrecognised; conservative retry applies
 const classifyError = (ctx) => {
   const { error, response } = ctx
 
