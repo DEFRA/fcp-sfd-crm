@@ -6,8 +6,13 @@ import { generateCrmAuthToken } from '../../../src/auth/generate-crm-auth-token.
 // Mock dependencies
 import { config } from '../../../src/config/index.js'
 
-// Mock global fetch
-global.fetch = vi.fn()
+const { mockAuthHttpClient } = vi.hoisted(() => ({
+  mockAuthHttpClient: vi.fn()
+}))
+
+vi.mock('../../../src/http/client.js', () => ({
+  authHttpClient: mockAuthHttpClient
+}))
 
 vi.mock('../../../src/config/index.js', () => ({
   config: {
@@ -36,11 +41,11 @@ describe('generateCrmAuthToken', () => {
   }
 
   test('should use token endpoint value from config in fetch URL', async () => {
-    global.fetch.mockResolvedValue(mockSuccessResponse)
+    mockAuthHttpClient.mockResolvedValue(mockSuccessResponse)
 
     await generateCrmAuthToken()
 
-    expect(global.fetch).toHaveBeenCalledWith(
+    expect(mockAuthHttpClient).toHaveBeenCalledWith(
       'https://login.microsoftonline.com/fake-tenant/oauth2/v2.0/token',
       expect.objectContaining({
         method: 'POST'
@@ -55,7 +60,7 @@ describe('generateCrmAuthToken', () => {
       statusText: 'Unauthorized',
       text: vi.fn().mockResolvedValue('Invalid credentials')
     }
-    global.fetch.mockResolvedValue(mockFailResponse)
+    mockAuthHttpClient.mockResolvedValue(mockFailResponse)
 
     await expect(generateCrmAuthToken()).rejects.toThrow(
       'Auth failed: 401 Unauthorized - Invalid credentials'
@@ -63,7 +68,7 @@ describe('generateCrmAuthToken', () => {
   })
 
   test('should return object with token and expiresAt property', async () => {
-    global.fetch.mockResolvedValue(mockSuccessResponse)
+    mockAuthHttpClient.mockResolvedValue(mockSuccessResponse)
 
     const result = await generateCrmAuthToken()
 
@@ -76,11 +81,11 @@ describe('generateCrmAuthToken', () => {
   })
 
   test('should send correct form data with URL encoding', async () => {
-    global.fetch.mockResolvedValue(mockSuccessResponse)
+    mockAuthHttpClient.mockResolvedValue(mockSuccessResponse)
 
     await generateCrmAuthToken()
 
-    const fetchCall = global.fetch.mock.calls[0]
+    const fetchCall = mockAuthHttpClient.mock.calls[0]
     const requestOptions = fetchCall[1]
 
     expect(requestOptions.method).toBe('POST')
@@ -94,7 +99,7 @@ describe('generateCrmAuthToken', () => {
   })
 
   test('should throw error when token endpoint is down', async () => {
-    global.fetch.mockRejectedValue(new Error('Network error'))
+    mockAuthHttpClient.mockRejectedValue(new Error('Network error'))
 
     await expect(generateCrmAuthToken()).rejects.toThrow(
       'Unable to reach token endpoint: Network error'

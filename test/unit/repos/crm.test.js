@@ -1,7 +1,10 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
 
-// Mock fetch globally
-global.fetch = vi.fn()
+const mockHttpClient = vi.fn()
+
+vi.mock('../../../src/http/client.js', () => ({
+  httpClient: mockHttpClient
+}))
 
 // Mock config
 vi.mock('../../../src/config/index.js', () => ({
@@ -29,11 +32,11 @@ describe('CRM repository', () => {
           value: [{ contactid: '6ff3f89f-efe6-f455-fff6-bfff1f808e6' }]
         })
       }
-      global.fetch.mockResolvedValue(mockResponse)
+      mockHttpClient.mockResolvedValue(mockResponse)
 
       const result = await getContactIdFromCrn('Bearer token', '1234567890')
 
-      expect(global.fetch).toHaveBeenCalledWith(
+      expect(mockHttpClient).toHaveBeenCalledWith(
         "https://crm.example.com/api/contacts?%24select=contactid&%24filter=rpa_capcustomerid%20eq%20'1234567890'",
         {
           method: 'GET',
@@ -53,7 +56,7 @@ describe('CRM repository', () => {
           ]
         })
       }
-      global.fetch.mockResolvedValue(mockResponse)
+      mockHttpClient.mockResolvedValue(mockResponse)
 
       const result = await getContactIdFromCrn('Bearer token', '1234567890')
 
@@ -62,7 +65,7 @@ describe('CRM repository', () => {
 
     test('should handle fetch error for SBI and return error message', async () => {
       const mockError = new Error('Network error')
-      global.fetch.mockRejectedValue(mockError)
+      mockHttpClient.mockRejectedValue(mockError)
 
       const result = await getContactIdFromCrn('Bearer token', '1234567890')
 
@@ -77,7 +80,7 @@ describe('CRM repository', () => {
         ok: true,
         json: vi.fn().mockRejectedValue(new Error('Invalid JSON'))
       }
-      global.fetch.mockResolvedValue(mockResponse)
+      mockHttpClient.mockResolvedValue(mockResponse)
 
       const result = await getContactIdFromCrn('Bearer token', '1234567890')
 
@@ -96,11 +99,11 @@ describe('CRM repository', () => {
           value: [{ accountid: '7dd1d67d-cdc4-f233-ddf4-9efe9e686c4' }]
         })
       }
-      global.fetch.mockResolvedValue(mockResponse)
+      mockHttpClient.mockResolvedValue(mockResponse)
 
       const result = await getAccountIdFromSbi('Bearer token', '987654321')
 
-      expect(global.fetch).toHaveBeenCalledWith(
+      expect(mockHttpClient).toHaveBeenCalledWith(
         "https://crm.example.com/api/accounts?%24select=accountid&%24filter=rpa_sbinumber%20eq%20'987654321'",
         {
           method: 'GET',
@@ -120,7 +123,7 @@ describe('CRM repository', () => {
           ]
         })
       }
-      global.fetch.mockResolvedValue(mockResponse)
+      mockHttpClient.mockResolvedValue(mockResponse)
 
       const result = await getAccountIdFromSbi('Bearer token', '987654321')
 
@@ -129,7 +132,7 @@ describe('CRM repository', () => {
 
     test('should handle fetch error for CRN and return error message', async () => {
       const mockError = new Error('Network error')
-      global.fetch.mockRejectedValue(mockError)
+      mockHttpClient.mockRejectedValue(mockError)
 
       const result = await getAccountIdFromSbi('Bearer token', '987654321')
 
@@ -144,7 +147,7 @@ describe('CRM repository', () => {
         ok: true,
         json: vi.fn().mockRejectedValue(new Error('Invalid JSON'))
       }
-      global.fetch.mockResolvedValue(mockResponse)
+      mockHttpClient.mockResolvedValue(mockResponse)
 
       const result = await getAccountIdFromSbi('Bearer token', '987654321')
 
@@ -164,7 +167,7 @@ describe('CRM repository', () => {
         })
       }
 
-      global.fetch.mockResolvedValue(mockResponse)
+      mockHttpClient.mockResolvedValue(mockResponse)
 
       const request = {
         authToken: 'Bearer token',
@@ -192,7 +195,7 @@ describe('CRM repository', () => {
 
       const { caseId, error } = await createCaseWithOnlineSubmission(request)
 
-      expect(global.fetch).toHaveBeenCalledWith(
+      expect(mockHttpClient).toHaveBeenCalledWith(
         'https://crm.example.com/api/incidents',
         {
           method: 'POST',
@@ -205,7 +208,7 @@ describe('CRM repository', () => {
         }
       )
 
-      const payload = JSON.parse(global.fetch.mock.calls[0][1].body)
+      const payload = JSON.parse(mockHttpClient.mock.calls[0][1].body)
 
       expect(payload).toMatchObject({
         title: 'Test case title',
@@ -252,7 +255,7 @@ describe('CRM repository', () => {
         json: vi.fn().mockResolvedValue({ incidentid: '8bb8b45b-aba2-f011-bbd2-7ced8d4645a2' })
       }
 
-      global.fetch.mockResolvedValue(mockResponse)
+      mockHttpClient.mockResolvedValue(mockResponse)
 
       const request = {
         authToken: 'Bearer token',
@@ -279,14 +282,14 @@ describe('CRM repository', () => {
 
       await createCaseWithOnlineSubmission(request)
 
-      const payload = JSON.parse(global.fetch.mock.calls[0][1].body)
+      const payload = JSON.parse(mockHttpClient.mock.calls[0][1].body)
       const submission = payload.incident_rpa_onlinesubmissions[0]
       const meta = submission.rpa_onlinesubmission_rpa_activitymetadata[0]
       expect(meta.rpa_filemimetype).toBeUndefined()
     })
 
     test('should return error when fetch throws', async () => {
-      global.fetch.mockRejectedValue(new Error('Network error'))
+      mockHttpClient.mockRejectedValue(new Error('Network error'))
 
       const { caseId, error } = await createCaseWithOnlineSubmission({
         authToken: 'Bearer token',
@@ -316,7 +319,7 @@ describe('CRM repository', () => {
     })
 
     test('should return error when response json parsing fails', async () => {
-      global.fetch.mockResolvedValue({
+      mockHttpClient.mockResolvedValue({
         ok: true,
         json: vi.fn().mockRejectedValue(new Error('Invalid JSON'))
       })
@@ -355,13 +358,13 @@ describe('CRM repository', () => {
         ok: true,
         json: vi.fn().mockResolvedValue({ incident_rpa_onlinesubmissions: [{ rpa_onlinesubmissionid: 'OLS-2026-0001' }] })
       }
-      global.fetch.mockResolvedValue(mockResponse)
+      mockHttpClient.mockResolvedValue(mockResponse)
 
       const { getOnlineSubmissionId } = await import('../../../src/repos/crm.js')
 
       const result = await getOnlineSubmissionId('Bearer token', 'case-123')
 
-      expect(global.fetch).toHaveBeenCalledWith(
+      expect(mockHttpClient).toHaveBeenCalledWith(
         'https://crm.example.com/api/incidents(case-123)?%24select=incidentid,title&%24expand=incident_rpa_onlinesubmissions(%24select=rpa_onlinesubmissionid)',
         {
           method: 'GET',
@@ -373,7 +376,7 @@ describe('CRM repository', () => {
     })
 
     test('should return error when fetch fails', async () => {
-      global.fetch.mockRejectedValue(new Error('Network error'))
+      mockHttpClient.mockRejectedValue(new Error('Network error'))
       const { getOnlineSubmissionId } = await import('../../../src/repos/crm.js')
       const result = await getOnlineSubmissionId('Bearer token', 'case-123')
       expect(result).toEqual({ rpaOnlinesubmissionid: null, error: 'Network error' })
@@ -381,7 +384,7 @@ describe('CRM repository', () => {
 
     test('should handle empty online submissions array', async () => {
       const mockResponse = { ok: true, json: vi.fn().mockResolvedValue({ incident_rpa_onlinesubmissions: [] }) }
-      global.fetch.mockResolvedValue(mockResponse)
+      mockHttpClient.mockResolvedValue(mockResponse)
       const { getOnlineSubmissionId } = await import('../../../src/repos/crm.js')
       const result = await getOnlineSubmissionId('Bearer token', 'case-123')
       expect(result).toEqual({ rpaOnlinesubmissionid: null, error: null })
@@ -394,7 +397,7 @@ describe('CRM repository', () => {
         ok: true,
         json: vi.fn().mockResolvedValue({ rpa_activitymetadataid: 'meta-123' })
       }
-      global.fetch.mockResolvedValue(mockResponse)
+      mockHttpClient.mockResolvedValue(mockResponse)
 
       const { createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
 
@@ -405,7 +408,7 @@ describe('CRM repository', () => {
       })
 
       expect(result).toEqual({ metadataId: 'meta-123', error: null })
-      const lastCall = global.fetch.mock.calls[0]
+      const lastCall = mockHttpClient.mock.calls[0]
       const body = JSON.parse(lastCall[1].body)
       expect(body.rpa_filemimetype).toBe('application/pdf')
     })
@@ -415,7 +418,7 @@ describe('CRM repository', () => {
         ok: true,
         json: vi.fn().mockResolvedValue({ rpa_activitymetadataid: 'meta-124' })
       }
-      global.fetch.mockResolvedValue(mockResponse)
+      mockHttpClient.mockResolvedValue(mockResponse)
       const { createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
 
       const result = await createMetadataForOnlineSubmission({
@@ -425,13 +428,13 @@ describe('CRM repository', () => {
       })
 
       expect(result).toEqual({ metadataId: 'meta-124', error: null })
-      const lastCall = global.fetch.mock.calls[0]
+      const lastCall = mockHttpClient.mock.calls[0]
       const body = JSON.parse(lastCall[1].body)
       expect(body.rpa_filemimetype).toBeUndefined()
     })
 
     test('should return error when fetch fails', async () => {
-      global.fetch.mockRejectedValue(new Error('Network error'))
+      mockHttpClient.mockRejectedValue(new Error('Network error'))
       const { createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
       const result = await createMetadataForOnlineSubmission({ authToken: 'Bearer token', rpaOnlinesubmissionid: 'ols', metadata: {} })
       expect(result).toEqual({ metadataId: null, error: 'Network error' })
@@ -439,7 +442,7 @@ describe('CRM repository', () => {
 
     test('should handle response without metadata id', async () => {
       const mockResponse = { ok: true, json: vi.fn().mockResolvedValue({}) }
-      global.fetch.mockResolvedValue(mockResponse)
+      mockHttpClient.mockResolvedValue(mockResponse)
       const { createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
       const result = await createMetadataForOnlineSubmission({ authToken: 'Bearer token', rpaOnlinesubmissionid: 'ols', metadata: { name: 'a' } })
       expect(result).toEqual({ metadataId: null, error: null })
@@ -447,7 +450,7 @@ describe('CRM repository', () => {
 
     test('should include provided documentTypeId in payload', async () => {
       const mockResponse = { ok: true, json: vi.fn().mockResolvedValue({ rpa_activitymetadataid: 'meta-456' }) }
-      global.fetch.mockResolvedValue(mockResponse)
+      mockHttpClient.mockResolvedValue(mockResponse)
       const { createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
 
       const result = await createMetadataForOnlineSubmission({
@@ -457,7 +460,7 @@ describe('CRM repository', () => {
       })
 
       expect(result).toEqual({ metadataId: 'meta-456', error: null })
-      const lastCall = global.fetch.mock.calls[0]
+      const lastCall = mockHttpClient.mock.calls[0]
       const body = JSON.parse(lastCall[1].body)
       expect(body['rpa_DocumentTypeMetaId@odata.bind']).toBe('/rpa_documenttypeses(abcd-1234)')
     })
@@ -466,7 +469,7 @@ describe('CRM repository', () => {
   describe('createMetadataForExistingCase', () => {
     test('should post metadata for existing case and return metadataId with contact/account binds', async () => {
       const mockResponse = { ok: true, json: vi.fn().mockResolvedValue({ rpa_activitymetadataid: 'meta-existing-123' }) }
-      global.fetch.mockResolvedValue(mockResponse)
+      mockHttpClient.mockResolvedValue(mockResponse)
 
       const { createMetadataForExistingCase } = await import('../../../src/repos/crm.js')
 
@@ -477,7 +480,7 @@ describe('CRM repository', () => {
       })
 
       expect(result).toEqual({ metadataId: 'meta-existing-123', error: null })
-      const lastCall = global.fetch.mock.calls[0]
+      const lastCall = mockHttpClient.mock.calls[0]
       expect(lastCall[0]).toBe('https://crm.example.com/api/incidents(case-789)/incident_rpa_activitymetadata')
       const body = JSON.parse(lastCall[1].body)
       expect(body.rpa_name).toBe('file.pdf')
@@ -488,7 +491,7 @@ describe('CRM repository', () => {
 
     test('should omit rpa_filemimetype when mimeType not provided in createMetadataForExistingCase', async () => {
       const mockResponse = { ok: true, json: vi.fn().mockResolvedValue({ rpa_activitymetadataid: 'meta-existing-124' }) }
-      global.fetch.mockResolvedValue(mockResponse)
+      mockHttpClient.mockResolvedValue(mockResponse)
 
       const { createMetadataForExistingCase } = await import('../../../src/repos/crm.js')
 
@@ -499,13 +502,13 @@ describe('CRM repository', () => {
       })
 
       expect(result).toEqual({ metadataId: 'meta-existing-124', error: null })
-      const lastCall = global.fetch.mock.calls[0]
+      const lastCall = mockHttpClient.mock.calls[0]
       const body = JSON.parse(lastCall[1].body)
       expect(body.rpa_filemimetype).toBeUndefined()
     })
 
     test('should return error when fetch fails', async () => {
-      global.fetch.mockRejectedValue(new Error('Network error'))
+      mockHttpClient.mockRejectedValue(new Error('Network error'))
       const { createMetadataForExistingCase } = await import('../../../src/repos/crm.js')
       const result = await createMetadataForExistingCase({ authToken: 'Bearer token', caseId: 'case-1', metadata: { name: 'a' } })
       expect(result).toEqual({ metadataId: null, error: 'Network error' })
@@ -513,7 +516,7 @@ describe('CRM repository', () => {
 
     test('should handle response without metadata id', async () => {
       const mockResponse = { ok: true, json: vi.fn().mockResolvedValue({}) }
-      global.fetch.mockResolvedValue(mockResponse)
+      mockHttpClient.mockResolvedValue(mockResponse)
       const { createMetadataForExistingCase } = await import('../../../src/repos/crm.js')
       const result = await createMetadataForExistingCase({ authToken: 'Bearer token', caseId: 'case-2', metadata: { name: 'a' } })
       expect(result).toEqual({ metadataId: null, error: null })
@@ -521,7 +524,7 @@ describe('CRM repository', () => {
 
     test('should include provided documentTypeId in payload', async () => {
       const mockResponse = { ok: true, json: vi.fn().mockResolvedValue({ rpa_activitymetadataid: 'meta-999' }) }
-      global.fetch.mockResolvedValue(mockResponse)
+      mockHttpClient.mockResolvedValue(mockResponse)
       const { createMetadataForExistingCase } = await import('../../../src/repos/crm.js')
 
       const result = await createMetadataForExistingCase({
@@ -531,7 +534,7 @@ describe('CRM repository', () => {
       })
 
       expect(result).toEqual({ metadataId: 'meta-999', error: null })
-      const lastCall = global.fetch.mock.calls[0]
+      const lastCall = mockHttpClient.mock.calls[0]
       const body = JSON.parse(lastCall[1].body)
       expect(body['rpa_DocumentTypeMetaId@odata.bind']).toBe('/rpa_documenttypeses(doc-999)')
     })

@@ -37,6 +37,7 @@
     "@aws-sdk/client-sqs": "3.1046.0",
     "@defra/hapi-tracing": "1.0.0",
     "@elastic/ecs-pino-format": "1.5.0",
+    "@fetchkit/ffetch": "5.5.1",
     "@hapi/boom": "10.0.1",
     "@hapi/hapi": "21.3.12",
     "aws-embedded-metrics": "4.2.0",
@@ -58,6 +59,7 @@
     "undici": "7.24.0"
   },
   "devDependencies": {
+    "@fetchkit/chaos-fetch": "1.2.1",
     "@vitest/coverage-v8": "4.1.7",
     "autoprefixer": "10.5.0",
     "dotenv": "17.4.2",
