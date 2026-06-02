@@ -79,13 +79,8 @@ describe('Publish received request', () => {
     await publishReceivedEvent(mockCrmRequest)
 
     expect(mockLogger.error).toHaveBeenCalledWith(
-      {
-        err: mockError,
-        caseId: mockCrmRequest.data.caseId,
-        correlationId: mockCrmRequest.data.correlationId,
-        topicArn: config.get('messaging.crmEvents.topicArn')
-      },
-      'Error publishing received CRM request event'
+      { err: mockError },
+      `Error publishing received CRM request event | caseId=${mockCrmRequest.data.caseId} correlationId=${mockCrmRequest.data.correlationId} topicArn=${config.get('messaging.crmEvents.topicArn')}`
     )
   })
 
