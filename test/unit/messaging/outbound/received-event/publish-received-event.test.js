@@ -55,13 +55,8 @@ describe('Publish received request', () => {
 
   test('should use message.id as correlationId when data.correlationId is missing', async () => {
     const messageWithoutCorrelationId = {
-      id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-      type: 'uk.gov.fcp.sfd.crm.case.created',
-      data: {
-        caseId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
-        crn: 1050000000,
-        sbi: 105000000
-      }
+      ...mockCrmRequest,
+      data: { ...mockCrmRequest.data, correlationId: undefined }
     }
     await publishReceivedEvent(messageWithoutCorrelationId)
 
@@ -70,7 +65,7 @@ describe('Publish received request', () => {
       config.get('messaging.crmEvents.topicArn'),
       expect.objectContaining({
         data: expect.objectContaining({
-          correlationId: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
+          correlationId: mockCrmRequest.id
         })
       })
     )
@@ -84,9 +79,15 @@ describe('Publish received request', () => {
     await publishReceivedEvent(mockCrmRequest)
 
     expect(mockLogger.error).toHaveBeenCalledWith(
-      mockError,
-      'Error publishing received CRM request event'
+      { err: mockError },
+      `Error publishing received CRM request event | caseId=${mockCrmRequest.data.caseId} correlationId=${mockCrmRequest.data.correlationId} topicArn=${config.get('messaging.crmEvents.topicArn')}`
     )
+  })
+
+  test('should not throw when publish fails', async () => {
+    publish.mockRejectedValue(new Error('Publish error'))
+
+    await expect(publishReceivedEvent(mockCrmRequest)).resolves.not.toThrow()
   })
 
   test('should throw and log error when CloudEvent type is missing', async () => {
@@ -116,7 +117,6 @@ describe('Publish received request', () => {
       id: 'msg-1',
       type: 'uk.gov.fcp.sfd.crm.case.created',
       data: {
-        // include an onlineSubmissionActivities entry missing required fields to fail validation
         onlineSubmissionActivities: [{ id: 'oa-1' }]
       }
     }

@@ -13,11 +13,11 @@ const snsConfig = {
     ? {}
     : {
       // Always pass credentials object (may contain undefined/null values) so unit tests can assert on it
-      credentials: {
-        accessKeyId: config.get('aws.accessKeyId'),
-        secretAccessKey: config.get('aws.secretAccessKey')
-      }
-    })
+        credentials: {
+          accessKeyId: config.get('aws.accessKeyId'),
+          secretAccessKey: config.get('aws.secretAccessKey')
+        }
+      })
 }
 
 const snsClient = new SNSClient(snsConfig)

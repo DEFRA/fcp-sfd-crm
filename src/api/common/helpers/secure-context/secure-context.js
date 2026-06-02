@@ -32,7 +32,7 @@ export const createSecureContext = (logger) => {
 export const secureContext = {
   plugin: {
     name: 'secure-context',
-    register(server) {
+    register (server) {
       const context = createSecureContext(server.logger)
 
       if (context) {

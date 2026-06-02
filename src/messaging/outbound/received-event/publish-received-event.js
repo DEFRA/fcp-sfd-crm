@@ -44,6 +44,9 @@ export const publishReceivedEvent = async (message) => {
   try {
     await publish(snsClient, snsTopic, receivedRequest)
   } catch (err) {
-    logger.error(err, 'Error publishing received CRM request event')
+    logger.error(
+      { err },
+      `Error publishing received CRM request event | caseId=${message.data?.caseId} correlationId=${message.data?.correlationId ?? message.id} topicArn=${snsTopic}`
+    )
   }
 }

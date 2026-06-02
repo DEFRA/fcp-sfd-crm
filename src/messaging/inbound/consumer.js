@@ -24,7 +24,7 @@ const startCRMListener = (sqsClient) => {
     waitTimeSeconds: config.get('messaging.waitTimeSeconds'),
     pollingWaitTime: config.get('messaging.pollingWaitTime'),
     sqs: sqsClient,
-    async handleMessage(message) {
+    async handleMessage (message) {
       let payload
       try {
         payload = JSON.parse(message.Body)

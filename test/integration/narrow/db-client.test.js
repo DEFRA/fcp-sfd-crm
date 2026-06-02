@@ -8,7 +8,7 @@ try {
   db = mod.default
 } catch (err) {
   // mark to skip integration tests that require MongoDB
-  // eslint-disable-next-line no-console
+
   console.warn('Skipping integration DB tests; MongoDB not available:', err.message)
   skipIntegration = true
 }
