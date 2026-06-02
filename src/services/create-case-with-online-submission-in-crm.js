@@ -51,8 +51,8 @@ export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi,
   const eventData = {
     correlationId,
     caseId,
-    crn,
-    sbi
+    crn: Number(crn),
+    sbi: Number(sbi)
   }
 
   // Fire-and-forget publishing; handle any rejection to avoid unhandled rejections

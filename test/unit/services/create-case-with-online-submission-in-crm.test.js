@@ -70,8 +70,8 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     const request = {
       authToken: 'mock-bearer-token',
       correlationId: 'mock-correlation-id',
-      crn: 'mock-crn',
-      sbi: 'mock-sbi',
+      crn: '1234567890',
+      sbi: '123456789',
       caseData: { title: 'Test Case', caseDescription: 'Test description' },
       onlineSubmissionActivity: { subject: 'Test', description: 'Test submission' }
     }
@@ -83,8 +83,8 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
       data: expect.objectContaining({
         correlationId: 'mock-correlation-id',
         caseId: 'mock-case-id',
-        crn: 'mock-crn',
-        sbi: 'mock-sbi'
+        crn: 1234567890,
+        sbi: 123456789
       })
     })
   })
