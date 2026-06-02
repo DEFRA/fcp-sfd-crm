@@ -15,37 +15,29 @@
 
 ### Testing
 
-Run tests with coverage:
-```bash
-npm test
-```
-
-Watch mode (for TDD):
-```bash
-npm run test:watch
-```
-
-Run tests in Docker:
+Run tests with coverage (Docker — preferred):
 ```bash
 npm run docker:test
 ```
 
-Watch mode in Docker:
+Watch mode in Docker (for TDD):
 ```bash
 npm run docker:test:watch
 ```
 
-Single test file:
+Single test file (requires env vars from `.env` — run inside Docker or with env loaded):
 ```bash
-npx vitest run test/unit/path/to/test.test.js
+npm run docker:test
 ```
+
+> **Note:** Do not run `npm test` or `npx vitest run` directly — the config validation requires env vars that are only available inside the Docker environment.
 
 **Coverage Requirements:** 100% statements, lines, branches; 97% functions. Excluded files: `src/index.js`, `src/data/db.js`, `src/messaging/sqs/client.js`.
 
 ### Linting
 
 ```bash
-npm run test:lint
+npm run lint
 ```
 
 Uses **neostandard** (opinionated ESLint config).

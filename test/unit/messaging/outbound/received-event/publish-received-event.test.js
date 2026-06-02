@@ -80,7 +80,41 @@ describe('Publish received request', () => {
     await publishReceivedEvent(mockCrmRequest)
 
     expect(mockLogger.error).toHaveBeenCalledWith(
-      mockError,
+      {
+        err: mockError,
+        caseId: mockCrmRequest.data.caseId,
+        correlationId: mockCrmRequest.data.correlationId,
+        topicArn: config.get('messaging.crmEvents.topicArn')
+      },
+      'Error publishing received CRM request event'
+    )
+  })
+
+  test('should not throw when publish fails', async () => {
+    publish.mockRejectedValue(new Error('Publish error'))
+
+    await expect(publishReceivedEvent(mockCrmRequest)).resolves.not.toThrow()
+  })
+
+  test('should log error with message.id as correlationId when publish fails and data.correlationId is missing', async () => {
+    const mockError = new Error('Publish error')
+    const messageWithoutCorrelationId = {
+      id: 'msg-id-123',
+      type: 'uk.gov.fcp.sfd.crm.case.created',
+      data: { caseId: 'case-1', crn: 123 }
+    }
+
+    publish.mockRejectedValue(mockError)
+
+    await publishReceivedEvent(messageWithoutCorrelationId)
+
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      {
+        err: mockError,
+        caseId: 'case-1',
+        correlationId: 'msg-id-123',
+        topicArn: config.get('messaging.crmEvents.topicArn')
+      },
       'Error publishing received CRM request event'
     )
   })
