@@ -52,7 +52,8 @@ const classifyError = (ctx) => {
 
 const calcDelay = (attempt, baseDelayMs, backoffMultiplier, jitterPct, capMs) => {
   const base = baseDelayMs * Math.pow(backoffMultiplier, attempt - 1)
-  const jitter = base * (jitterPct / 100) * Math.random()
+  // Math.random() is intentional here — jitter for retry backoff, not security-sensitive
+  const jitter = base * (jitterPct / 100) * Math.random() // NOSONAR
   return Math.min(base + jitter, capMs)
 }
 
@@ -66,7 +67,9 @@ const makeClient = (timeout) => createClient({
   throwOnHttpError: false,
   shouldRetry: (ctx) => {
     const cls = classifyError(ctx)
-    if (cls === 'nonRetryable') return false
+    if (cls === 'nonRetryable') {
+      return false
+    }
     const limit = cls === 'unknown'
       ? config.get('retry.http.unknownMaxAttempts')
       : config.get('retry.http.maxAttempts')
