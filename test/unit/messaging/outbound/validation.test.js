@@ -1,0 +1,53 @@
+import { describe, it, expect } from 'vitest'
+import { receivedEventSchema, validationOptions } from '../../../../src/api/schemas/outbound.js'
+
+describe('Outbound received event schema validation', () => {
+    it('accepts a valid received event payload', () => {
+        const valid = {
+            id: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+            source: 'fcp-sfd-crm',
+            specversion: '1.0',
+            type: 'uk.gov.fcp.sfd.crm.case.created',
+            datacontenttype: 'application/json',
+            time: new Date().toISOString(),
+            data: {
+                correlationId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+                caseId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+                crn: 1050000000,
+                sbi: 105000000
+            }
+        }
+
+        const { error } = receivedEventSchema.validate(valid, validationOptions)
+        expect(error).toBeUndefined()
+    })
+
+    it('rejects invalid received event payloads', () => {
+        const invalid = { not: 'valid' }
+        const { error } = receivedEventSchema.validate(invalid, validationOptions)
+        expect(error).toBeDefined()
+        expect(Array.isArray(error.details)).toBe(true)
+    })
+
+    it('rejects unknown properties', () => {
+        const withUnknown = {
+            id: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+            source: 'fcp-sfd-crm',
+            specversion: '1.0',
+            type: 'uk.gov.fcp.sfd.crm.case.created',
+            datacontenttype: 'application/json',
+            time: new Date().toISOString(),
+            data: {
+                correlationId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+                caseId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+                crn: 1050000000,
+                sbi: 105000000,
+                unknownField: 'should-fail'
+            }
+        }
+
+        const { error } = receivedEventSchema.validate(withUnknown, validationOptions)
+        expect(error).toBeDefined()
+        expect(error.details.some(d => d.message.includes('unknownField'))).toBe(true)
+    })
+})

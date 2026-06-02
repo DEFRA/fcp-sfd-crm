@@ -3,6 +3,7 @@ import { Consumer } from 'sqs-consumer'
 import { createLogger } from '../../logging/logger.js'
 import { config } from '../../config/index.js'
 import { createCase } from '../../services/case.js'
+import { inboundCloudEventSchema, validationOptions } from '../../api/schemas/index.js'
 
 // Allow injection of logger for testing
 let logger = createLogger()
@@ -23,7 +24,7 @@ const startCRMListener = (sqsClient) => {
     waitTimeSeconds: config.get('messaging.waitTimeSeconds'),
     pollingWaitTime: config.get('messaging.pollingWaitTime'),
     sqs: sqsClient,
-    async handleMessage (message) {
+    async handleMessage(message) {
       let payload
       try {
         payload = JSON.parse(message.Body)
@@ -31,6 +32,23 @@ const startCRMListener = (sqsClient) => {
         logger.error('Invalid JSON in inbound message', err)
         return message
       }
+
+      const { error } = inboundCloudEventSchema.validate(payload, validationOptions)
+      if (error) {
+        logger.error(
+          {
+            validationErrors: error.details.map(d => ({
+              message: d.message,
+              path: d.path,
+              type: d.type
+            })),
+            payload
+          },
+          'Inbound message failed validation'
+        )
+        return message
+      }
+
       try {
         await createCase(payload)
         return message

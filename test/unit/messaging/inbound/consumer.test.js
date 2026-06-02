@@ -20,11 +20,11 @@ const mockConsumer = {
   start: vi.fn(),
   stop: vi.fn(),
   _listeners: {},
-  on (event, fn) {
+  on(event, fn) {
     if (!this._listeners[event]) this._listeners[event] = []
     this._listeners[event].push(fn)
   },
-  emit (event, ...args) {
+  emit(event, ...args) {
     if (this._listeners[event]) {
       this._listeners[event].forEach(fn => fn(...args))
     }
@@ -95,7 +95,7 @@ describe('CRM request sqs consumer', () => {
       mockConsumer._listeners = {}
     })
 
-    async function setupAndImportConsumer () {
+    async function setupAndImportConsumer() {
       vi.resetModules()
       mockConsumer._listeners = {}
       const logger = { info: vi.fn(), error: vi.fn() }
@@ -182,11 +182,47 @@ describe('CRM request sqs consumer', () => {
       const { startCRMListener: start } = await setupAndImportConsumer()
       const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
       start(mockSqsClient)
-      const message = { Body: JSON.stringify({ data: { correlationId: 'corr-1' } }) }
+      const message = {
+        Body: JSON.stringify({
+          id: 'evt-1',
+          source: '/test',
+          specversion: '1.0',
+          type: 'test.type',
+          datacontenttype: 'application/json',
+          time: new Date().toISOString(),
+          data: { crn: '123', sbi: '321', file: { fileId: 'f1', fileName: 'file.pdf' }, correlationId: 'corr-1' }
+        })
+      }
 
       const result = await capturedHandleMessage(message)
 
-      expect(createCase).toHaveBeenCalledWith({ data: { correlationId: 'corr-1' } })
+      expect(createCase).toHaveBeenCalledWith(JSON.parse(message.Body))
+      expect(result).toEqual(message)
+    })
+
+    test('should not call createCase for schema-invalid but parseable payload', async () => {
+      const { createCase } = await import('../../../../src/services/case.js')
+      const { startCRMListener: start } = await setupAndImportConsumer()
+      const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
+      start(mockSqsClient)
+
+      // payload missing required file.fileId/fileName to fail schema validation
+      const message = {
+        Body: JSON.stringify({
+          id: 'evt-invalid',
+          source: '/test',
+          specversion: '1.0',
+          type: 'test.type',
+          datacontenttype: 'application/json',
+          time: new Date().toISOString(),
+          data: { crn: '123', sbi: '321', file: {}, correlationId: 'corr-1' }
+        })
+      }
+
+      const result = await capturedHandleMessage(message)
+
+      expect(createCase).not.toHaveBeenCalled()
+      // on validation failure, handler returns the original message
       expect(result).toEqual(message)
     })
 
@@ -210,7 +246,17 @@ describe('CRM request sqs consumer', () => {
       const retryableError = new Error('CRM API retryable failure')
       retryableError.retryable = true
       createCase.mockRejectedValueOnce(retryableError)
-      const message = { Body: JSON.stringify({ data: { correlationId: 'corr-1' } }) }
+      const message = {
+        Body: JSON.stringify({
+          id: 'evt-2',
+          source: '/test',
+          specversion: '1.0',
+          type: 'test.type',
+          datacontenttype: 'application/json',
+          time: new Date().toISOString(),
+          data: { crn: '123', sbi: '321', file: { fileId: 'f2', fileName: 'file2.pdf' }, correlationId: 'corr-1' }
+        })
+      }
 
       const result = await capturedHandleMessage(message)
 
@@ -224,7 +270,17 @@ describe('CRM request sqs consumer', () => {
       const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
       start(mockSqsClient)
       createCase.mockRejectedValueOnce(new Error('CRM API failed'))
-      const message = { Body: JSON.stringify({ data: { correlationId: 'corr-1' } }) }
+      const message = {
+        Body: JSON.stringify({
+          id: 'evt-3',
+          source: '/test',
+          specversion: '1.0',
+          type: 'test.type',
+          datacontenttype: 'application/json',
+          time: new Date().toISOString(),
+          data: { crn: '123', sbi: '321', file: { fileId: 'f3', fileName: 'file3.pdf' }, correlationId: 'corr-1' }
+        })
+      }
 
       const result = await capturedHandleMessage(message)
 
