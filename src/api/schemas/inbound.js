@@ -14,9 +14,12 @@ export const inboundCloudEventSchema = Joi.object({
     file: Joi.object({
       fileId: Joi.string().required(),
       fileName: Joi.string().required(),
-      mimeType: Joi.string().optional()
+      contentType: Joi.string().optional(),
+      url: Joi.string().uri().required()
     }).required(),
-    correlationId: Joi.string().required()
+    correlationId: Joi.string().required(),
+    sourceSystem: Joi.string().required(),
+    submissionId: Joi.string().required()
   }).required()
 }).required()
 

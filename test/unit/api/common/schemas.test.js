@@ -62,9 +62,12 @@ describe('api/common/schemas', () => {
         crm: {},
         file: {
           fileId: 'file-1',
-          fileName: 'f.pdf'
+          fileName: 'f.pdf',
+          url: 'https://example.com/api/v1/blobs/file-1'
         },
-        correlationId: 'corr-1'
+        correlationId: 'corr-1',
+        sourceSystem: 'fcp-sfd-frontend',
+        submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6'
       }
     }
 
@@ -86,9 +89,12 @@ describe('api/common/schemas', () => {
           sbi: 'SBI',
           file: {
             fileId: 'file-1',
-            fileName: 'f.pdf'
+            fileName: 'f.pdf',
+            url: 'https://example.com/api/v1/blobs/file-1'
           },
-          correlationId: 'corr-1'
+          correlationId: 'corr-1',
+          sourceSystem: 'fcp-sfd-frontend',
+          submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6'
         }
       }
     }

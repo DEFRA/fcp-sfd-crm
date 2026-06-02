@@ -190,7 +190,7 @@ describe('CRM request sqs consumer', () => {
           type: 'test.type',
           datacontenttype: 'application/json',
           time: new Date().toISOString(),
-          data: { crn: '123', sbi: '321', file: { fileId: 'f1', fileName: 'file.pdf' }, correlationId: 'corr-1' }
+          data: { crn: '123', sbi: '321', file: { fileId: 'f1', fileName: 'file.pdf', url: 'https://example.com/api/v1/blobs/f1' }, correlationId: 'corr-1', sourceSystem: 'fcp-sfd-frontend', submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6' }
         })
       }
 
@@ -254,7 +254,7 @@ describe('CRM request sqs consumer', () => {
           type: 'test.type',
           datacontenttype: 'application/json',
           time: new Date().toISOString(),
-          data: { crn: '123', sbi: '321', file: { fileId: 'f2', fileName: 'file2.pdf' }, correlationId: 'corr-1' }
+          data: { crn: '123', sbi: '321', file: { fileId: 'f2', fileName: 'file2.pdf', url: 'https://example.com/api/v1/blobs/f2' }, correlationId: 'corr-1', sourceSystem: 'fcp-sfd-frontend', submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6' }
         })
       }
 
@@ -278,7 +278,7 @@ describe('CRM request sqs consumer', () => {
           type: 'test.type',
           datacontenttype: 'application/json',
           time: new Date().toISOString(),
-          data: { crn: '123', sbi: '321', file: { fileId: 'f3', fileName: 'file3.pdf' }, correlationId: 'corr-1' }
+          data: { crn: '123', sbi: '321', file: { fileId: 'f3', fileName: 'file3.pdf', url: 'https://example.com/api/v1/blobs/f3' }, correlationId: 'corr-1', sourceSystem: 'fcp-sfd-frontend', submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6' }
         })
       }
 

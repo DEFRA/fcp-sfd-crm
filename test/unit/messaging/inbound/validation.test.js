@@ -13,8 +13,10 @@ describe('Inbound CloudEvent schema validation', () => {
       data: {
         crn: '123',
         sbi: '321',
-        file: { fileId: 'f1', fileName: 'file.pdf' },
-        correlationId: 'corr-1'
+        file: { fileId: 'f1', fileName: 'file.pdf', url: 'https://example.com/api/v1/blobs/f1' },
+        correlationId: 'corr-1',
+        sourceSystem: 'fcp-sfd-frontend',
+        submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6'
       }
     }
 
