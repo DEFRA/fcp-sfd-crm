@@ -12,12 +12,12 @@ export const inboundCloudEventSchema = Joi.object({
     sbi: Joi.alternatives().try(Joi.string(), Joi.number()).required(),
     crm: Joi.object().optional(),
     file: Joi.object({
-      fileId: Joi.string().required(),
+      fileId: Joi.string().guid({ version: ['uuidv4'] }).required(),
       fileName: Joi.string().required(),
       contentType: Joi.string().optional(),
       url: Joi.string().uri().required()
     }).required(),
-    correlationId: Joi.string().required(),
+    correlationId: Joi.string().guid({ version: ['uuidv4'] }).required(),
     sourceSystem: Joi.string().required(),
     submissionId: Joi.string().required()
   }).required()

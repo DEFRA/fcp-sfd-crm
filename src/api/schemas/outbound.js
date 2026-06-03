@@ -9,7 +9,8 @@ export const receivedEventSchema = Joi.object({
   time: Joi.string().isoDate().required(),
   data: Joi.object({
     correlationId: Joi.string().guid({ version: ['uuidv4'] }).required(),
-    caseId: Joi.string().guid({ version: ['uuidv4'] }).required(),
+    // CRM/Dynamics returns non-v4 GUIDs for caseId
+    caseId: Joi.string().guid().required(),
     crn: Joi.number().integer().min(1050000000).max(9999999999).required(),
     sbi: Joi.number().integer().min(105000000).max(999999999).required(),
     caseType: Joi.string().valid('case-created', 'document-uploaded').optional(),
