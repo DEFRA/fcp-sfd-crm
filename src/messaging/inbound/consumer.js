@@ -4,6 +4,7 @@ import { createLogger } from '../../logging/logger.js'
 import { config } from '../../config/index.js'
 import { createCase } from '../../services/case.js'
 import { inboundCloudEventSchema, validationOptions } from '../../api/schemas/index.js'
+import { logInboundValidationFailure } from '../../utils/validation-logger.js'
 
 // Allow injection of logger for testing
 let logger = createLogger()
@@ -35,17 +36,7 @@ const startCRMListener = (sqsClient) => {
 
       const { error } = inboundCloudEventSchema.validate(payload, validationOptions)
       if (error) {
-        logger.error(
-          {
-            validationErrors: error.details.map(d => ({
-              message: d.message,
-              path: d.path,
-              type: d.type
-            })),
-            payload
-          },
-          'Inbound message failed validation'
-        )
+        logInboundValidationFailure(logger, error, payload)
         return message
       }
 

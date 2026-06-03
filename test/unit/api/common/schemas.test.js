@@ -61,10 +61,13 @@ describe('api/common/schemas', () => {
         sbi: 'SBI',
         crm: {},
         file: {
-          fileId: 'file-1',
-          fileName: 'f.pdf'
+          fileId: '9fcaabe5-77ec-44db-8356-3a6e8dc51b13',
+          fileName: 'f.pdf',
+          url: 'https://example.com/api/v1/blobs/9fcaabe5-77ec-44db-8356-3a6e8dc51b13'
         },
-        correlationId: 'corr-1'
+        correlationId: '550e8400-e29b-41d4-a716-446655440000',
+        sourceSystem: 'fcp-sfd-frontend',
+        submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6'
       }
     }
 
@@ -85,10 +88,13 @@ describe('api/common/schemas', () => {
           crn: 'CRN',
           sbi: 'SBI',
           file: {
-            fileId: 'file-1',
-            fileName: 'f.pdf'
+            fileId: '9fcaabe5-77ec-44db-8356-3a6e8dc51b13',
+            fileName: 'f.pdf',
+            url: 'https://example.com/api/v1/blobs/9fcaabe5-77ec-44db-8356-3a6e8dc51b13'
           },
-          correlationId: 'corr-1'
+          correlationId: '550e8400-e29b-41d4-a716-446655440000',
+          sourceSystem: 'fcp-sfd-frontend',
+          submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6'
         }
       }
     }

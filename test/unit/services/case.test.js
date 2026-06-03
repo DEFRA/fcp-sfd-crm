@@ -36,7 +36,7 @@ const validPayload = {
     crn: 'crn1',
     sbi: 'sbi1',
     crm: { title: 'Test Title' },
-    file: { fileId: 'file-1', fileName: 'file.pdf', url: 'http://file', mimeType: 'application/pdf' },
+    file: { fileId: 'file-1', fileName: 'file.pdf', url: 'http://file', contentType: 'application/pdf' },
     correlationId: 'corr-1'
   }
 }
@@ -86,13 +86,13 @@ describe('case service', () => {
       expect(result.onlineSubmissionActivity.metadata.blobFileId).toBeNull()
     })
 
-    it('should include mimeType when provided on file', () => {
+    it('should include mimeType when contentType is provided on file', () => {
       const payloadWithMime = {
         data: {
           crn: 'crn1',
           sbi: 'sbi1',
           crm: { title: 'Test Title' },
-          file: { fileId: 'file-2', fileName: 'file.pdf', url: 'http://file', mimeType: 'application/pdf' },
+          file: { fileId: 'file-2', fileName: 'file.pdf', url: 'http://file', contentType: 'application/pdf' },
           correlationId: 'corr-2'
         }
       }
@@ -101,7 +101,7 @@ describe('case service', () => {
       expect(result.onlineSubmissionActivity.metadata.mimeType).toBe('application/pdf')
     })
 
-    it('should not include mimeType when file has no mimeType', () => {
+    it('should not include mimeType when file has no contentType', () => {
       const payloadWithoutMime = {
         data: {
           crn: 'crn1',
@@ -258,7 +258,7 @@ describe('case service', () => {
           crn: 'crn1',
           sbi: 'sbi1',
           crm: { title: 'Test Title' },
-          file: {}, // no fileName, url, fileId, or mimeType
+          file: {}, // no fileName, url, fileId, or contentType
           correlationId: 'corr-2'
         }
       }

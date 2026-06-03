@@ -28,7 +28,7 @@ describe('Integration - createCase first request processing', () => {
         crn: 'crn-int',
         sbi: 'sbi-int',
         crm: { title: 'Integration Test' },
-        file: { fileId: 'file-int-1', fileName: 'file.pdf', url: 'http://file', mimeType: 'application/pdf' },
+        file: { fileId: 'file-int-1', fileName: 'file.pdf', url: 'http://file', contentType: 'application/pdf' },
         correlationId: 'corr-int-1'
       }
     }
@@ -50,7 +50,7 @@ describe('Integration - createCase first request processing', () => {
         crn: 'crn-int',
         sbi: 'sbi-int',
         crm: { title: 'Integration Test' },
-        file: { fileId: 'file-int-2', fileName: 'file.pdf', url: 'http://file', mimeType: 'application/pdf' },
+        file: { fileId: 'file-int-2', fileName: 'file.pdf', url: 'http://file', contentType: 'application/pdf' },
         correlationId: 'corr-int-2'
       }
     }
