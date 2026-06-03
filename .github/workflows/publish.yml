@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       - name: Create Test Coverage Reports
         run: |
@@ -35,11 +35,11 @@ jobs:
 
       - name: SonarQube Cloud Scan
         if: github.actor != 'dependabot[bot]'
-        uses: SonarSource/sonarqube-scan-action@v8
+        uses: SonarSource/sonarqube-scan-action@7006c4492b2e0ee0f816d36501671557c97f5995 # v8
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
       - name: Build and Publish
-        uses: DEFRA/cdp-build-action/build@main
+        uses: DEFRA/cdp-build-action/build@7fe324bec9987c5a4d0f4724b42e30c282892ceb # main
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
