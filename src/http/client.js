@@ -120,130 +120,137 @@ const logRetryDecision = ({ ctx, category, willRetry, limit, terminalReason, sta
   }, 'HTTP retry policy decision')
 }
 
+const beforeHook = (request, retryStateByRequest) => {
+  retryStateByRequest.set(request, buildRetryState())
+}
+
+const onCompleteHook = (request, response, error, retryStateByRequest) => {
+  const state = retryStateByRequest.get(request)
+  retryStateByRequest.delete(request)
+
+  if (!state) {
+    return
+  }
+
+  // finalAttempt is set when shouldRetry returned false on a failure (early
+  // exit path). In that case ctx.attempt is the real total. The +1 form
+  // covers the loop-exhausted path where shouldRetry was never called on
+  // the last failure, and the success path.
+  const attempts = state.finalAttempt ?? Math.max(1, state.lastAttempt + 1)
+  const metadata = {
+    attempts,
+    category: state.category,
+    terminalReason: state.terminalReason
+  }
+
+  if (error) {
+    attachRetryMetadata(error, metadata)
+    logger.error({
+      event: {
+        type: 'http_retry_terminal',
+        action: 'request_failed',
+        category: 'http',
+        outcome: 'failure',
+        reason: metadata.terminalReason,
+        reference: request.url,
+        duration: retryDurationNs(state.startedAtMs),
+        kind: error instanceof Error ? error.name : 'error'
+      },
+      error: {
+        message: errorMessage(error)
+      },
+      retry: metadata
+    }, 'HTTP request failed after retry policy evaluation')
+    return
+  }
+
+  if (attempts > 1) {
+    logger.info({
+      event: {
+        type: 'http_retry_recovered',
+        action: 'request_succeeded',
+        category: 'http',
+        outcome: 'success',
+        reason: metadata.terminalReason,
+        reference: request.url,
+        duration: retryDurationNs(state.startedAtMs)
+      },
+      retry: metadata,
+      http: {
+        response: {
+          status_code: response?.status
+        }
+      }
+    }, 'HTTP request recovered after retry')
+  }
+}
+
+const shouldRetryHook = (ctx, retryStateByRequest) => {
+  if (!isRetryDecisionFailure(ctx)) {
+    return false
+  }
+
+  const cls = classifyError(ctx)
+  const category = toMetadataCategory(cls)
+  const terminalReason = buildTerminalReason(ctx)
+  const limit = cls === 'unknown'
+    ? config.get('retry.http.unknownMaxAttempts')
+    : config.get('retry.http.maxAttempts')
+  const willRetry = cls !== 'nonRetryable' && ctx.attempt < limit
+
+  const existingState = retryStateByRequest.get(ctx.request) ?? buildRetryState()
+  existingState.lastAttempt = Math.max(existingState.lastAttempt, ctx.attempt)
+  existingState.category = category
+  existingState.terminalReason = terminalReason
+  // When shouldRetry returns false for a failure, ctx.attempt is already
+  // the correct total — store it so onComplete does not add 1 again.
+  if (!willRetry && (ctx.error || (ctx.response && ctx.response.status >= HTTP_CLIENT_ERROR_MIN))) {
+    existingState.finalAttempt = ctx.attempt
+  }
+  retryStateByRequest.set(ctx.request, existingState)
+
+  logRetryDecision({
+    ctx,
+    category,
+    willRetry,
+    limit,
+    terminalReason,
+    startedAtMs: existingState.startedAtMs
+  })
+
+  return willRetry
+}
+
+const computeRetryDelay = (ctx) => {
+  const cls = classifyError(ctx)
+  const cap = cls === 'unknown'
+    ? config.get('retry.http.unknownMaxDelayMs')
+    : config.get('retry.http.maxDelayMs')
+  return calcDelay(
+    ctx.attempt,
+    config.get('retry.http.baseDelayMs'),
+    config.get('retry.http.backoffMultiplier'),
+    config.get('retry.http.jitterPercentage'),
+    cap
+  )
+}
+
 const makeClient = (timeout) => {
   const retryStateByRequest = new Map()
 
   return createClient({
     timeout,
-    // Upper bound – shouldRetry enforces the per-class budget
     retries: Math.max(
       config.get('retry.http.maxAttempts'),
       config.get('retry.http.unknownMaxAttempts')
     ) - 1,
     throwOnHttpError: false,
     hooks: {
-      before: (request) => {
-        retryStateByRequest.set(request, buildRetryState())
-      },
-      onComplete: (request, response, error) => {
-        const state = retryStateByRequest.get(request)
-        retryStateByRequest.delete(request)
-
-        if (!state) {
-          return
-        }
-
-        // finalAttempt is set when shouldRetry returned false on a failure (early
-        // exit path). In that case ctx.attempt is the real total. The +1 form
-        // covers the loop-exhausted path where shouldRetry was never called on
-        // the last failure, and the success path.
-        const attempts = state.finalAttempt ?? Math.max(1, state.lastAttempt + 1)
-        const metadata = {
-          attempts,
-          category: state.category,
-          terminalReason: state.terminalReason
-        }
-
-        if (error) {
-          attachRetryMetadata(error, metadata)
-          logger.error({
-            event: {
-              type: 'http_retry_terminal',
-              action: 'request_failed',
-              category: 'http',
-              outcome: 'failure',
-              reason: metadata.terminalReason,
-              reference: request.url,
-              duration: retryDurationNs(state.startedAtMs),
-              kind: error instanceof Error ? error.name : 'error'
-            },
-            error: {
-              message: errorMessage(error)
-            },
-            retry: metadata
-          }, 'HTTP request failed after retry policy evaluation')
-          return
-        }
-
-        if (attempts > 1) {
-          logger.info({
-            event: {
-              type: 'http_retry_recovered',
-              action: 'request_succeeded',
-              category: 'http',
-              outcome: 'success',
-              reason: metadata.terminalReason,
-              reference: request.url,
-              duration: retryDurationNs(state.startedAtMs)
-            },
-            retry: metadata,
-            http: {
-              response: {
-                status_code: response?.status
-              }
-            }
-          }, 'HTTP request recovered after retry')
-        }
-      }
+      before: (request) => beforeHook(request, retryStateByRequest),
+      onComplete: (request, response, error) => onCompleteHook(request, response, error, retryStateByRequest)
     },
-    shouldRetry: (ctx) => {
-      if (!isRetryDecisionFailure(ctx)) {
-        return false
-      }
-
-      const cls = classifyError(ctx)
-      const category = toMetadataCategory(cls)
-      const terminalReason = buildTerminalReason(ctx)
-      const limit = cls === 'unknown'
-        ? config.get('retry.http.unknownMaxAttempts')
-        : config.get('retry.http.maxAttempts')
-      const willRetry = cls !== 'nonRetryable' && ctx.attempt < limit
-
-      const existingState = retryStateByRequest.get(ctx.request) ?? buildRetryState()
-      existingState.lastAttempt = Math.max(existingState.lastAttempt, ctx.attempt)
-      existingState.category = category
-      existingState.terminalReason = terminalReason
-      // When shouldRetry returns false for a failure, ctx.attempt is already
-      // the correct total — store it so onComplete does not add 1 again.
-      if (!willRetry && (ctx.error || (ctx.response && ctx.response.status >= HTTP_CLIENT_ERROR_MIN))) {
-        existingState.finalAttempt = ctx.attempt
-      }
-      retryStateByRequest.set(ctx.request, existingState)
-
-      logRetryDecision({
-        ctx,
-        category,
-        willRetry,
-        limit,
-        terminalReason,
-        startedAtMs: existingState.startedAtMs
-      })
-
-      return willRetry
-    },
-    retryDelay: (ctx) => {
-      const cls = classifyError(ctx)
-      const cap = cls === 'unknown'
-        ? config.get('retry.http.unknownMaxDelayMs')
-        : config.get('retry.http.maxDelayMs')
-      return calcDelay(
-        ctx.attempt,
-        config.get('retry.http.baseDelayMs'),
-        config.get('retry.http.backoffMultiplier'),
-        config.get('retry.http.jitterPercentage'),
-        cap
-      )
-    }
+    shouldRetry: (ctx) => shouldRetryHook(ctx, retryStateByRequest),
+    retryDelay: computeRetryDelay
   })
 }
 
