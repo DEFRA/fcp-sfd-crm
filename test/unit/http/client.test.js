@@ -30,7 +30,7 @@ vi.mock('../../../src/logging/logger.js', () => ({
   createLogger: () => mockLogger
 }))
 
-const { httpClient, authHttpClient } = await import('../../../src/http/client.js')
+const { httpClient, authHttpClient, AbortError, TimeoutError } = await import('../../../src/http/client.js')
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -137,6 +137,28 @@ describe('httpClient — non-retryable errors (4xx)', () => {
 })
 
 describe('httpClient — network errors (retryable)', () => {
+  test('does not retry on AbortError (non-retryable)', async () => {
+    let calls = 0
+    const fetchHandler = async () => {
+      calls++
+      throw new AbortError('aborted by user')
+    }
+
+    await expect(httpClient(url, { fetchHandler })).rejects.toThrow('aborted by user')
+    expect(calls).toBe(1)
+  })
+
+  test('retries on TimeoutError class instances', async () => {
+    let calls = 0
+    const fetchHandler = async () => {
+      calls++
+      throw new TimeoutError('operation timed out')
+    }
+
+    await expect(httpClient(url, { fetchHandler })).rejects.toThrow('operation timed out')
+    expect(calls).toBe(3)
+  })
+
   test('retries on ECONNREFUSED', async () => {
     let calls = 0
     const fetchHandler = async () => {
@@ -176,6 +198,35 @@ describe('httpClient — network errors (retryable)', () => {
 })
 
 describe('httpClient — unknown errors', () => {
+  test('handles thrown string errors and keeps metadata attach safe', async () => {
+    const fetchHandler = async () => { throw 'string failure' }
+    await expect(httpClient(url, { fetchHandler })).rejects.toMatchObject({
+      name: 'RetryLimitError',
+      cause: 'string failure',
+      retryMetadata: {
+        attempts: 2,
+        category: 'unknown',
+        terminalReason: 'string failure'
+      }
+    })
+  })
+
+  test('handles thrown object errors and stringifies message', async () => {
+    const fetchHandler = async () => { throw { code: 'E_CUSTOM', detail: 'x' } }
+    let thrown
+    try {
+      await httpClient(url, { fetchHandler })
+    } catch (err) {
+      thrown = err
+    }
+
+    expect(thrown).toEqual(
+      expect.objectContaining({
+        retryMetadata: expect.objectContaining({ category: 'unknown' })
+      })
+    )
+  })
+
   test('applies conservative retry budget (unknownMaxAttempts = 2)', async () => {
     let calls = 0
     const fetchHandler = async () => {

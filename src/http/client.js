@@ -15,10 +15,7 @@ const classifyResponseStatus = (status) => {
   if (status === HTTP_TOO_MANY_REQUESTS || status >= HTTP_SERVER_ERROR_MIN) {
     return 'retryable'
   }
-  if (status >= HTTP_CLIENT_ERROR_MIN) {
-    return 'nonRetryable'
-  }
-  return null
+  return 'nonRetryable'
 }
 
 // Classify an ffetch RetryContext into one of three buckets:
@@ -39,10 +36,7 @@ const classifyError = (ctx) => {
   }
 
   if (response) {
-    const statusClass = classifyResponseStatus(response.status)
-    if (statusClass) {
-      return statusClass
-    }
+    return classifyResponseStatus(response.status)
   }
 
   return error ? 'unknown' : 'nonRetryable'
@@ -125,12 +119,8 @@ const beforeHook = (request, retryStateByRequest) => {
 }
 
 const onCompleteHook = (request, response, error, retryStateByRequest) => {
-  const state = retryStateByRequest.get(request)
+  const state = retryStateByRequest.get(request) ?? buildRetryState()
   retryStateByRequest.delete(request)
-
-  if (!state) {
-    return
-  }
 
   // finalAttempt is set when shouldRetry returned false on a failure (early
   // exit path). In that case ctx.attempt is the real total. The +1 form
