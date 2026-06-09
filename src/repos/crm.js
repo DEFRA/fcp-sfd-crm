@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import { config } from '../config/index.js'
+import { httpClient } from '../http/client.js'
 
 const baseUrl = config.get('crm.baseUrl')
 const DEFAULT_DOCUMENT_TYPE_ID = '4e88916b-aae2-ee11-904c-000d3adc1ec9'
@@ -27,7 +28,7 @@ const getContactIdFromCrn = async (authToken, crn) => {
   })}`
 
   try {
-    const response = await fetch(`${baseUrl}${query}`, {
+    const response = await httpClient(`${baseUrl}${query}`, {
       method: 'GET',
       headers: { Authorization: authToken, ...baseHeaders }
     })
@@ -52,7 +53,7 @@ const getAccountIdFromSbi = async (authToken, sbi) => {
   })}`
 
   try {
-    const response = await fetch(`${baseUrl}${query}`, {
+    const response = await httpClient(`${baseUrl}${query}`, {
       method: 'GET',
       headers: { Authorization: authToken, ...baseHeaders }
     })
@@ -112,7 +113,7 @@ const createCaseWithOnlineSubmission = async (request) => {
       ]
     }
 
-    const response = await fetch(`${baseUrl}/incidents`, {
+    const response = await httpClient(`${baseUrl}/incidents`, {
       method: 'POST',
       headers: {
         Authorization: authToken,
@@ -141,7 +142,7 @@ const getOnlineSubmissionId = async (authToken, caseId) => {
       $select: 'incidentid,title',
       $expand: 'incident_rpa_onlinesubmissions($select=rpa_onlinesubmissionid)'
     })}`
-    const response = await fetch(`${baseUrl}${query}`, {
+    const response = await httpClient(`${baseUrl}${query}`, {
       method: 'GET',
       headers: { Authorization: authToken, ...baseHeaders }
     })
@@ -184,7 +185,7 @@ const createMetadataForOnlineSubmission = async (request) => {
 
     const endpoint = `${baseUrl}/rpa_onlinesubmissions(${rpaOnlinesubmissionid})/rpa_onlinesubmission_rpa_activitymetadata`
 
-    const response = await fetch(endpoint, {
+    const response = await httpClient(endpoint, {
       method: 'POST',
       headers: {
         Authorization: authToken,
@@ -236,7 +237,7 @@ const createMetadataForExistingCase = async (request) => {
 
     const endpoint = `${baseUrl}/incidents(${caseId})/incident_rpa_activitymetadata`
 
-    const response = await fetch(endpoint, {
+    const response = await httpClient(endpoint, {
       method: 'POST',
       headers: {
         Authorization: authToken,

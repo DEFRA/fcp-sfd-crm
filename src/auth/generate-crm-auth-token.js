@@ -1,4 +1,5 @@
 import { config } from '../config/index.js'
+import { authHttpClient } from '../http/client.js'
 
 const generateCrmAuthToken = async () => {
   const { tokenEndpoint, clientId, clientSecret, scope } = config.get('auth')
@@ -13,7 +14,7 @@ const generateCrmAuthToken = async () => {
   let response
 
   try {
-    response = await fetch(tokenEndpoint, {
+    response = await authHttpClient(tokenEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: form.toString()
