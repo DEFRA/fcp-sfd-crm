@@ -268,6 +268,38 @@ describe('httpClient — unknown errors', () => {
       expect.any(String)
     )
   })
+
+  test('logs recovery on network error + retry success with attempts > 1', async () => {
+    const fetchHandler = failFirstNThenOk(1)
+    const res = await httpClient(url, { fetchHandler })
+    expect(res.status).toBe(200)
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: expect.objectContaining({
+          type: 'http_retry_recovered',
+          action: 'request_succeeded',
+          outcome: 'success'
+        }),
+        retry: expect.objectContaining({
+          attempts: 2,
+          category: 'retryable'
+        })
+      }),
+      expect.stringContaining('recovered')
+    )
+  })
+
+  test('enriches error with retryMetadata on failure', async () => {
+    const fetchHandler = alwaysRespond(500, 'error')
+    const err = await httpClient(url, { fetchHandler }).catch(e => e)
+    expect(err.retryMetadata).toEqual(
+      expect.objectContaining({
+        attempts: 3,
+        category: 'retryable',
+        terminalReason: 'http_500'
+      })
+    )
+  })
 })
 
 describe('authHttpClient — distinct client with shorter timeout', () => {
