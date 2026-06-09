@@ -243,6 +243,31 @@ describe('httpClient — unknown errors', () => {
       expect.any(String)
     )
   })
+
+  test('does NOT log recovery for immediate success (attempts=1)', async () => {
+    const fetchHandler = alwaysRespond(200, 'ok')
+    const res = await httpClient(url, { fetchHandler })
+    expect(res.status).toBe(200)
+    // Verify no recovery log was emitted (only attempt count is 1)
+    expect(mockLogger.info).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: expect.objectContaining({ type: 'http_retry_recovered' })
+      }),
+      expect.any(String)
+    )
+  })
+
+  test('does NOT log terminal error on successful response', async () => {
+    const fetchHandler = alwaysRespond(200, 'ok')
+    const res = await httpClient(url, { fetchHandler })
+    expect(res.status).toBe(200)
+    expect(mockLogger.error).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: expect.objectContaining({ type: 'http_retry_terminal' })
+      }),
+      expect.any(String)
+    )
+  })
 })
 
 describe('authHttpClient — distinct client with shorter timeout', () => {
