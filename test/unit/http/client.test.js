@@ -289,14 +289,14 @@ describe('httpClient — unknown errors', () => {
     )
   })
 
-  test('enriches error with retryMetadata on failure', async () => {
-    const fetchHandler = alwaysRespond(500, 'error')
+  test('enriches thrown network error with retryMetadata', async () => {
+    const fetchHandler = async () => { throw new Error('ECONNREFUSED') }
     const err = await httpClient(url, { fetchHandler }).catch(e => e)
     expect(err.retryMetadata).toEqual(
       expect.objectContaining({
         attempts: 3,
         category: 'retryable',
-        terminalReason: 'http_500'
+        terminalReason: 'ECONNREFUSED'
       })
     )
   })
