@@ -196,7 +196,17 @@ Outbound HTTP calls (CRM API and auth token requests) use [`@fetchkit/ffetch`](h
 |---|---|---|
 | `retryable` | 5xx responses, 429 Too Many Requests, network errors (`ECONNREFUSED`, `ETIMEDOUT`, etc.), timeout | Retried up to `HTTP_RETRY_MAX_ATTEMPTS` |
 | `nonRetryable` | 4xx responses (excluding 429), user abort | Not retried — fails immediately |
-| `unknown` | Unrecognised/unexpected errors | Retried up to `RETRY_UNKNOWN_MAX_ATTEMPTS` (conservative budget); logs a warning on first occurrence |
+| `unknown` | Unrecognised/unexpected errors | Retried up to `RETRY_UNKNOWN_MAX_ATTEMPTS` (conservative budget) |
+
+### Retry metadata
+
+The HTTP client preserves existing success response contracts. For terminal thrown errors (for example, timeout/network failures), the error is enriched with:
+
+- `error.retryMetadata.attempts`
+- `error.retryMetadata.category` (`retryable`, `non-retryable`, `unknown`)
+- `error.retryMetadata.terminalReason`
+
+Retry decisions, terminal failures, and retry recovery are logged from the HTTP client layer using ECS-style `event.*` fields.
 
 ### Configuration
 

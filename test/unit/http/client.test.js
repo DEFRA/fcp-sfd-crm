@@ -65,6 +65,21 @@ describe('httpClient — successful requests', () => {
     const fetchHandler = async () => { calls++; return new Response('not found', { status: 404 }) }
     await httpClient(url, { fetchHandler })
     expect(calls).toBe(1)
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: expect.objectContaining({
+          type: 'http_retry_decision',
+          action: 'retry_decision',
+          reason: 'http_404'
+        }),
+        retry: expect.objectContaining({
+          attempts: 1,
+          category: 'non-retryable',
+          willRetry: false
+        })
+      }),
+      expect.any(String)
+    )
   })
 })
 
@@ -87,6 +102,21 @@ describe('httpClient — retryable errors (5xx / 429)', () => {
     const fetchHandler = failFirstNThenOk(1, 500)
     const res = await httpClient(url, { fetchHandler })
     expect(res.status).toBe(200)
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: expect.objectContaining({
+          type: 'http_retry_recovered',
+          action: 'request_succeeded',
+          outcome: 'success'
+        }),
+        retry: expect.objectContaining({
+          attempts: 2,
+          category: 'retryable',
+          terminalReason: 'http_500'
+        })
+      }),
+      expect.any(String)
+    )
   })
 })
 
@@ -113,7 +143,34 @@ describe('httpClient — network errors (retryable)', () => {
       calls++
       throw Object.assign(new Error('ECONNREFUSED'), { code: 'ECONNREFUSED' })
     }
-    await expect(httpClient(url, { fetchHandler })).rejects.toThrow()
+    let thrown
+    try {
+      await httpClient(url, { fetchHandler })
+    } catch (err) {
+      thrown = err
+    }
+
+    expect(thrown).toBeInstanceOf(Error)
+    expect(thrown.retryMetadata).toEqual({
+      attempts: 3,
+      category: 'retryable',
+      terminalReason: 'ECONNREFUSED'
+    })
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: expect.objectContaining({
+          type: 'http_retry_terminal',
+          action: 'request_failed',
+          outcome: 'failure'
+        }),
+        retry: expect.objectContaining({
+          attempts: 3,
+          category: 'retryable',
+          terminalReason: 'ECONNREFUSED'
+        })
+      }),
+      expect.any(String)
+    )
     expect(calls).toBe(3)
   })
 })
@@ -129,32 +186,62 @@ describe('httpClient — unknown errors', () => {
     expect(calls).toBe(2)
   })
 
-  test('logs warn on first unknown error', async () => {
+  test('enriches terminal unknown errors with retry metadata', async () => {
+    const fetchHandler = async () => { throw new Error('mystery failure') }
+    let thrown
+    try {
+      await httpClient(url, { fetchHandler })
+    } catch (err) {
+      thrown = err
+    }
+
+    expect(thrown).toBeInstanceOf(Error)
+    expect(thrown.retryMetadata).toEqual({
+      attempts: 2,
+      category: 'unknown',
+      terminalReason: 'mystery failure'
+    })
+  })
+
+  test('logs retry decision for unknown errors', async () => {
     const fetchHandler = async () => { throw new Error('mystery failure') }
     await expect(httpClient(url, { fetchHandler })).rejects.toThrow()
     expect(mockLogger.warn).toHaveBeenCalledWith(
       expect.objectContaining({
-        event: expect.objectContaining({ type: 'http_unknown_error', outcome: 'unknown' })
+        event: expect.objectContaining({
+          type: 'http_retry_decision',
+          action: 'retry_decision',
+          outcome: 'unknown',
+          reason: 'mystery failure'
+        }),
+        retry: expect.objectContaining({
+          category: 'unknown',
+          willRetry: true
+        })
       }),
       expect.any(String)
     )
   })
 
-  test('logs error when unknown retries exhausted', async () => {
+  test('logs terminal error when unknown retries exhausted', async () => {
     const fetchHandler = async () => { throw new Error('mystery failure') }
     await expect(httpClient(url, { fetchHandler })).rejects.toThrow()
     expect(mockLogger.error).toHaveBeenCalledWith(
       expect.objectContaining({
-        event: expect.objectContaining({ type: 'http_unknown_error_exhausted', outcome: 'failure' })
+        event: expect.objectContaining({
+          type: 'http_retry_terminal',
+          action: 'request_failed',
+          outcome: 'failure',
+          reason: 'mystery failure'
+        }),
+        retry: expect.objectContaining({
+          attempts: 2,
+          category: 'unknown',
+          terminalReason: 'mystery failure'
+        })
       }),
       expect.any(String)
     )
-  })
-
-  test('logs warn only once per request (attempt 1 only)', async () => {
-    const fetchHandler = async () => { throw new Error('mystery failure') }
-    await expect(httpClient(url, { fetchHandler })).rejects.toThrow()
-    expect(mockLogger.warn).toHaveBeenCalledTimes(1)
   })
 })
 

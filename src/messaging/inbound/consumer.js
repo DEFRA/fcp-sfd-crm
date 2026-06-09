@@ -54,10 +54,31 @@ const startCRMListener = (sqsClient) => {
         return message
       } catch (err) {
         if (err.retryable) {
-          logger.info('Retryable error, leaving message on queue', err)
+          logger.info({
+            event: {
+              type: 'crm_case_creation_retryable',
+              action: 'leave_on_queue',
+              category: 'messaging',
+              outcome: 'unknown',
+              reason: err.message
+            },
+            retry: err.retryMetadata ?? null
+          }, 'Retryable error, leaving message on queue')
           return undefined
         }
-        logger.error('Failed to create case via CRM API', err)
+        logger.error({
+          event: {
+            type: 'crm_case_creation_failed',
+            action: 'discard_message',
+            category: 'messaging',
+            outcome: 'failure',
+            reason: err.message
+          },
+          error: {
+            message: err.message
+          },
+          retry: err.retryMetadata ?? null
+        }, 'Failed to create case via CRM API')
         return message
       }
     }

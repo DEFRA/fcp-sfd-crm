@@ -260,7 +260,17 @@ describe('CRM request sqs consumer', () => {
 
       const result = await capturedHandleMessage(message)
 
-      expect(mockLogger.info).toHaveBeenCalledWith('Retryable error, leaving message on queue', expect.any(Error))
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: expect.objectContaining({
+            type: 'crm_case_creation_retryable',
+            action: 'leave_on_queue',
+            outcome: 'unknown'
+          }),
+          retry: null
+        }),
+        'Retryable error, leaving message on queue'
+      )
       expect(result).toBeUndefined()
     })
 
@@ -284,7 +294,17 @@ describe('CRM request sqs consumer', () => {
 
       const result = await capturedHandleMessage(message)
 
-      expect(mockLogger.error).toHaveBeenCalledWith('Failed to create case via CRM API', expect.any(Error))
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: expect.objectContaining({
+            type: 'crm_case_creation_failed',
+            action: 'discard_message',
+            outcome: 'failure'
+          }),
+          retry: null
+        }),
+        'Failed to create case via CRM API'
+      )
       expect(result).toEqual(message)
     })
   })
