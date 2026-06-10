@@ -36,7 +36,18 @@ export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi,
 
   if (caseError) {
     logger.error({ correlationId, error: caseError }, 'Error creating case with online submission activity')
-    throw internal('Unable to create case with online submission activity in CRM')
+    // If the CRM error indicates the request should be retried, surface that to the
+    // consumer by throwing the original error with `retryable = true` so the
+    // inbound consumer can leave the message on the queue.
+    if (caseError?.retryMetadata?.category === 'retryable') {
+      caseError.retryable = true
+      throw caseError
+    }
+
+    const err = internal('Unable to create case with online submission activity in CRM')
+    err.retryable = false
+    err.retryMetadata = caseError?.retryMetadata ?? null
+    throw err
   }
 
   // Retrieve rpa_onlinesubmissionid for the created case
@@ -45,7 +56,17 @@ export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi,
     rpaOnlinesubmissionid = await fetchRpaOnlineSubmissionIdOrThrow(authToken, caseId, { correlationId })
   } catch (err) {
     logger.error({ caseId, error: err }, 'Unable to retrieve online submission id')
-    throw internal('Unable to retrieve online submission for created case')
+    // If the underlying error carries retry metadata and is retryable, rethrow
+    // it so the inbound consumer can decide to leave the message on the queue.
+    if (err?.retryMetadata?.category === 'retryable') {
+      err.retryable = true
+      throw err
+    }
+
+    const thrown = internal('Unable to retrieve online submission for created case')
+    thrown.retryable = false
+    thrown.retryMetadata = err?.retryMetadata ?? null
+    throw thrown
   }
 
   const eventData = {
