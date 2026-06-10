@@ -101,7 +101,6 @@ describe('CRM request sqs consumer', () => {
     })
 
     async function setupAndImportConsumer() {
-      vi.resetModules()
       mockConsumer._listeners = {}
       const logger = { info: vi.fn(), error: vi.fn() }
       mockLoggerRef = logger
@@ -120,7 +119,8 @@ describe('CRM request sqs consumer', () => {
 
       const consumerModule = await import('../../../../src/messaging/inbound/consumer.js')
       consumerModule.setLogger(logger)
-      return { startCRMListener: consumerModule.startCRMListener, logger }
+      const { createCase } = await import('../../../../src/services/case.js')
+      return { startCRMListener: consumerModule.startCRMListener, logger, createCase }
     }
 
     test('should log consumer start', async () => {
@@ -195,8 +195,7 @@ describe('CRM request sqs consumer', () => {
     })
 
     test('should call createCase when handleMessage receives valid JSON', async () => {
-      const { createCase } = await import('../../../../src/services/case.js')
-      const { startCRMListener: start } = await setupAndImportConsumer()
+      const { startCRMListener: start, createCase } = await setupAndImportConsumer()
       const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
       start(mockSqsClient)
       const message = {
@@ -207,7 +206,7 @@ describe('CRM request sqs consumer', () => {
           type: 'test.type',
           datacontenttype: 'application/json',
           time: new Date().toISOString(),
-          data: { crn: '123', sbi: '321', file: { fileId: '9fcaabe5-77ec-44db-8356-3a6e8dc51b13', fileName: 'file.pdf', url: 'https://example.com/api/v1/blobs/9fcaabe5-77ec-44db-8356-3a6e8dc51b13' }, correlationId: '550e8400-e29b-41d4-a716-446655440000', sourceSystem: 'fcp-sfd-frontend', submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6' }
+          data: { crn: '123', sbi: '321', file: { fileId: '9fcaabe5-77ec-44db-8356-3a6e8dc51b13', fileName: 'file.pdf', url: 'https://example.com/api/v1/blobs/9fcaabe5-77ec-44db-8356-3a6e8dc51b13' }, correlationId: '550e8400-e29b-41d4-a716-446655440000', sourceSystem: 'fcp-sfd-frontend', submissionId: 'sub-1' }
         })
       }
 
@@ -218,8 +217,7 @@ describe('CRM request sqs consumer', () => {
     })
 
     test('should not call createCase for schema-invalid but parseable payload', async () => {
-      const { createCase } = await import('../../../../src/services/case.js')
-      const { startCRMListener: start } = await setupAndImportConsumer()
+      const { startCRMListener: start, createCase } = await setupAndImportConsumer()
       const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
       start(mockSqsClient)
 
@@ -232,7 +230,7 @@ describe('CRM request sqs consumer', () => {
           type: 'test.type',
           datacontenttype: 'application/json',
           time: new Date().toISOString(),
-          data: { crn: '123', sbi: '321', file: {}, correlationId: 'corr-1' }
+          data: { crn: '123', sbi: '321', file: {}, correlationId: 'corr-1', sourceSystem: 'fcp-sfd-frontend', submissionId: 'sub-2' }
         })
       }
 
@@ -277,6 +275,179 @@ describe('CRM request sqs consumer', () => {
 
       expect(logger.error).toHaveBeenCalledWith('Invalid JSON in inbound message', expect.any(SyntaxError))
       expect(result).toEqual(message)
+    })
+
+    test('should call Consumer.create with expected options', async () => {
+      const { startCRMListener: start } = await setupAndImportConsumer()
+      const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
+      start(mockSqsClient)
+      const sqs = await import('sqs-consumer')
+      expect(sqs.Consumer.create).toHaveBeenCalled()
+      const opts = sqs.Consumer.create.mock.calls[0][0]
+      expect(opts).toHaveProperty('queueUrl')
+      expect(opts).toHaveProperty('batchSize')
+      expect(opts).toHaveProperty('waitTimeSeconds')
+      expect(opts).toHaveProperty('pollingWaitTime')
+      expect(opts.sqs).toBe(mockSqsClient)
+    })
+
+    test('retryable true without retryMetadata leaves message on queue with null retry', async () => {
+      const { startCRMListener: start, logger, createCase } = await setupAndImportConsumer()
+      const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
+      start(mockSqsClient)
+      const retryableError = new Error('Retryable no metadata')
+      retryableError.retryable = true
+      // no retryMetadata set
+      createCase.mockRejectedValueOnce(retryableError)
+      const message = {
+        Body: JSON.stringify({
+          id: 'evt-r1',
+          source: '/test',
+          specversion: '1.0',
+          type: 'test.type',
+          datacontenttype: 'application/json',
+          time: new Date().toISOString(),
+          data: { crn: '123', sbi: '321', file: { fileId: '3fa85f64-5717-4562-b3fc-2c963f66afa6', fileName: 'file.pdf', url: 'https://example.com/api/v1/blobs/f1' }, correlationId: '550e8400-e29b-41d4-a716-446655440000', sourceSystem: 'fcp-sfd-frontend', submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6' }
+        })
+      }
+
+      const result = await capturedHandleMessage(message)
+
+      const calls = logger.info.mock.calls
+      const found = calls.some(call => call[1] === 'Retryable error, leaving message on queue' && call[0] && call[0].retry === null)
+      expect(createCase).toHaveBeenCalled()
+      // debug output
+      // eslint-disable-next-line no-console
+      console.debug('logger.info.calls:', JSON.stringify(logger.info.mock.calls, null, 2))
+      // eslint-disable-next-line no-console
+      console.debug('logger.error.calls:', JSON.stringify(logger.error.mock.calls, null, 2))
+      expect(found).toBeTruthy()
+      expect(result).toBeUndefined()
+    })
+
+    test('retryable with empty retryMetadata logs provided object', async () => {
+      const { startCRMListener: start, logger, createCase } = await setupAndImportConsumer()
+      const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
+      start(mockSqsClient)
+      const retryableError = new Error('Retryable empty metadata')
+      retryableError.retryable = true
+      retryableError.retryMetadata = {}
+      createCase.mockRejectedValueOnce(retryableError)
+      const message = {
+        Body: JSON.stringify({
+          id: 'evt-r2',
+          source: '/test',
+          specversion: '1.0',
+          type: 'test.type',
+          datacontenttype: 'application/json',
+          time: new Date().toISOString(),
+          data: { crn: '123', sbi: '321', file: { fileId: '4fa85f64-5717-4562-b3fc-2c963f66afa6', fileName: 'file.pdf', url: 'https://example.com/api/v1/blobs/f2' }, correlationId: '550e8400-e29b-41d4-a716-446655440000', sourceSystem: 'fcp-sfd-frontend', submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6' }
+        })
+      }
+
+      const result = await capturedHandleMessage(message)
+
+      const calls = logger.info.mock.calls
+      const found = calls.some(call => call[1] === 'Retryable error, leaving message on queue' && call[0] && typeof call[0].retry === 'object')
+      expect(createCase).toHaveBeenCalled()
+      // debug output
+      // eslint-disable-next-line no-console
+      console.debug('logger.info.calls:', JSON.stringify(logger.info.mock.calls, null, 2))
+      // eslint-disable-next-line no-console
+      console.debug('logger.error.calls:', JSON.stringify(logger.error.mock.calls, null, 2))
+      expect(found).toBeTruthy()
+      expect(result).toBeUndefined()
+    })
+
+    test('non-retryable error without retryMetadata is discarded and logs nulls', async () => {
+      const { startCRMListener: start, logger, createCase } = await setupAndImportConsumer()
+      const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
+      start(mockSqsClient)
+      const err = new Error('Generic failure')
+      // no retryable, no retryMetadata
+      createCase.mockRejectedValueOnce(err)
+      const message = {
+        Body: JSON.stringify({
+          id: 'evt-nr1',
+          source: '/test',
+          specversion: '1.0',
+          type: 'test.type',
+          datacontenttype: 'application/json',
+          time: new Date().toISOString(),
+          data: { crn: '123', sbi: '321', file: { fileId: '5fa85f64-5717-4562-b3fc-2c963f66afa6', fileName: 'file.pdf', url: 'https://example.com/api/v1/blobs/f3' }, correlationId: '550e8400-e29b-41d4-a716-446655440000', sourceSystem: 'fcp-sfd-frontend', submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6' }
+        })
+      }
+
+      const result = await capturedHandleMessage(message)
+
+      expect(logger.error).toHaveBeenCalled()
+      expect(createCase).toHaveBeenCalled()
+      // debug output
+      // eslint-disable-next-line no-console
+      console.debug('logger.info.calls:', JSON.stringify(logger.info.mock.calls, null, 2))
+      // eslint-disable-next-line no-console
+      console.debug('logger.error.calls:', JSON.stringify(logger.error.mock.calls, null, 2))
+      expect(logger.error).toHaveBeenCalledWith(expect.objectContaining({ error: expect.objectContaining({ message: 'Generic failure', status: null, category: null }), retry: null }), 'Failed to create case via CRM API')
+      expect(result).toEqual(message)
+    })
+
+    test('unknown retryMetadata.category treated as non-retryable unless retryable flag set', async () => {
+      const { startCRMListener: start, logger, createCase } = await setupAndImportConsumer()
+      const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
+      start(mockSqsClient)
+      const err = new Error('Unknown category')
+      err.retryMetadata = { category: 'unknown', status: 520 }
+      // not setting err.retryable => non-retryable path
+      createCase.mockRejectedValueOnce(err)
+      const message = {
+        Body: JSON.stringify({
+          id: 'evt-unk',
+          source: '/test',
+          specversion: '1.0',
+          type: 'test.type',
+          datacontenttype: 'application/json',
+          time: new Date().toISOString(),
+          data: { crn: '123', sbi: '321', file: { fileId: '6fa85f64-5717-4562-b3fc-2c963f66afa6', fileName: 'file.pdf', url: 'https://example.com/api/v1/blobs/f4' }, correlationId: '550e8400-e29b-41d4-a716-446655440000', sourceSystem: 'fcp-sfd-frontend', submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6' }
+        })
+      }
+
+      const result = await capturedHandleMessage(message)
+
+      expect(logger.error).toHaveBeenCalled()
+      expect(createCase).toHaveBeenCalled()
+      // debug output
+      // eslint-disable-next-line no-console
+      console.debug('logger.info.calls:', JSON.stringify(logger.info.mock.calls, null, 2))
+      // eslint-disable-next-line no-console
+      console.debug('logger.error.calls:', JSON.stringify(logger.error.mock.calls, null, 2))
+      expect(logger.error).toHaveBeenCalledWith(expect.objectContaining({ error: expect.objectContaining({ category: 'unknown', status: 520 }), retry: expect.objectContaining({ category: 'unknown', status: 520 }) }), 'Failed to create case via CRM API')
+      expect(result).toEqual(message)
+    })
+
+    test('empty and null Body are treated as invalid JSON and return message', async () => {
+      const { startCRMListener: start, logger } = await setupAndImportConsumer()
+      const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
+      start(mockSqsClient)
+
+      const resultEmpty = await capturedHandleMessage({ Body: '' })
+      expect(logger.error).toHaveBeenCalled()
+      expect(resultEmpty).toEqual({ Body: '' })
+
+      const resultNull = await capturedHandleMessage({ Body: null })
+      expect(logger.error).toHaveBeenCalled()
+      expect(resultNull).toEqual({ Body: null })
+    })
+
+
+
+    test('setLogger injection replaces internal logger used by events', async () => {
+      const consumerModule = await import('../../../../src/messaging/inbound/consumer.js')
+      const customLogger = { info: vi.fn(), error: vi.fn() }
+      consumerModule.setLogger(customLogger)
+      const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
+      consumerModule.startCRMListener(mockSqsClient)
+      mockConsumer.emit('started')
+      expect(customLogger.info).toHaveBeenCalledWith('CRM request consumer started')
     })
 
     test('should return undefined when createCase fails with retryable error', async () => {
@@ -357,4 +528,22 @@ describe('CRM request sqs consumer', () => {
 
 afterAll(() => {
   vi.resetAllMocks()
+})
+
+test('when schema.validate throws, handleMessage rejects with that error', async () => {
+  vi.resetModules()
+  // use doMock to avoid hoisting issues
+  vi.doMock('../../../../src/api/schemas/index.js', () => ({ inboundCloudEventSchema: { validate: () => { throw new Error('validate exploded') } }, validationOptions: {} }))
+  // re-import consumer so it picks up the mocked schema
+  const consumerModule = await import('../../../../src/messaging/inbound/consumer.js')
+  consumerModule.setLogger({ info: vi.fn(), error: vi.fn() })
+  const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
+  consumerModule.startCRMListener(mockSqsClient)
+  const sqs = await import('sqs-consumer')
+  const handler = sqs.Consumer.create.mock.calls[0][0].handleMessage
+  const message = { Body: JSON.stringify({ id: 'evt-throw' }) }
+  const result = await handler(message)
+  expect(result).toEqual(message)
+  // reset modules so subsequent tests are unaffected by the doMock
+  vi.resetModules()
 })
