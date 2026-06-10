@@ -48,6 +48,11 @@ vi.mock('sqs-consumer', () => ({
   }
 }))
 
+// Mock validation logger util at top-level for this test file to assert it's called
+vi.mock('../../../../src/utils/validation-logger.js', () => ({
+  logInboundValidationFailure: vi.fn()
+}))
+
 let startCRMListener, stopCRMListener, setLogger, mockLogger
 
 beforeEach(async () => {
@@ -112,7 +117,10 @@ describe('CRM request sqs consumer', () => {
           })
         }
       }))
-      return { startCRMListener, logger }
+
+      const consumerModule = await import('../../../../src/messaging/inbound/consumer.js')
+      consumerModule.setLogger(logger)
+      return { startCRMListener: consumerModule.startCRMListener, logger }
     }
 
     test('should log consumer start', async () => {
@@ -133,6 +141,15 @@ describe('CRM request sqs consumer', () => {
       expect(mockConsumer._listeners.stopped.length).toBeGreaterThan(0)
       mockConsumer.emit('stopped')
       expect(logger.info).toHaveBeenCalledWith('CRM request consumer stopped')
+    })
+
+    test('should log starting consumer with queueUrl and endpoint', async () => {
+      const { startCRMListener: start, logger } = await setupAndImportConsumer()
+      const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
+      start(mockSqsClient)
+      expect(logger.info).toHaveBeenCalled()
+      const calls = logger.info.mock.calls
+      expect(calls.some(call => call.some(arg => arg === 'Starting CRM request consumer' || (typeof arg === 'string' && arg.includes('Starting CRM request consumer'))))).toBeTruthy()
     })
 
     test('should log consumer error', async () => {
@@ -226,21 +243,45 @@ describe('CRM request sqs consumer', () => {
       expect(result).toEqual(message)
     })
 
-    test('should log error for invalid JSON in handleMessage', async () => {
+    test('should call logInboundValidationFailure on schema-invalid payload', async () => {
       const { startCRMListener: start } = await setupAndImportConsumer()
+      const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
+      start(mockSqsClient)
+
+      const message = {
+        Body: JSON.stringify({
+          id: 'evt-invalid',
+          source: '/test',
+          specversion: '1.0',
+          type: 'test.type',
+          datacontenttype: 'application/json',
+          time: new Date().toISOString(),
+          data: { crn: '123', sbi: '321', file: {}, correlationId: 'corr-1' }
+        })
+      }
+
+      const result = await capturedHandleMessage(message)
+
+      const { logInboundValidationFailure } = await import('../../../../src/utils/validation-logger.js')
+      expect(logInboundValidationFailure).toHaveBeenCalled()
+      expect(result).toEqual(message)
+    })
+
+    test('should log error for invalid JSON in handleMessage', async () => {
+      const { startCRMListener: start, logger } = await setupAndImportConsumer()
       const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
       start(mockSqsClient)
       const message = { Body: 'invalid-json' }
 
       const result = await capturedHandleMessage(message)
 
-      expect(mockLogger.error).toHaveBeenCalledWith('Invalid JSON in inbound message', expect.any(SyntaxError))
+      expect(logger.error).toHaveBeenCalledWith('Invalid JSON in inbound message', expect.any(SyntaxError))
       expect(result).toEqual(message)
     })
 
     test('should return undefined when createCase fails with retryable error', async () => {
       const { createCase } = await import('../../../../src/services/case.js')
-      const { startCRMListener: start } = await setupAndImportConsumer()
+      const { startCRMListener: start, logger } = await setupAndImportConsumer()
       const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
       start(mockSqsClient)
       const retryableError = new Error('CRM API retryable failure')
@@ -261,7 +302,7 @@ describe('CRM request sqs consumer', () => {
 
       const result = await capturedHandleMessage(message)
 
-      expect(mockLogger.info).toHaveBeenCalledWith(
+      expect(logger.info).toHaveBeenCalledWith(
         expect.objectContaining({
           event: expect.objectContaining({
             type: 'crm_case_creation_retryable',
@@ -277,7 +318,7 @@ describe('CRM request sqs consumer', () => {
 
     test('should log error and return message when createCase fails with non-retryable error', async () => {
       const { createCase } = await import('../../../../src/services/case.js')
-      const { startCRMListener: start } = await setupAndImportConsumer()
+      const { startCRMListener: start, logger } = await setupAndImportConsumer()
       const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
       start(mockSqsClient)
       const nonRetryError = new Error('CRM API failed')
@@ -297,7 +338,7 @@ describe('CRM request sqs consumer', () => {
 
       const result = await capturedHandleMessage(message)
 
-      expect(mockLogger.error).toHaveBeenCalledWith(
+      expect(logger.error).toHaveBeenCalledWith(
         expect.objectContaining({
           event: expect.objectContaining({
             type: 'crm_case_creation_failed',
