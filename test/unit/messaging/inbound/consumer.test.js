@@ -20,11 +20,11 @@ const mockConsumer = {
   start: vi.fn(),
   stop: vi.fn(),
   _listeners: {},
-  on (event, fn) {
+  on(event, fn) {
     if (!this._listeners[event]) this._listeners[event] = []
     this._listeners[event].push(fn)
   },
-  emit (event, ...args) {
+  emit(event, ...args) {
     if (this._listeners[event]) {
       this._listeners[event].forEach(fn => fn(...args))
     }
@@ -95,7 +95,7 @@ describe('CRM request sqs consumer', () => {
       mockConsumer._listeners = {}
     })
 
-    async function setupAndImportConsumer () {
+    async function setupAndImportConsumer() {
       vi.resetModules()
       mockConsumer._listeners = {}
       const logger = { info: vi.fn(), error: vi.fn() }
@@ -245,6 +245,7 @@ describe('CRM request sqs consumer', () => {
       start(mockSqsClient)
       const retryableError = new Error('CRM API retryable failure')
       retryableError.retryable = true
+      retryableError.retryMetadata = { category: 'retryable', status: 503 }
       createCase.mockRejectedValueOnce(retryableError)
       const message = {
         Body: JSON.stringify({
@@ -267,7 +268,7 @@ describe('CRM request sqs consumer', () => {
             action: 'leave_on_queue',
             outcome: 'unknown'
           }),
-          retry: null
+          retry: expect.objectContaining({ category: 'retryable', status: 503 })
         }),
         'Retryable error, leaving message on queue'
       )
@@ -279,7 +280,9 @@ describe('CRM request sqs consumer', () => {
       const { startCRMListener: start } = await setupAndImportConsumer()
       const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
       start(mockSqsClient)
-      createCase.mockRejectedValueOnce(new Error('CRM API failed'))
+      const nonRetryError = new Error('CRM API failed')
+      nonRetryError.retryMetadata = { category: 'non-retryable', status: 400 }
+      createCase.mockRejectedValueOnce(nonRetryError)
       const message = {
         Body: JSON.stringify({
           id: 'evt-3',
@@ -301,7 +304,8 @@ describe('CRM request sqs consumer', () => {
             action: 'discard_message',
             outcome: 'failure'
           }),
-          retry: null
+          error: expect.objectContaining({ message: 'CRM API failed', status: 400, category: 'non-retryable' }),
+          retry: expect.objectContaining({ category: 'non-retryable', status: 400 })
         }),
         'Failed to create case via CRM API'
       )
