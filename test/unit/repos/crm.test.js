@@ -69,10 +69,9 @@ describe('CRM repository', () => {
 
       const result = await getContactIdFromCrn('Bearer token', '1234567890')
 
-      expect(result).toEqual({
-        contactId: null,
-        error: 'Network error'
-      })
+      expect(result.contactId).toBeNull()
+      expect(result.error).toBeInstanceOf(Error)
+      expect(result.error.message).toBe('Network error')
     })
 
     test('should handle JSON parsing error for SBI and return error message', async () => {
@@ -84,10 +83,9 @@ describe('CRM repository', () => {
 
       const result = await getContactIdFromCrn('Bearer token', '1234567890')
 
-      expect(result).toEqual({
-        contactId: null,
-        error: 'Invalid JSON'
-      })
+      expect(result.contactId).toBeNull()
+      expect(result.error).toBeInstanceOf(Error)
+      expect(result.error.message).toBe('Invalid JSON')
     })
   })
 
@@ -136,10 +134,9 @@ describe('CRM repository', () => {
 
       const result = await getAccountIdFromSbi('Bearer token', '987654321')
 
-      expect(result).toEqual({
-        accountId: null,
-        error: 'Network error'
-      })
+      expect(result.accountId).toBeNull()
+      expect(result.error).toBeInstanceOf(Error)
+      expect(result.error.message).toBe('Network error')
     })
 
     test('should handle JSON parsing error for CRN and return error message', async () => {
@@ -151,10 +148,9 @@ describe('CRM repository', () => {
 
       const result = await getAccountIdFromSbi('Bearer token', '987654321')
 
-      expect(result).toEqual({
-        accountId: null,
-        error: 'Invalid JSON'
-      })
+      expect(result.accountId).toBeNull()
+      expect(result.error).toBeInstanceOf(Error)
+      expect(result.error.message).toBe('Invalid JSON')
     })
   })
 
@@ -315,7 +311,8 @@ describe('CRM repository', () => {
       })
 
       expect(caseId).toBeNull()
-      expect(error).toBe('Network error')
+      expect(error).toBeInstanceOf(Error)
+      expect(error.message).toBe('Network error')
     })
 
     test('should return error when response json parsing fails', async () => {
@@ -348,7 +345,8 @@ describe('CRM repository', () => {
       })
 
       expect(caseId).toBeNull()
-      expect(error).toBe('Invalid JSON')
+      expect(error).toBeInstanceOf(Error)
+      expect(error.message).toBe('Invalid JSON')
     })
   })
 
@@ -379,7 +377,9 @@ describe('CRM repository', () => {
       mockHttpClient.mockRejectedValue(new Error('Network error'))
       const { getOnlineSubmissionId } = await import('../../../src/repos/crm.js')
       const result = await getOnlineSubmissionId('Bearer token', 'case-123')
-      expect(result).toEqual({ rpaOnlinesubmissionid: null, error: 'Network error' })
+      expect(result.rpaOnlinesubmissionid).toBeNull()
+      expect(result.error).toBeInstanceOf(Error)
+      expect(result.error.message).toBe('Network error')
     })
 
     test('should handle empty online submissions array', async () => {
@@ -437,7 +437,9 @@ describe('CRM repository', () => {
       mockHttpClient.mockRejectedValue(new Error('Network error'))
       const { createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
       const result = await createMetadataForOnlineSubmission({ authToken: 'Bearer token', rpaOnlinesubmissionid: 'ols', metadata: {} })
-      expect(result).toEqual({ metadataId: null, error: 'Network error' })
+      expect(result.metadataId).toBeNull()
+      expect(result.error).toBeInstanceOf(Error)
+      expect(result.error.message).toBe('Network error')
     })
 
     test('should handle response without metadata id', async () => {
@@ -511,7 +513,9 @@ describe('CRM repository', () => {
       mockHttpClient.mockRejectedValue(new Error('Network error'))
       const { createMetadataForExistingCase } = await import('../../../src/repos/crm.js')
       const result = await createMetadataForExistingCase({ authToken: 'Bearer token', caseId: 'case-1', metadata: { name: 'a' } })
-      expect(result).toEqual({ metadataId: null, error: 'Network error' })
+      expect(result.metadataId).toBeNull()
+      expect(result.error).toBeInstanceOf(Error)
+      expect(result.error.message).toBe('Network error')
     })
 
     test('should handle response without metadata id', async () => {
