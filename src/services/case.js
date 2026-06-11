@@ -7,6 +7,8 @@ import { fetchRpaOnlineSubmissionIdOrThrow } from './crm-helpers.js'
 
 const logger = createLogger()
 
+const ONE_HOUR_MS = 60 * 60 * 1000
+
 /**
  * Transform CloudEvents payload to the format expected by createCaseWithOnlineSubmissionInCrm
  * @param {object} cloudEventPayload - CloudEvents format payload with data property
@@ -32,7 +34,7 @@ export function transformPayload (cloudEventPayload) {
     subject: `Document Upload - ${file?.fileName || 'Unknown'}`,
     description: `File uploaded: ${file?.fileName || 'Unknown file'}\nCorrelation ID: ${correlationId}`,
     scheduledStart: new Date().toISOString(),
-    scheduledEnd: new Date(Date.now() + 3600000).toISOString(), // 1 hour from now
+    scheduledEnd: new Date(Date.now() + ONE_HOUR_MS).toISOString(),
     stateCode: 0,
     statusCode: 1,
     metadata: {

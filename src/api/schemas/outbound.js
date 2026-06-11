@@ -1,5 +1,10 @@
 import Joi from 'joi'
 
+const CRN_MIN = 1_050_000_000
+const CRN_MAX = 9_999_999_999
+const SBI_MIN = 105_000_000
+const SBI_MAX = 999_999_999
+
 export const receivedEventSchema = Joi.object({
   id: Joi.string().guid({ version: ['uuidv4'] }).required(),
   source: Joi.string().required(),
@@ -11,8 +16,8 @@ export const receivedEventSchema = Joi.object({
     correlationId: Joi.string().guid({ version: ['uuidv4'] }).required(),
     // CRM/Dynamics returns non-v4 GUIDs for caseId
     caseId: Joi.string().guid().required(),
-    crn: Joi.number().integer().min(1050000000).max(9999999999).required(),
-    sbi: Joi.number().integer().min(105000000).max(999999999).required(),
+    crn: Joi.number().integer().min(CRN_MIN).max(CRN_MAX).required(),
+    sbi: Joi.number().integer().min(SBI_MIN).max(SBI_MAX).required(),
     caseType: Joi.string().valid('case-created', 'document-uploaded').optional(),
     onlineSubmissionActivities: Joi.array().items(Joi.object({
       id: Joi.string().guid({ version: ['uuidv4'] }).required(),
