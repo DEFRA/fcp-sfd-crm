@@ -31,8 +31,13 @@ const METRIC_LABELS = {
   new_violations: 'New Issues',
   new_security_hotspots_reviewed: 'Security Hotspots Reviewed',
   new_blocker_violations: 'Blocker Issues',
-  new_critical_violations: 'Critical Issues'
+  new_critical_violations: 'Critical Issues',
+  false_positive_issues_without_comment: 'False Positives without Comment',
+  accepted_issues_without_comment: 'Accepted Issues without Comment'
 }
+
+const ACCEPTED_ISSUE_STATUSES = ['FALSE_POSITIVE', 'ACCEPTED']
+const CHANGELOG_FETCH_CONCURRENCY = 8
 
 const COMPARATOR_SYMBOLS = {
   GT: '>',
@@ -113,7 +118,8 @@ const sonarcloudFetch = async (path, sonarToken) => {
   })
 
   if (!response.ok) {
-    throw new Error(`SonarCloud API error ${response.status}: ${response.statusText} (${url})`)
+    const body = await response.text()
+    throw new Error(`SonarCloud API error ${response.status}: ${response.statusText} (${url})${body ? ` — ${body}` : ''}`)
   }
 
   return response.json()
@@ -142,6 +148,71 @@ const fetchSecurityHotspots = (projectKey, sonarToken, branch) =>
     `/api/hotspots/search?projectKey=${encodeURIComponent(projectKey)}&branch=${encodeURIComponent(branch)}&inNewCodePeriod=true&ps=500&status=TO_REVIEW`,
     sonarToken
   )
+
+const fetchAcceptedIssues = async (projectKey, sonarToken) => {
+  const issueStatuses = ACCEPTED_ISSUE_STATUSES.join(',')
+  const pageSize = 500
+  let page = 1
+  const issues = []
+
+  while (true) {
+    const response = await sonarcloudFetch(
+      `/api/issues/search?componentKeys=${encodeURIComponent(projectKey)}&issueStatuses=${issueStatuses}&ps=${pageSize}&p=${page}`,
+      sonarToken
+    )
+
+    issues.push(...(response.issues ?? []))
+
+    const total = response.total ?? issues.length
+    if (issues.length >= total || (response.issues ?? []).length < pageSize) break
+    page++
+  }
+
+  return issues
+}
+
+const fetchIssueChangelog = (issueKey, sonarToken) =>
+  sonarcloudFetch(`/api/issues/changelog?issue=${encodeURIComponent(issueKey)}`, sonarToken)
+
+const issueHasComment = (changelogResponse) => {
+  const entries = changelogResponse?.changelog ?? []
+
+  return entries.some((entry) =>
+    (entry.items ?? []).some((item) => {
+      if (item.field !== 'comment') return false
+
+      const value = item.newValue ?? item.newString ?? ''
+      return String(value).trim().length > 0
+    })
+  )
+}
+
+const mapConcurrent = async (items, fn, concurrency = CHANGELOG_FETCH_CONCURRENCY) => {
+  const results = new Array(items.length)
+  let nextIndex = 0
+
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex++
+      results[index] = await fn(items[index], index)
+    }
+  })
+
+  await Promise.all(workers)
+  return results
+}
+
+const findAcceptedIssuesWithoutComment = async (projectKey, sonarToken) => {
+  const acceptedIssues = await fetchAcceptedIssues(projectKey, sonarToken)
+  if (acceptedIssues.length === 0) return []
+
+  const issuesWithCommentFlags = await mapConcurrent(acceptedIssues, async (issue) => {
+    const changelog = await fetchIssueChangelog(issue.key, sonarToken)
+    return { issue, hasComment: issueHasComment(changelog) }
+  })
+
+  return issuesWithCommentFlags.filter(({ hasComment }) => !hasComment)
+}
 
 const getMeasureValue = (measures, key) => {
   const measure = measures.find((m) => m.metric === key)
@@ -239,6 +310,65 @@ const printIssues = (issuesResponse, projectKey) => {
   console.log(THIN_BORDER)
   console.log(` 🔗 ${issuesUrl}`)
   console.log(`${BORDER}\n`)
+}
+
+const formatIssueStatus = (status) => {
+  if (status === 'FALSE_POSITIVE') return 'False positive'
+  if (status === 'ACCEPTED') return 'Accepted'
+  return status ?? 'Unknown'
+}
+
+const printAcceptedIssuesWithoutComment = (issuesWithoutComment, projectKey) => {
+  if (issuesWithoutComment.length === 0) return false
+
+  const issuesUrl = `${SONARCLOUD_BASE_URL}/project/issues?id=${encodeURIComponent(projectKey)}&issueStatuses=${ACCEPTED_ISSUE_STATUSES.join(',')}`
+
+  console.log(`\n${BORDER}`)
+  console.log(` 💬 Accepted / False Positive Issues without Comment (${issuesWithoutComment.length})`)
+  console.log(BORDER)
+  console.log('  DEFRA quality gates require a justification comment on each accepted issue.')
+  console.log('  Add a comment in SonarCloud under the issue Activity tab.\n')
+
+  const byFile = new Map()
+
+  for (const { issue } of issuesWithoutComment) {
+    const filePath = extractFilePath(issue.component, projectKey)
+    if (!byFile.has(filePath)) byFile.set(filePath, [])
+    byFile.get(filePath).push(issue)
+  }
+
+  let displayed = 0
+
+  for (const [filePath, fileIssues] of [...byFile.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    if (displayed >= MAX_ISSUES_DISPLAYED) break
+
+    console.log(`\n  📄 ${filePath}`)
+
+    for (const issue of fileIssues) {
+      if (displayed >= MAX_ISSUES_DISPLAYED) break
+
+      const icon = SEVERITY_ICONS[issue.severity] ?? '⚪'
+      const rule = issue.rule ? ` (${issue.rule})` : ''
+      const status = formatIssueStatus(issue.issueStatus ?? issue.status)
+
+      console.log(`    ${icon} [${status}] L${issue.line ?? '?'} ${issue.message}${rule}`)
+
+      const issueUrl = `${SONARCLOUD_BASE_URL}/project/issues?id=${encodeURIComponent(projectKey)}&open=${encodeURIComponent(issue.key)}`
+      console.log(`       ${issueUrl}`)
+
+      displayed++
+    }
+  }
+
+  if (issuesWithoutComment.length > MAX_ISSUES_DISPLAYED) {
+    console.log(`\n  ... and ${issuesWithoutComment.length - MAX_ISSUES_DISPLAYED} more`)
+  }
+
+  console.log(THIN_BORDER)
+  console.log(` 🔗 ${issuesUrl}`)
+  console.log(`${BORDER}\n`)
+
+  return true
 }
 
 const printHotspots = (hotspotsResponse, projectKey) => {
@@ -379,7 +509,16 @@ const sonarScan = async () => {
 
   const passed = printSummary(qualityGate, measuresResponse, projectKey, branch)
 
-  if (!passed) {
+  let hasAcceptedIssuesWithoutComment = false
+
+  try {
+    const issuesWithoutComment = await findAcceptedIssuesWithoutComment(projectKey, sonarToken)
+    hasAcceptedIssuesWithoutComment = printAcceptedIssuesWithoutComment(issuesWithoutComment, projectKey)
+  } catch (acceptedErr) {
+    console.error(`\nCould not fetch accepted/false-positive issue comments: ${acceptedErr.message}`)
+  }
+
+  if (!passed || hasAcceptedIssuesWithoutComment) {
     // Fetch detailed issues and hotspots to help developers fix problems locally
     try {
       const measures = measuresResponse.component?.measures ?? []

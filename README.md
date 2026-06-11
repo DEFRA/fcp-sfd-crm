@@ -14,14 +14,6 @@ This service is part of the [Single Front Door (SFD)](https://github.com/defra/f
 
 Create a `.env` file in the root of the project based on `.env.example`.
 
-### SonarQube Cloud token
-
-`npm run sonar` enables local SonarQube Cloud scanning. To set it up:
-
-1. Log in to [SonarQube Cloud](https://sonarcloud.io)
-2. Go to **My Account → Security → Generate Tokens** and create a personal token
-3. Add `SONAR_TOKEN=<your-token>` to your `.env` file
-
 ### Pre-commit hooks
 
 This repo includes pre-commit hooks:
@@ -180,11 +172,31 @@ npm run lint:fix
 
 ## SonarQube Cloud scan
 
-Run a local SonarQube Cloud scan (requires `SONAR_TOKEN` in `.env`):
+Run a local scan against [SonarCloud](https://sonarcloud.io/project/overview?id=DEFRA_fcp-sfd-crm) for the current git branch. See the [DEFRA SonarCloud guide](https://github.com/DEFRA/cdp-documentation/blob/main/how-to/sonarcloud.md) for organisation access and CI setup.
+
+### Setup
+
+1. Log in to [SonarQube Cloud](https://sonarcloud.io) with your DEFRA GitHub account
+2. Go to **My Account → Security → Generate Tokens** and create a personal token
+3. Add `SONAR_TOKEN=<your-token>` to your `.env` file
+4. Ensure Docker is running
+
+### Run
+
+Generate test coverage first, then scan:
 
 ```bash
+npm run docker:test
 npm run sonar
 ```
+
+The script uploads results for the current branch and prints:
+
+- Quality gate pass/fail and failed conditions
+- Open issues on new code (when the gate fails)
+- **Accepted / false-positive issues without comment** — DEFRA quality gates require a justification comment on each suppressed issue; add comments in SonarCloud under the issue **Activity** tab
+
+Exit code is `0` when the gate passes and all suppressed issues are commented, `1` otherwise.
 
 ## HTTP Retry
 
