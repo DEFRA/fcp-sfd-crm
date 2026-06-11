@@ -181,3 +181,63 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     })).rejects.toThrow('Unable to retrieve online submission for created case')
   })
 })
+
+test('re-throws original retryable CRM error when createCaseWithOnlineSubmission reports retryable', async () => {
+  vi.resetModules()
+  const mockLogger = { error: vi.fn() }
+  vi.doMock('../../../src/logging/logger.js', () => ({ createLogger: () => mockLogger }))
+
+  const retryErr = new Error('CRM transient')
+  retryErr.retryMetadata = { category: 'retryable', status: 503 }
+
+  vi.doMock('../../../src/repos/crm.js', () => ({
+    getContactIdFromCrn: vi.fn().mockResolvedValue({ contactId: 'c1' }),
+    getAccountIdFromSbi: vi.fn().mockResolvedValue({ accountId: 'a1' }),
+    createCaseWithOnlineSubmission: vi.fn().mockResolvedValue({ caseId: null, error: retryErr }),
+    getOnlineSubmissionId: vi.fn().mockResolvedValue({ rpaOnlinesubmissionid: 'ol-1', error: null })
+  }))
+
+  vi.doMock('../../../src/messaging/outbound/received-event/publish-received-event.js', () => ({ publishReceivedEvent: vi.fn() }))
+
+  const { createCaseWithOnlineSubmissionInCrm } = await import('../../../src/services/create-case-with-online-submission-in-crm.js')
+
+  await expect(createCaseWithOnlineSubmissionInCrm({
+    authToken: 't', crn: '123', sbi: '456', caseData: {}, onlineSubmissionActivity: {}, correlationId: 'cid'
+  })).rejects.toMatchObject({ message: 'CRM transient', retryable: true })
+
+  // logger should have been called with the original case error
+  expect(mockLogger.error).toHaveBeenCalledWith({ correlationId: 'cid', error: retryErr }, 'Error creating case with online submission activity')
+})
+
+test('re-throws retryable error from fetchRpaOnlineSubmissionIdOrThrow preserving retryable flag', async () => {
+  vi.resetModules()
+  const mockLogger = { error: vi.fn() }
+  vi.doMock('../../../src/logging/logger.js', () => ({ createLogger: () => mockLogger }))
+
+  const thrownErr = new Error('RPA transient')
+  thrownErr.retryMetadata = { category: 'retryable', status: 502 }
+
+  vi.doMock('../../../src/repos/crm.js', () => ({
+    getContactIdFromCrn: vi.fn().mockResolvedValue({ contactId: 'c1' }),
+    getAccountIdFromSbi: vi.fn().mockResolvedValue({ accountId: 'a1' }),
+    createCaseWithOnlineSubmission: vi.fn().mockResolvedValue({ caseId: 'case-1', error: null }),
+    getOnlineSubmissionId: vi.fn().mockResolvedValue({ rpaOnlinesubmissionid: 'ol-1', error: null })
+  }))
+
+  // mock the helper that fetches RPA id to throw the retryable error
+  vi.doMock('../../../src/services/crm-helpers.js', () => ({
+    assertRequiredParams: vi.fn(),
+    ensureContactAndAccount: vi.fn().mockResolvedValue({ contactId: 'c1', accountId: 'a1' }),
+    fetchRpaOnlineSubmissionIdOrThrow: vi.fn().mockRejectedValue(thrownErr)
+  }))
+
+  vi.doMock('../../../src/messaging/outbound/received-event/publish-received-event.js', () => ({ publishReceivedEvent: vi.fn() }))
+
+  const { createCaseWithOnlineSubmissionInCrm } = await import('../../../src/services/create-case-with-online-submission-in-crm.js')
+
+  await expect(createCaseWithOnlineSubmissionInCrm({
+    authToken: 't', crn: '123', sbi: '456', caseData: {}, onlineSubmissionActivity: {}, correlationId: 'cid'
+  })).rejects.toMatchObject({ message: 'RPA transient', retryable: true })
+
+  expect(mockLogger.error).toHaveBeenCalledWith({ caseId: 'case-1', error: thrownErr }, 'Unable to retrieve online submission id')
+})

@@ -40,7 +40,7 @@ const getContactIdFromCrn = async (authToken, crn) => {
   } catch (err) {
     return {
       contactId: null,
-      error: err.message
+      error: err
     }
   }
 }
@@ -66,7 +66,7 @@ const getAccountIdFromSbi = async (authToken, sbi) => {
   } catch (err) {
     return {
       accountId: null,
-      error: err.message
+      error: err
     }
   }
 }
@@ -131,7 +131,7 @@ const createCaseWithOnlineSubmission = async (request) => {
   } catch (err) {
     return {
       caseId: null,
-      error: err.message
+      error: err
     }
   }
 }
@@ -158,7 +158,7 @@ const getOnlineSubmissionId = async (authToken, caseId) => {
   } catch (err) {
     return {
       rpaOnlinesubmissionid: null,
-      error: err.message
+      error: err
     }
   }
 }
@@ -203,7 +203,7 @@ const createMetadataForOnlineSubmission = async (request) => {
   } catch (err) {
     return {
       metadataId: null,
-      error: err.message
+      error: err
     }
   }
 }
@@ -255,7 +255,7 @@ const createMetadataForExistingCase = async (request) => {
   } catch (err) {
     return {
       metadataId: null,
-      error: err.message
+      error: err
     }
   }
 }

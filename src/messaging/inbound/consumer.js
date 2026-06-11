@@ -25,7 +25,7 @@ const startCRMListener = (sqsClient) => {
     waitTimeSeconds: config.get('messaging.waitTimeSeconds'),
     pollingWaitTime: config.get('messaging.pollingWaitTime'),
     sqs: sqsClient,
-    async handleMessage (message) {
+    async handleMessage(message) {
       let payload
       try {
         payload = JSON.parse(message.Body)
@@ -65,8 +65,12 @@ const startCRMListener = (sqsClient) => {
             outcome: 'failure',
             reason: err.message
           },
+          // Include structured CRM failure detail when available so downstream
+          // logging/observability can make better decisions (status, category).
           error: {
-            message: err.message
+            message: err.message,
+            status: err.retryMetadata?.status ?? null,
+            category: err.retryMetadata?.category ?? null
           },
           retry: err.retryMetadata ?? null
         }, 'Failed to create case via CRM API')
