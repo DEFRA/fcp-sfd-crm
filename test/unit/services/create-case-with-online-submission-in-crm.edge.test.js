@@ -14,6 +14,10 @@ vi.mock('../../../src/repos/crm.js', () => ({
   createMetadataForOnlineSubmission: vi.fn()
 }))
 
+vi.mock('../../../src/messaging/outbound/received-event/publish-received-event.js', () => ({
+  publishReceivedEvent: vi.fn()
+}))
+
 const { createCaseWithOnlineSubmissionInCrm } = await import('../../../src/services/create-case-with-online-submission-in-crm.js')
 const { getContactIdFromCrn, getAccountIdFromSbi, createCaseWithOnlineSubmission, getOnlineSubmissionId } = await import('../../../src/repos/crm.js')
 

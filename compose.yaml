@@ -45,6 +45,7 @@ services:
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-test}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-test}
       CRM_EVENTS_TOPIC_ARN: ${CRM_EVENTS_TOPIC_ARN}
+      CRM_EVENTS_PUBLISH_DLQ_URL: ${CRM_EVENTS_PUBLISH_DLQ_URL:-http://floci:4566/000000000000/fcp_sfd_crm_requests-deadletter}
     networks:
       - fcp-sfd
 

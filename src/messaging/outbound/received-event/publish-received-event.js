@@ -1,11 +1,11 @@
 import { createLogger } from '../../../logging/logger.js'
 import { config } from '../../../config/index.js'
 import { snsClient } from '../../sns/client.js'
-import { publish } from '../../sns/publish.js'
 import { eventToTypeMap } from '../../../constants/events.js'
 import { buildReceivedEvent } from './build-received-event.js'
 import { receivedEventSchema, validationOptions } from '../../../api/schemas/index.js'
 import { logOutboundValidationFailure } from '../../../utils/validation-logger.js'
+import { publishWithDurability } from '../publish-retry.js'
 
 const snsTopic = config.get('messaging.crmEvents.topicArn')
 
@@ -42,12 +42,8 @@ export const publishReceivedEvent = async (message) => {
     throw new Error('Invalid outbound SNS event payload: ' + error.details.map(d => d.message).join('; '))
   }
 
-  try {
-    await publish(snsClient, snsTopic, receivedRequest)
-  } catch (err) {
-    logger.error(
-      { err },
-      `Error publishing received CRM request event | caseId=${message.data?.caseId} correlationId=${message.data?.correlationId ?? message.id} topicArn=${snsTopic}`
-    )
-  }
+  await publishWithDurability(snsClient, snsTopic, receivedRequest, {
+    caseId: message.data?.caseId,
+    correlationId: message.data?.correlationId ?? message.id
+  })
 }
