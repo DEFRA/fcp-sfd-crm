@@ -132,7 +132,7 @@ const onCompleteHook = (request, response, error, retryStateByRequest) => {
     attempts,
     category: state.category,
     terminalReason: state.terminalReason,
-    status: httpStatusMatch ? parseInt(httpStatusMatch[1], 10) : null
+    status: httpStatusMatch ? Number.parseInt(httpStatusMatch[1], 10) : null
   }
 
   if (error) {

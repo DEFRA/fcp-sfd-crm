@@ -45,6 +45,50 @@ const sendToDlq = async (sqsClient, dlqUrl, message, logContext) => {
 
 let crmRequestConsumer
 
+const processValidatedMessage = async (sqsClient, dlqUrl, payload, message) => {
+  try {
+    await createCase(payload)
+    return message
+  } catch (err) {
+    if (err.retryable) {
+      logger.info({
+        event: {
+          type: 'crm_case_creation_retryable',
+          action: 'leave_on_queue',
+          category: 'messaging',
+          outcome: 'unknown',
+          reason: err.message
+        },
+        retry: err.retryMetadata ?? null
+      }, 'Retryable error, leaving message on queue')
+      return undefined
+    }
+
+    const fileId = payload?.data?.file?.fileId ?? null
+    await sendToDlq(sqsClient, dlqUrl, message, {
+      errorClassification: err.retryMetadata?.category ?? 'non-retryable',
+      fileId,
+      status: err.retryMetadata?.status ?? null
+    })
+    logger.error({
+      event: {
+        type: 'crm_case_creation_failed',
+        action: 'discard_message',
+        category: 'messaging',
+        outcome: 'failure',
+        reason: err.message
+      },
+      error: {
+        message: err.message,
+        status: err.retryMetadata?.status ?? null,
+        category: err.retryMetadata?.category ?? null
+      },
+      retry: err.retryMetadata ?? null
+    }, 'Failed to create case via CRM API')
+    return message
+  }
+}
+
 const startCRMListener = (sqsClient) => {
   const queueUrl = config.get('messaging.crmRequest.queueUrl')
   const dlqUrl = config.get('messaging.crmRequest.deadLetterUrl')
@@ -85,47 +129,7 @@ const startCRMListener = (sqsClient) => {
         return message
       }
 
-      try {
-        await createCase(payload)
-        return message
-      } catch (err) {
-        if (err.retryable) {
-          logger.info({
-            event: {
-              type: 'crm_case_creation_retryable',
-              action: 'leave_on_queue',
-              category: 'messaging',
-              outcome: 'unknown',
-              reason: err.message
-            },
-            retry: err.retryMetadata ?? null
-          }, 'Retryable error, leaving message on queue')
-          return undefined
-        }
-
-        const fileId = payload?.data?.file?.fileId ?? null
-        await sendToDlq(sqsClient, dlqUrl, message, {
-          errorClassification: err.retryMetadata?.category ?? 'non-retryable',
-          fileId,
-          status: err.retryMetadata?.status ?? null
-        })
-        logger.error({
-          event: {
-            type: 'crm_case_creation_failed',
-            action: 'discard_message',
-            category: 'messaging',
-            outcome: 'failure',
-            reason: err.message
-          },
-          error: {
-            message: err.message,
-            status: err.retryMetadata?.status ?? null,
-            category: err.retryMetadata?.category ?? null
-          },
-          retry: err.retryMetadata ?? null
-        }, 'Failed to create case via CRM API')
-        return message
-      }
+      return processValidatedMessage(sqsClient, dlqUrl, payload, message)
     }
   })
 
