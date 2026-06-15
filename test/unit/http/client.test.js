@@ -199,6 +199,7 @@ describe('httpClient — network errors (retryable)', () => {
 
 describe('httpClient — unknown errors', () => {
   test('handles thrown string errors and keeps metadata attach safe', async () => {
+    // eslint-disable-next-line no-throw-literal
     const fetchHandler = async () => { throw 'string failure' }
     await expect(httpClient(url, { fetchHandler })).rejects.toMatchObject({
       name: 'RetryLimitError',
@@ -212,7 +213,8 @@ describe('httpClient — unknown errors', () => {
   })
 
   test('handles thrown object errors and stringifies message', async () => {
-    const fetchHandler = async () => { throw { code: 'E_CUSTOM', detail: 'x' } }
+    const customError = Object.assign(new Error('E_CUSTOM'), { code: 'E_CUSTOM', detail: 'x' })
+    const fetchHandler = async () => { throw customError }
     let thrown
     try {
       await httpClient(url, { fetchHandler })

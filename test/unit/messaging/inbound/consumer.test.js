@@ -20,11 +20,11 @@ const mockConsumer = {
   start: vi.fn(),
   stop: vi.fn(),
   _listeners: {},
-  on(event, fn) {
+  on (event, fn) {
     if (!this._listeners[event]) this._listeners[event] = []
     this._listeners[event].push(fn)
   },
-  emit(event, ...args) {
+  emit (event, ...args) {
     if (this._listeners[event]) {
       this._listeners[event].forEach(fn => fn(...args))
     }
@@ -100,7 +100,7 @@ describe('CRM request sqs consumer', () => {
       mockConsumer._listeners = {}
     })
 
-    async function setupAndImportConsumer() {
+    async function setupAndImportConsumer () {
       mockConsumer._listeners = {}
       const logger = { info: vi.fn(), error: vi.fn() }
       mockLoggerRef = logger
@@ -317,9 +317,9 @@ describe('CRM request sqs consumer', () => {
       const found = calls.some(call => call[1] === 'Retryable error, leaving message on queue' && call[0] && call[0].retry === null)
       expect(createCase).toHaveBeenCalled()
       // debug output
-      // eslint-disable-next-line no-console
+
       console.debug('logger.info.calls:', JSON.stringify(logger.info.mock.calls, null, 2))
-      // eslint-disable-next-line no-console
+
       console.debug('logger.error.calls:', JSON.stringify(logger.error.mock.calls, null, 2))
       expect(found).toBeTruthy()
       expect(result).toBeUndefined()
@@ -351,9 +351,9 @@ describe('CRM request sqs consumer', () => {
       const found = calls.some(call => call[1] === 'Retryable error, leaving message on queue' && call[0] && typeof call[0].retry === 'object')
       expect(createCase).toHaveBeenCalled()
       // debug output
-      // eslint-disable-next-line no-console
+
       console.debug('logger.info.calls:', JSON.stringify(logger.info.mock.calls, null, 2))
-      // eslint-disable-next-line no-console
+
       console.debug('logger.error.calls:', JSON.stringify(logger.error.mock.calls, null, 2))
       expect(found).toBeTruthy()
       expect(result).toBeUndefined()
@@ -383,9 +383,9 @@ describe('CRM request sqs consumer', () => {
       expect(logger.error).toHaveBeenCalled()
       expect(createCase).toHaveBeenCalled()
       // debug output
-      // eslint-disable-next-line no-console
+
       console.debug('logger.info.calls:', JSON.stringify(logger.info.mock.calls, null, 2))
-      // eslint-disable-next-line no-console
+
       console.debug('logger.error.calls:', JSON.stringify(logger.error.mock.calls, null, 2))
       expect(logger.error).toHaveBeenCalledWith(expect.objectContaining({ error: expect.objectContaining({ message: 'Generic failure', status: null, category: null }), retry: null }), 'Failed to create case via CRM API')
       expect(result).toEqual(message)
@@ -416,9 +416,9 @@ describe('CRM request sqs consumer', () => {
       expect(logger.error).toHaveBeenCalled()
       expect(createCase).toHaveBeenCalled()
       // debug output
-      // eslint-disable-next-line no-console
+
       console.debug('logger.info.calls:', JSON.stringify(logger.info.mock.calls, null, 2))
-      // eslint-disable-next-line no-console
+
       console.debug('logger.error.calls:', JSON.stringify(logger.error.mock.calls, null, 2))
       expect(logger.error).toHaveBeenCalledWith(expect.objectContaining({ error: expect.objectContaining({ category: 'unknown', status: 520 }), retry: expect.objectContaining({ category: 'unknown', status: 520 }) }), 'Failed to create case via CRM API')
       expect(result).toEqual(message)
@@ -437,8 +437,6 @@ describe('CRM request sqs consumer', () => {
       expect(logger.error).toHaveBeenCalled()
       expect(resultNull).toEqual({ Body: null })
     })
-
-
 
     test('setLogger injection replaces internal logger used by events', async () => {
       const consumerModule = await import('../../../../src/messaging/inbound/consumer.js')
