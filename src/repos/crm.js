@@ -13,6 +13,8 @@ const baseHeaders = {
   Prefer: 'return=representation'
 }
 
+const noop = () => { }
+
 const buildQuery = (params) =>
   Object.entries(params)
     .map(([k, v]) => {
@@ -47,12 +49,12 @@ const getContactIdFromCrn = async (authToken, crn) => {
         const snsTopic = config.get('messaging.crmEvents.topicArn')
         setImmediate(() => {
           publish(snsClient, snsTopic, event).catch(err => {
-            import('../logging/logger.js').then(m => m.createLogger().error({ err, contactId, crn }, 'Error publishing person.read event')).catch(() => { })
+            import('../logging/logger.js').then(m => m.createLogger().error({ err, contactId, crn }, 'Error publishing person.read event')).catch(noop)
           })
         })
       } catch (err) {
         // swallow publish build errors but log asynchronously
-        import('../logging/logger.js').then(m => m.createLogger().error({ err, contactId, crn }, 'Failed to build or publish person.read event')).catch(() => { })
+        import('../logging/logger.js').then(m => m.createLogger().error({ err, contactId, crn }, 'Failed to build or publish person.read event')).catch(noop)
       }
     } else {
       try {
@@ -60,11 +62,11 @@ const getContactIdFromCrn = async (authToken, crn) => {
         const snsTopic = config.get('messaging.crmEvents.topicArn')
         setImmediate(() => {
           publish(snsClient, snsTopic, failEvent).catch(err => {
-            import('../logging/logger.js').then(m => m.createLogger().error({ err, crn }, 'Error publishing person.read failure event')).catch(() => { })
+            import('../logging/logger.js').then(m => m.createLogger().error({ err, crn }, 'Error publishing person.read failure event')).catch(noop)
           })
         })
       } catch (err) {
-        import('../logging/logger.js').then(m => m.createLogger().error({ err, crn }, 'Failed to build or publish person.read failure event')).catch(() => { })
+        import('../logging/logger.js').then(m => m.createLogger().error({ err, crn }, 'Failed to build or publish person.read failure event')).catch(noop)
       }
     }
 
@@ -102,10 +104,10 @@ const getAccountIdFromSbi = async (authToken, sbi) => {
         const event = buildReceivedEvent({ data: { accountId, accounts: { sbi } } }, 'uk.gov.fcp.sfd.business.read')
         const snsTopic = config.get('messaging.crmEvents.topicArn')
         Promise.resolve(publish(snsClient, snsTopic, event)).catch(err => {
-          import('../logging/logger.js').then(m => m.createLogger().error({ err, accountId, sbi }, 'Error publishing business.read event')).catch(() => { })
+          import('../logging/logger.js').then(m => m.createLogger().error({ err, accountId, sbi }, 'Error publishing business.read event')).catch(noop)
         })
       } catch (err) {
-        import('../logging/logger.js').then(m => m.createLogger().error({ err, accountId, sbi }, 'Failed to build or publish business.read event')).catch(() => { })
+        import('../logging/logger.js').then(m => m.createLogger().error({ err, accountId, sbi }, 'Failed to build or publish business.read event')).catch(noop)
       }
     }
 
@@ -325,5 +327,10 @@ export {
   getOnlineSubmissionId,
   createMetadataForOnlineSubmission
   ,
-  createMetadataForExistingCase
+  createMetadataForExistingCase,
+  // exported for testing
+  buildQuery,
+  buildActivityMetadataItem,
+  buildOnlineSubmissionEntry,
+  buildCreateCasePayload
 }
