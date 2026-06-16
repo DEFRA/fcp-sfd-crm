@@ -78,9 +78,23 @@ const getAccountIdFromSbi = async (authToken, sbi) => {
 
     const responseJson = await response.json()
     // Future: handle no results - get status code 200 whether it finds it or not
-    return {
-      accountId: responseJson.value[0]?.accountid
+    const accountId = responseJson.value[0]?.accountid
+
+    // Fire-and-forget: emit a business/read event so downstream systems know
+    // a business/account was resolved for this SBI. Include SBI under accounts.sbi.
+    if (accountId) {
+      try {
+        const event = buildReceivedEvent({ data: { accountId, accounts: { sbi } } }, 'uk.gov.fcp.sfd.business.read')
+        const snsTopic = config.get('messaging.crmEvents.topicArn')
+        Promise.resolve(publish(snsClient, snsTopic, event)).catch(err => {
+          import('../logging/logger.js').then(m => m.createLogger().error({ err, accountId, sbi }, 'Error publishing business.read event')).catch(() => { })
+        })
+      } catch (err) {
+        import('../logging/logger.js').then(m => m.createLogger().error({ err, accountId, sbi }, 'Failed to build or publish business.read event')).catch(() => { })
+      }
     }
+
+    return { accountId }
   } catch (err) {
     return {
       accountId: null,
