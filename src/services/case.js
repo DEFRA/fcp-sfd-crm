@@ -16,7 +16,7 @@ const ONE_HOUR_MS = 60 * 60 * 1000
  * @param {object} cloudEventPayload - CloudEvents format payload with data property
  * @returns {object} Transformed payload
  */
-export function transformPayload (cloudEventPayload) {
+export function transformPayload(cloudEventPayload) {
   // Extract data from CloudEvents format
   const { data } = cloudEventPayload
 
@@ -66,7 +66,7 @@ export function transformPayload (cloudEventPayload) {
  *
  * @param {object} payload - parsed CloudEvents message payload
  */
-export async function createCase (payload) {
+export async function createCase(payload) {
   const { correlationId, file } = payload.data
   const fileId = file?.fileId
 
@@ -87,7 +87,7 @@ export async function createCase (payload) {
   return addMetadataToExistingCase({ authToken, caseId: prep.caseId, correlationId, file, fileId, transformedPayload })
 }
 
-async function prepareCase ({ correlationId, fileId }) {
+async function prepareCase({ correlationId, fileId }) {
   const { isNew, isDuplicateFile, caseId, isCreator } = await upsertCase(correlationId, fileId)
 
   if (isDuplicateFile) {
@@ -108,7 +108,7 @@ async function prepareCase ({ correlationId, fileId }) {
   return { action: 'addMetadata', caseId }
 }
 
-async function createNewCase ({ authToken, transformedPayload, correlationId, fileId }) {
+async function createNewCase({ authToken, transformedPayload, correlationId, fileId }) {
   const response = await createCaseWithOnlineSubmissionInCrm({ authToken, ...transformedPayload })
 
   await updateCaseId(correlationId, response.caseId)
@@ -118,7 +118,7 @@ async function createNewCase ({ authToken, transformedPayload, correlationId, fi
   return response
 }
 
-async function addMetadataToExistingCase ({ authToken, caseId, correlationId, file, fileId, transformedPayload }) {
+async function addMetadataToExistingCase({ authToken, caseId, correlationId, file, fileId, transformedPayload }) {
   const rpaOnlinesubmissionid = await fetchRpaOnlineSubmissionIdOrThrow(authToken, caseId, { correlationId })
 
   const metadata = {
