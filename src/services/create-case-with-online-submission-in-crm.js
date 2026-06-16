@@ -86,6 +86,22 @@ export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi,
     logger.error({ err, caseId, correlationId }, 'Error publishing received CRM request event')
   })
 
+  // Also emit a document.created event so downstream systems know a document/case
+  // was created; include the original correlationId from the inbound message.
+  Promise.resolve(publishReceivedEvent(
+    {
+      type: crmEvents.DOCUMENT_CREATED,
+      data: {
+        correlationId,
+        caseId,
+        crn: Number(crn),
+        sbi: Number(sbi)
+      }
+    }
+  )).catch(err => {
+    logger.error({ err, caseId, correlationId }, 'Error publishing document.created event')
+  })
+
   return {
     contactId,
     accountId,

@@ -9,7 +9,7 @@ export const receivedEventSchema = Joi.object({
   id: Joi.string().guid({ version: ['uuidv4'] }).required(),
   source: Joi.string().required(),
   specversion: Joi.string().valid('1.0').required(),
-  type: Joi.string().valid('uk.gov.fcp.sfd.crm.case.created', 'uk.gov.fcp.sfd.document.uploaded').required(),
+  type: Joi.string().valid('uk.gov.fcp.sfd.crm.case.created', 'uk.gov.fcp.sfd.document.uploaded', 'uk.gov.fcp.sfd.document.created').required(),
   datacontenttype: Joi.string().required(),
   time: Joi.string().isoDate().required(),
   data: Joi.object({
@@ -18,7 +18,7 @@ export const receivedEventSchema = Joi.object({
     caseId: Joi.string().guid().required(),
     crn: Joi.number().integer().min(CRN_MIN).max(CRN_MAX).required(),
     sbi: Joi.number().integer().min(SBI_MIN).max(SBI_MAX).required(),
-    caseType: Joi.string().valid('case-created', 'document-uploaded').optional(),
+    caseType: Joi.string().valid('case-created', 'document-uploaded', 'document-created').optional(),
     onlineSubmissionActivities: Joi.array().items(Joi.object({
       id: Joi.string().guid({ version: ['uuidv4'] }).required(),
       fileId: Joi.string().guid({ version: ['uuidv4'] }).required(),
