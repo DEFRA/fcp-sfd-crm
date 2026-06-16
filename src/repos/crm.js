@@ -274,45 +274,12 @@ const createMetadataForOnlineSubmission = async (request) => {
 const createMetadataForExistingCase = async (request) => {
   try {
     const { authToken, caseId, metadata } = request
-    const { name, blobFileId, documentTypeId, contactId, accountId, mimeType } = metadata
 
-    const payload = {
-      rpa_name: name,
-      rpa_blobfileid: blobFileId
-    }
-
-    if (mimeType) {
-      payload.rpa_filemimetype = mimeType
-    }
-
-    if (documentTypeId) {
-      payload['rpa_DocumentTypeMetaId@odata.bind'] = `/rpa_documenttypeses(${documentTypeId})`
-    } else {
-      payload['rpa_DocumentTypeMetaId@odata.bind'] = `/rpa_documenttypeses(${DEFAULT_DOCUMENT_TYPE_ID})`
-    }
-
-    if (contactId) {
-      payload['rpa_Contact@odata.bind'] = `/contacts(${contactId})`
-    }
-    if (accountId) {
-      payload['rpa_Organisation@odata.bind'] = `/accounts(${accountId})`
-    }
-
-    const endpoint = `${baseUrl}/incidents(${caseId})/incident_rpa_activitymetadata`
-
-    const response = await httpClient(endpoint, {
-      method: 'POST',
-      headers: {
-        Authorization: authToken,
-        ...baseHeaders
-      },
-      body: JSON.stringify(payload)
-    })
-
-    const data = await response.json()
+    const payload = buildExistingCaseMetadataPayload(metadata)
+    const result = await postMetadataForCase(authToken, caseId, payload)
 
     return {
-      metadataId: data?.rpa_activitymetadataid || null,
+      metadataId: result?.rpa_activitymetadataid || null,
       error: null
     }
   } catch (err) {
@@ -321,6 +288,43 @@ const createMetadataForExistingCase = async (request) => {
       error: err
     }
   }
+}
+
+const buildExistingCaseMetadataPayload = (metadata) => {
+  const { name, blobFileId, documentTypeId, contactId, accountId, mimeType } = metadata
+
+  const payload = {
+    rpa_name: name,
+    rpa_blobfileid: blobFileId
+  }
+
+  if (mimeType) payload.rpa_filemimetype = mimeType
+
+  if (documentTypeId) {
+    payload['rpa_DocumentTypeMetaId@odata.bind'] = `/rpa_documenttypeses(${documentTypeId})`
+  } else {
+    payload['rpa_DocumentTypeMetaId@odata.bind'] = `/rpa_documenttypeses(${DEFAULT_DOCUMENT_TYPE_ID})`
+  }
+
+  if (contactId) payload['rpa_Contact@odata.bind'] = `/contacts(${contactId})`
+  if (accountId) payload['rpa_Organisation@odata.bind'] = `/accounts(${accountId})`
+
+  return payload
+}
+
+const postMetadataForCase = async (authToken, caseId, payload) => {
+  const endpoint = `${baseUrl}/incidents(${caseId})/incident_rpa_activitymetadata`
+
+  const response = await httpClient(endpoint, {
+    method: 'POST',
+    headers: {
+      Authorization: authToken,
+      ...baseHeaders
+    },
+    body: JSON.stringify(payload)
+  })
+
+  return response.json()
 }
 
 // Future: get document type
