@@ -52,6 +52,16 @@ const getContactIdFromCrn = async (authToken, crn) => {
         // swallow publish build errors but log asynchronously
         import('../logging/logger.js').then(m => m.createLogger().error({ err, contactId, crn }, 'Failed to build or publish person.read event')).catch(() => { })
       }
+    } else {
+      try {
+        const failEvent = buildReceivedEvent({ data: { contactId: null, accounts: { crn }, audit: { status: 'failure', details: 'CRN not found' } } }, 'uk.gov.fcp.sfd.person.read')
+        const snsTopic = config.get('messaging.crmEvents.topicArn')
+        Promise.resolve(publish(snsClient, snsTopic, failEvent)).catch(err => {
+          import('../logging/logger.js').then(m => m.createLogger().error({ err, crn }, 'Error publishing person.read failure event')).catch(() => {})
+        })
+      } catch (err) {
+        import('../logging/logger.js').then(m => m.createLogger().error({ err, crn }, 'Failed to build or publish person.read failure event')).catch(() => {})
+      }
     }
 
     return { contactId }
