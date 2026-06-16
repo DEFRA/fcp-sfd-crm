@@ -1,6 +1,10 @@
 import { randomBytes } from 'node:crypto'
 import { config } from '../config/index.js'
 import { httpClient } from '../http/client.js'
+import { createLogger } from '../logging/logger.js'
+import { snsClient } from '../messaging/sns/client.js'
+import { publish } from '../messaging/sns/publish.js'
+import { buildReceivedEvent } from '../messaging/outbound/received-event/build-received-event.js'
 
 const baseUrl = config.get('crm.baseUrl')
 const DEFAULT_DOCUMENT_TYPE_ID = '4e88916b-aae2-ee11-904c-000d3adc1ec9'
@@ -34,9 +38,24 @@ const getContactIdFromCrn = async (authToken, crn) => {
     })
     const responseJson = await response.json()
     // Future: handle no results - get status code 200 whether it finds it or not
-    return {
-      contactId: responseJson.value[0]?.contactid
+    const contactId = responseJson.value[0]?.contactid
+
+    // Fire-and-forget: emit a person/read event so downstream systems know
+    // a person was resolved for this CRN. Include CRN under accounts.crn.
+    if (contactId) {
+      try {
+        const event = buildReceivedEvent({ data: { contactId, accounts: { crn } } }, 'uk.gov.fcp.sfd.person.read')
+        const snsTopic = config.get('messaging.crmEvents.topicArn')
+        Promise.resolve(publish(snsClient, snsTopic, event)).catch(err => {
+          createLogger().error({ err, contactId, crn }, 'Error publishing person.read event')
+        })
+      } catch (err) {
+        // swallow publish build errors but log
+        createLogger().error({ err, contactId, crn }, 'Failed to build or publish person.read event')
+      }
     }
+
+    return { contactId }
   } catch (err) {
     return {
       contactId: null,
