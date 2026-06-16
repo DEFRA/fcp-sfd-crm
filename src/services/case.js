@@ -4,6 +4,8 @@ import { createCaseWithOnlineSubmissionInCrm } from './create-case-with-online-s
 import { upsertCase, updateCaseId, markFileProcessed } from '../repos/cases.js'
 import { createMetadataForOnlineSubmission } from '../repos/crm.js'
 import { fetchRpaOnlineSubmissionIdOrThrow } from './crm-helpers.js'
+import { publishReceivedEvent } from '../messaging/outbound/received-event/publish-received-event.js'
+import { crmEvents } from '../constants/events.js'
 
 const logger = createLogger()
 
@@ -82,7 +84,7 @@ export async function createCase (payload) {
     return createNewCase({ authToken, transformedPayload, correlationId, fileId })
   }
 
-  return addMetadataToExistingCase({ authToken, caseId: prep.caseId, correlationId, file, fileId })
+  return addMetadataToExistingCase({ authToken, caseId: prep.caseId, correlationId, file, fileId, transformedPayload })
 }
 
 async function prepareCase ({ correlationId, fileId }) {
@@ -116,7 +118,7 @@ async function createNewCase ({ authToken, transformedPayload, correlationId, fi
   return response
 }
 
-async function addMetadataToExistingCase ({ authToken, caseId, correlationId, file, fileId }) {
+async function addMetadataToExistingCase ({ authToken, caseId, correlationId, file, fileId, transformedPayload }) {
   const rpaOnlinesubmissionid = await fetchRpaOnlineSubmissionIdOrThrow(authToken, caseId, { correlationId })
 
   const metadata = {
@@ -142,5 +144,21 @@ async function addMetadataToExistingCase ({ authToken, caseId, correlationId, fi
   await markFileProcessed(correlationId, fileId)
 
   logger.info({ correlationId, caseId, fileId, metadataId }, 'Metadata added to existing case')
+  // Emit document.created event with metadataId so downstream systems can act on the
+  // newly-created metadata record. Include correlationId and caseId and the original
+  // CRN/SBI if available from the transformed payload.
+  const eventData = {
+    correlationId,
+    caseId,
+    metadataId,
+    crn: transformedPayload?.crn ? Number(transformedPayload.crn) : undefined,
+    sbi: transformedPayload?.sbi ? Number(transformedPayload.sbi) : undefined
+  }
+
+  Promise.resolve(publishReceivedEvent({ type: crmEvents.DOCUMENT_CREATED, data: eventData }))
+    .catch(err => {
+      logger.error({ err, caseId, correlationId, metadataId }, 'Error publishing document.created event after metadata creation')
+    })
+
   return { caseId }
 }
