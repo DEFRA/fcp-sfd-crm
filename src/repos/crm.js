@@ -8,6 +8,8 @@ import { buildReceivedEvent } from '../messaging/outbound/received-event/build-r
 const baseUrl = config.get('crm.baseUrl')
 const DEFAULT_DOCUMENT_TYPE_ID = '4e88916b-aae2-ee11-904c-000d3adc1ec9'
 
+const CRM_EVENTS_TOPIC_KEY = 'messaging.crmEvents.topicArn'
+
 const baseHeaders = {
   'Content-Type': 'application/json',
   Prefer: 'return=representation'
@@ -46,7 +48,7 @@ const getContactIdFromCrn = async (authToken, crn) => {
     if (contactId) {
       try {
         const event = buildReceivedEvent({ data: { contactId, accounts: { crn } } }, 'uk.gov.fcp.sfd.person.read')
-        const snsTopic = config.get('messaging.crmEvents.topicArn')
+        const snsTopic = config.get(CRM_EVENTS_TOPIC_KEY)
         setImmediate(() => {
           publish(snsClient, snsTopic, event).catch(err => {
             import('../logging/logger.js').then(m => m.createLogger().error({ err, contactId, crn }, 'Error publishing person.read event')).catch(noop)
@@ -59,7 +61,7 @@ const getContactIdFromCrn = async (authToken, crn) => {
     } else {
       try {
         const failEvent = buildReceivedEvent({ data: { contactId: null, accounts: { crn }, audit: { status: 'failure', details: 'CRN not found' } } }, 'uk.gov.fcp.sfd.person.read')
-        const snsTopic = config.get('messaging.crmEvents.topicArn')
+        const snsTopic = config.get(CRM_EVENTS_TOPIC_KEY)
         setImmediate(() => {
           publish(snsClient, snsTopic, failEvent).catch(err => {
             import('../logging/logger.js').then(m => m.createLogger().error({ err, crn }, 'Error publishing person.read failure event')).catch(noop)
@@ -102,7 +104,7 @@ const getAccountIdFromSbi = async (authToken, sbi) => {
     if (accountId) {
       try {
         const event = buildReceivedEvent({ data: { accountId, accounts: { sbi } } }, 'uk.gov.fcp.sfd.business.read')
-        const snsTopic = config.get('messaging.crmEvents.topicArn')
+        const snsTopic = config.get(CRM_EVENTS_TOPIC_KEY)
         Promise.resolve(publish(snsClient, snsTopic, event)).catch(err => {
           import('../logging/logger.js').then(m => m.createLogger().error({ err, accountId, sbi }, 'Error publishing business.read event')).catch(noop)
         })
@@ -127,7 +129,9 @@ const buildActivityMetadataItem = ({ name, blobFileId, mimeType, documentTypeId 
     'rpa_DocumentTypeMetaId@odata.bind': `/rpa_documenttypeses(${documentTypeId || DEFAULT_DOCUMENT_TYPE_ID})`
   }
 
-  if (mimeType) item.rpa_filemimetype = mimeType
+  if (mimeType) {
+    item.rpa_filemimetype = mimeType
+  }
   return item
 }
 
