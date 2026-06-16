@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto'
 import { createLogger } from '../../logging/logger.js'
 import { config } from '../../config/index.js'
 import { publish } from '../sns/publish.js'
@@ -30,7 +31,7 @@ export const publishWithDurability = async (snsClient, topicArn, payload, contex
 
       if (attempt < maxAttempts) {
         const delay = baseDelayMs * Math.pow(backoffMultiplier, attempt - 1)
-        const jitter = delay * (jitterPercentage / 100) * Math.random()
+        const jitter = delay * (jitterPercentage / 100) * (randomInt(0, 1001) / 1000)
         await sleep(delay + jitter)
       }
     }
