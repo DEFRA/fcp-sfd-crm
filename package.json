@@ -38,7 +38,7 @@
     "@aws-sdk/credential-providers": "3.1060.0",
     "@defra/hapi-tracing": "1.30.0",
     "@elastic/ecs-pino-format": "1.5.0",
-    "@fetchkit/ffetch": "5.5.1",
+    "@fetchkit/ffetch": "5.5.4",
     "@hapi/boom": "10.0.1",
     "@hapi/hapi": "21.4.9",
     "aws-embedded-metrics": "4.2.1",
