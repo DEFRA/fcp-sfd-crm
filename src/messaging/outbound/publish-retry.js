@@ -7,6 +7,9 @@ import { sendToDlq } from '../sqs/send-to-dlq.js'
 
 const logger = createLogger()
 
+const RANDOM_INT_UPPER_BOUND = 1001
+const RANDOM_INT_DIVISOR = 1000
+
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 export const publishWithDurability = async (snsClient, topicArn, payload, context) => {
@@ -31,7 +34,7 @@ export const publishWithDurability = async (snsClient, topicArn, payload, contex
 
       if (attempt < maxAttempts) {
         const delay = baseDelayMs * Math.pow(backoffMultiplier, attempt - 1)
-        const jitter = delay * (jitterPercentage / 100) * (randomInt(0, 1001) / 1000)
+        const jitter = delay * (jitterPercentage / 100) * (randomInt(0, RANDOM_INT_UPPER_BOUND) / RANDOM_INT_DIVISOR)
         await sleep(delay + jitter)
       }
     }
