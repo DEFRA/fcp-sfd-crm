@@ -549,7 +549,7 @@ describe('CRM request sqs consumer', () => {
 
         expect(logger.info).toHaveBeenCalledWith(
           expect.objectContaining({
-            event: expect.objectContaining({ type: 'crm.dlq.message_replayed', reference: 'msg-replayed-1' })
+            event: expect.objectContaining({ type: 'crm.dlq.message_replayed', reference: 'msg-replayed-1', reason: 'recovery_attempt' })
           }),
           'Processing replayed DLQ message'
         )
