@@ -111,6 +111,18 @@ const getAccountIdFromSbi = async (authToken, sbi) => {
       } catch (err) {
         import('../logging/logger.js').then(m => m.createLogger().error({ err, accountId, sbi }, 'Failed to build or publish business.read event')).catch(noop)
       }
+    } else {
+      try {
+        const failEvent = buildReceivedEvent({ data: { accountId: null, accounts: { sbi }, audit: { status: 'failure', details: 'SBI not found' } } }, 'uk.gov.fcp.sfd.business.read')
+        const snsTopic = config.get(CRM_EVENTS_TOPIC_KEY)
+        setImmediate(() => {
+          publish(snsClient, snsTopic, failEvent).catch(err => {
+            import('../logging/logger.js').then(m => m.createLogger().error({ err, sbi }, 'Error publishing business.read failure event')).catch(noop)
+          })
+        })
+      } catch (err) {
+        import('../logging/logger.js').then(m => m.createLogger().error({ err, sbi }, 'Failed to build or publish business.read failure event')).catch(noop)
+      }
     }
 
     return { accountId }
