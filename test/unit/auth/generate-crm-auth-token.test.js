@@ -6,8 +6,10 @@ import { generateCrmAuthToken } from '../../../src/auth/generate-crm-auth-token.
 // Mock dependencies
 import { config } from '../../../src/config/index.js'
 
-const { mockAuthHttpClient } = vi.hoisted(() => ({
-  mockAuthHttpClient: vi.fn()
+const { mockAuthHttpClient, mockPublish, mockBuildReceivedEvent } = vi.hoisted(() => ({
+  mockAuthHttpClient: vi.fn(),
+  mockPublish: vi.fn().mockResolvedValue(),
+  mockBuildReceivedEvent: vi.fn((p, t) => ({ ...p, _type: t }))
 }))
 
 vi.mock('../../../src/http/client.js', () => ({
@@ -20,14 +22,28 @@ vi.mock('../../../src/config/index.js', () => ({
   }
 }))
 
+vi.mock('../../../src/messaging/sns/publish.js', () => ({
+  publish: mockPublish
+}))
+vi.mock('../../../src/messaging/sns/client.js', () => ({
+  snsClient: {}
+}))
+vi.mock('../../../src/messaging/outbound/received-event/build-received-event.js', () => ({
+  buildReceivedEvent: mockBuildReceivedEvent
+}))
+
 describe('generateCrmAuthToken', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    config.get.mockReturnValue({
-      clientId: 'fake-client',
-      clientSecret: 'fake-secret',
-      scope: 'fake-scope',
-      tokenEndpoint: 'https://login.microsoftonline.com/fake-tenant/oauth2/v2.0/token'
+    config.get.mockImplementation((key) => {
+      if (key === 'auth') return {
+        clientId: 'fake-client',
+        clientSecret: 'fake-secret',
+        scope: 'fake-scope',
+        tokenEndpoint: 'https://login.microsoftonline.com/fake-tenant/oauth2/v2.0/token'
+      }
+      if (key === 'messaging.crmEvents.topicArn') return 'arn:topic'
+      return undefined
     })
   })
 
@@ -61,10 +77,10 @@ describe('generateCrmAuthToken', () => {
       text: vi.fn().mockResolvedValue('Invalid credentials')
     }
     mockAuthHttpClient.mockResolvedValue(mockFailResponse)
-
-    await expect(generateCrmAuthToken()).rejects.toThrow(
-      'Auth failed: 401 Unauthorized - Invalid credentials'
-    )
+    mockPublish.mockRejectedValueOnce(new Error('publish fail'))
+    await expect(generateCrmAuthToken()).rejects.toThrow('Auth failed: 401 Unauthorized - Invalid credentials')
+    expect(mockBuildReceivedEvent).toHaveBeenCalled()
+    expect(mockPublish).toHaveBeenCalled()
   })
 
   test('should return object with token and expiresAt property', async () => {
@@ -100,9 +116,9 @@ describe('generateCrmAuthToken', () => {
 
   test('should throw error when token endpoint is down', async () => {
     mockAuthHttpClient.mockRejectedValue(new Error('Network error'))
-
-    await expect(generateCrmAuthToken()).rejects.toThrow(
-      'Unable to reach token endpoint: Network error'
-    )
+    mockPublish.mockRejectedValueOnce(new Error('publish fail'))
+    await expect(generateCrmAuthToken()).rejects.toThrow('Unable to reach token endpoint: Network error')
+    expect(mockBuildReceivedEvent).toHaveBeenCalled()
+    expect(mockPublish).toHaveBeenCalled()
   })
 })
