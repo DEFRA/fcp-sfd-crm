@@ -298,7 +298,9 @@ const buildExistingCaseMetadataPayload = (metadata) => {
     rpa_blobfileid: blobFileId
   }
 
-  if (mimeType) payload.rpa_filemimetype = mimeType
+  if (mimeType) {
+    payload.rpa_filemimetype = mimeType
+  }
 
   if (documentTypeId) {
     payload['rpa_DocumentTypeMetaId@odata.bind'] = `/rpa_documenttypeses(${documentTypeId})`
@@ -306,8 +308,12 @@ const buildExistingCaseMetadataPayload = (metadata) => {
     payload['rpa_DocumentTypeMetaId@odata.bind'] = `/rpa_documenttypeses(${DEFAULT_DOCUMENT_TYPE_ID})`
   }
 
-  if (contactId) payload['rpa_Contact@odata.bind'] = `/contacts(${contactId})`
-  if (accountId) payload['rpa_Organisation@odata.bind'] = `/accounts(${accountId})`
+  if (contactId) {
+    payload['rpa_Contact@odata.bind'] = `/contacts(${contactId})`
+  }
+  if (accountId) {
+    payload['rpa_Organisation@odata.bind'] = `/accounts(${accountId})`
+  }
 
   return payload
 }
