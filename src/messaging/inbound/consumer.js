@@ -109,7 +109,8 @@ const startCRMListener = (sqsClient) => {
             action: 'process_replayed_message',
             category: 'messaging',
             outcome: 'unknown',
-            reference: message.MessageId
+            reference: message.MessageId,
+            reason: 'recovery_attempt'
           }
         }, 'Processing replayed DLQ message')
       }

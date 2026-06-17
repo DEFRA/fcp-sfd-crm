@@ -418,4 +418,18 @@ describe('retryMetadata.status field', () => {
       status: null
     })
   })
+
+  test('status is numeric HTTP code for HTTP errors in retry recovered log', async () => {
+    const fetchHandler = async () => new Response('error', { status: 503 })
+    await httpClient(url, { fetchHandler })
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      expect.objectContaining({
+        retry: expect.objectContaining({
+          terminalReason: 'http_503',
+          status: 503
+        })
+      }),
+      expect.any(String)
+    )
+  })
 })
