@@ -1,9 +1,25 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
 
-const mockHttpClient = vi.fn()
+const { mockHttpClient, mockPublish, mockBuildReceivedEvent } = vi.hoisted(() => ({
+  mockHttpClient: vi.fn(),
+  mockPublish: vi.fn().mockResolvedValue(),
+  mockBuildReceivedEvent: vi.fn((p, t) => ({ ...p, _type: t }))
+}))
 
 vi.mock('../../../src/http/client.js', () => ({
   httpClient: mockHttpClient
+}))
+
+vi.mock('../../../src/messaging/sns/publish.js', () => ({
+  publish: mockPublish
+}))
+
+vi.mock('../../../src/messaging/sns/client.js', () => ({
+  snsClient: {}
+}))
+
+vi.mock('../../../src/messaging/outbound/received-event/build-received-event.js', () => ({
+  buildReceivedEvent: mockBuildReceivedEvent
 }))
 
 // Mock config
@@ -94,10 +110,13 @@ describe('CRM repository', () => {
         json: vi.fn().mockResolvedValue({ value: [] })
       }
       mockHttpClient.mockResolvedValue(mockResponse)
-
       const result = await getContactIdFromCrn('Bearer token', '0000000000')
+      // wait for setImmediate-published events to be invoked
+      await new Promise(resolve => setImmediate(resolve))
 
       expect(result.contactId).toBeNull()
+      expect(mockBuildReceivedEvent).toHaveBeenCalled()
+      expect(mockPublish).toHaveBeenCalled()
     })
   })
 
@@ -163,6 +182,22 @@ describe('CRM repository', () => {
       expect(result.accountId).toBeNull()
       expect(result.error).toBeInstanceOf(Error)
       expect(result.error.message).toBe('Invalid JSON')
+    })
+
+    test('should return null and publish failure event when no account found', async () => {
+      const mockResponse = {
+        ok: true,
+        json: vi.fn().mockResolvedValue({ value: [] })
+      }
+      mockHttpClient.mockResolvedValue(mockResponse)
+
+      const result = await getAccountIdFromSbi('Bearer token', '000000000')
+      // wait for setImmediate-published events to be invoked
+      await new Promise(resolve => setImmediate(resolve))
+
+      expect(result.accountId).toBeNull()
+      expect(mockBuildReceivedEvent).toHaveBeenCalled()
+      expect(mockPublish).toHaveBeenCalled()
     })
   })
 

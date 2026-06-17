@@ -25,6 +25,16 @@ vi.mock('../../../src/repos/crm.js', () => ({
   createMetadataForOnlineSubmission: vi.fn()
 }))
 
+// Hoisted mock for publishReceivedEvent so we can assert document.created emission
+const { mockPublishReceivedEvent } = vi.hoisted(() => ({
+  mockPublishReceivedEvent: vi.fn()
+}))
+
+vi.mock('../../../src/messaging/outbound/received-event/publish-received-event.js', () => ({
+  publishReceivedEvent: mockPublishReceivedEvent
+}))
+import { crmEvents } from '../../../src/constants/events.js'
+
 const { createCase, transformPayload } = await import('../../../src/services/case.js')
 const { getCrmAuthToken } = await import('../../../src/auth/get-crm-auth-token.js')
 const { createCaseWithOnlineSubmissionInCrm } = await import('../../../src/services/create-case-with-online-submission-in-crm.js')
@@ -270,6 +280,11 @@ describe('case service', () => {
       }))
 
       expect(markFileProcessed).toHaveBeenCalledWith('corr-2', undefined)
+      // verify document.created was emitted for the created metadata
+      expect(mockPublishReceivedEvent).toHaveBeenCalled()
+      const callArg = mockPublishReceivedEvent.mock.calls[0][0]
+      expect(callArg.type).toBe(crmEvents.DOCUMENT_CREATED)
+      expect(callArg.data).toMatchObject({ metadataId: 'meta-2', correlationId: 'corr-2', caseId: 'existing-case-id' })
     })
   })
 })
