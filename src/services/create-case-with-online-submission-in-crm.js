@@ -9,8 +9,7 @@ import { publishReceivedEvent } from '../messaging/outbound/received-event/publi
 
 const { internal } = Boom
 const logger = createLogger()
-
-export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi, caseData, onlineSubmissionActivity, correlationId }) => {
+const validateParams = ({ authToken, crn, sbi, caseData, onlineSubmissionActivity, correlationId }) => {
   const requiredParams = {
     authToken,
     crn,
@@ -21,9 +20,9 @@ export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi,
   }
 
   assertRequiredParams(requiredParams)
+}
 
-  const { contactId, accountId } = await ensureContactAndAccount(authToken, crn, sbi)
-
+const callCreateCase = async ({ authToken, caseData, onlineSubmissionActivity, contactId, accountId, correlationId }) => {
   const { caseId, error: caseError } = await createCaseWithOnlineSubmission({
     authToken,
     case: {
@@ -36,9 +35,6 @@ export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi,
 
   if (caseError) {
     logger.error({ correlationId, error: caseError }, 'Error creating case with online submission activity')
-    // If the CRM error indicates the request should be retried, surface that to the
-    // consumer by throwing the original error with `retryable = true` so the
-    // inbound consumer can leave the message on the queue.
     if (caseError?.retryMetadata?.category === 'retryable') {
       caseError.retryable = true
       throw caseError
@@ -50,14 +46,61 @@ export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi,
     throw err
   }
 
-  // Retrieve rpa_onlinesubmissionid for the created case
-  let rpaOnlinesubmissionid
+  return caseId
+}
+
+const publishEvents = ({ caseId, crn, sbi, correlationId }) => {
+  const eventData = {
+    correlationId,
+    caseId,
+    crn: Number(crn),
+    sbi: Number(sbi)
+  }
+
+  Promise.resolve(publishReceivedEvent({ type: crmEvents.CASE_CREATED, data: eventData }))
+    .catch(err => {
+      logger.error({ err, caseId, correlationId }, 'Error publishing received CRM request event')
+    })
+
+  Promise.resolve(publishReceivedEvent({
+    type: crmEvents.DOCUMENT_CREATED,
+    data: {
+      correlationId,
+      caseId,
+      crn: Number(crn),
+      sbi: Number(sbi)
+    }
+  }))
+    .catch(err => {
+      logger.error({ err, caseId, correlationId }, 'Error publishing document.created event')
+    })
+}
+
+export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi, caseData, onlineSubmissionActivity, correlationId }) => {
+  validateParams({ authToken, crn, sbi, caseData, onlineSubmissionActivity, correlationId })
+
+  const { contactId, accountId } = await ensureContactAndAccount(authToken, crn, sbi)
+
+  const caseId = await callCreateCase({ authToken, caseData, onlineSubmissionActivity, contactId, accountId, correlationId })
+
+  const rpaOnlinesubmissionid = await fetchRpaOnlinesubmissionidWrapper(authToken, caseId, correlationId)
+
+  publishEvents({ caseId, crn, sbi, correlationId })
+
+  return {
+    contactId,
+    accountId,
+    caseId,
+    rpaOnlinesubmissionid
+  }
+}
+
+// Wrapper kept to preserve the original behaviour of using correlationId for logging
+const fetchRpaOnlinesubmissionidWrapper = async (authToken, caseId, correlationId) => {
   try {
-    rpaOnlinesubmissionid = await fetchRpaOnlineSubmissionIdOrThrow(authToken, caseId, { correlationId })
+    return await fetchRpaOnlineSubmissionIdOrThrow(authToken, caseId, { correlationId })
   } catch (err) {
     logger.error({ caseId, error: err }, 'Unable to retrieve online submission id')
-    // If the underlying error carries retry metadata and is retryable, rethrow
-    // it so the inbound consumer can decide to leave the message on the queue.
     if (err?.retryMetadata?.category === 'retryable') {
       err.retryable = true
       throw err
@@ -67,45 +110,5 @@ export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi,
     thrown.retryable = false
     thrown.retryMetadata = err?.retryMetadata ?? null
     throw thrown
-  }
-
-  const eventData = {
-    correlationId,
-    caseId,
-    crn: Number(crn),
-    sbi: Number(sbi)
-  }
-
-  // Fire-and-forget publishing; handle any rejection to avoid unhandled rejections
-  Promise.resolve(publishReceivedEvent(
-    {
-      type: crmEvents.CASE_CREATED,
-      data: eventData
-    }
-  )).catch(err => {
-    logger.error({ err, caseId, correlationId }, 'Error publishing received CRM request event')
-  })
-
-  // Also emit a document.created event so downstream systems know a document/case
-  // was created; include the original correlationId from the inbound message.
-  Promise.resolve(publishReceivedEvent(
-    {
-      type: crmEvents.DOCUMENT_CREATED,
-      data: {
-        correlationId,
-        caseId,
-        crn: Number(crn),
-        sbi: Number(sbi)
-      }
-    }
-  )).catch(err => {
-    logger.error({ err, caseId, correlationId }, 'Error publishing document.created event')
-  })
-
-  return {
-    contactId,
-    accountId,
-    caseId,
-    rpaOnlinesubmissionid
   }
 }
