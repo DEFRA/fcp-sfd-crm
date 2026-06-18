@@ -7,6 +7,8 @@ import { buildReceivedEvent } from '../messaging/outbound/received-event/build-r
 const CRM_EVENTS_TOPIC_KEY = 'messaging.crmEvents.topicArn'
 
 const generateCrmAuthToken = async () => {
+  const { createLogger } = await import('../logging/logger.js')
+  const logger = createLogger()
   const { tokenEndpoint, clientId, clientSecret, scope } = config.get('auth')
 
   const form = new URLSearchParams({
@@ -31,7 +33,12 @@ const generateCrmAuthToken = async () => {
       const snsTopic = config.get(CRM_EVENTS_TOPIC_KEY)
       Promise.resolve(publish(snsClient, snsTopic, event)).catch(() => { })
     } catch (e) {
-      // swallow publish/build errors
+      // Log publish/build errors for observability
+      try {
+        logger.error({ err: e, clientId }, 'Failed to build or publish security.auth event')
+      } catch (_) {
+        // ignore logging failures
+      }
     }
 
     throw new Error(`Unable to reach token endpoint: ${err.message}`)
@@ -45,7 +52,12 @@ const generateCrmAuthToken = async () => {
       const snsTopic = config.get(CRM_EVENTS_TOPIC_KEY)
       Promise.resolve(publish(snsClient, snsTopic, event)).catch(() => { })
     } catch (e) {
-      // swallow publish/build errors
+      // Log publish/build errors for observability
+      try {
+        logger.error({ err: e, clientId, httpStatus: response.status }, 'Failed to build or publish security.auth event')
+      } catch (_) {
+        // ignore logging failures
+      }
     }
 
     throw new Error(`Auth failed: ${response.status} ${response.statusText} - ${errorText}`)
