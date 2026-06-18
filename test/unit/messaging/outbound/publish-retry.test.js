@@ -1,6 +1,6 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
 
-const mockLogger = { warn: vi.fn(), error: vi.fn(), info: vi.fn() }
+const mockLogger = { error: vi.fn(), info: vi.fn() }
 
 vi.mock('../../../../src/logging/logger.js', () => ({
   createLogger: vi.fn().mockReturnValue(mockLogger)
@@ -21,14 +21,8 @@ vi.mock('../../../../src/messaging/sqs/send-to-dlq.js', () => ({
 vi.mock('../../../../src/config/index.js', () => ({
   config: {
     get: vi.fn((key) => {
-      const values = {
-        'messaging.crmEvents.publishRetry.maxAttempts': 3,
-        'messaging.crmEvents.publishRetry.baseDelayMs': 10,
-        'messaging.crmEvents.publishRetry.backoffMultiplier': 2,
-        'messaging.crmEvents.publishRetry.jitterPercentage': 0,
-        'messaging.crmEvents.publishDlqUrl': 'https://publish-dlq-url'
-      }
-      return values[key]
+      if (key === 'messaging.crmEvents.publishDlqUrl') return 'https://publish-dlq-url'
+      return undefined
     })
   }
 }))
@@ -45,46 +39,34 @@ const context = { caseId: 'case-1', correlationId: 'corr-1' }
 describe('publishWithDurability', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.useFakeTimers()
   })
 
-  test('resolves without retrying when publish succeeds on first attempt', async () => {
+  test('resolves without calling sendToDlq when publish succeeds', async () => {
     publish.mockResolvedValue()
 
-    const promise = publishWithDurability(mockSnsClient, topicArn, payload, context)
-    await vi.runAllTimersAsync()
-    await promise
+    await publishWithDurability(mockSnsClient, topicArn, payload, context)
 
     expect(publish).toHaveBeenCalledTimes(1)
     expect(sendToDlq).not.toHaveBeenCalled()
-    expect(mockLogger.warn).not.toHaveBeenCalled()
   })
 
-  test('retries and resolves when publish fails once then succeeds', async () => {
-    publish
-      .mockRejectedValueOnce(new Error('transient'))
-      .mockResolvedValue()
+  test('passes snsClient, topicArn, and payload to publish', async () => {
+    publish.mockResolvedValue()
 
-    const promise = publishWithDurability(mockSnsClient, topicArn, payload, context)
-    await vi.runAllTimersAsync()
-    await promise
+    await publishWithDurability(mockSnsClient, topicArn, payload, context)
 
-    expect(publish).toHaveBeenCalledTimes(2)
-    expect(sendToDlq).not.toHaveBeenCalled()
-    expect(mockLogger.warn).toHaveBeenCalledTimes(1)
+    expect(publish).toHaveBeenCalledWith(mockSnsClient, topicArn, payload)
   })
 
-  test('calls sendToDlq with correct envelope after all retries exhausted', async () => {
+  test('calls sendToDlq with correct envelope when publish fails', async () => {
     const publishErr = new Error('SNS down')
     publishErr.name = 'ServiceUnavailableError'
     publish.mockRejectedValue(publishErr)
     sendToDlq.mockResolvedValue()
 
-    const promise = publishWithDurability(mockSnsClient, topicArn, payload, context)
-    await vi.runAllTimersAsync()
-    await promise
+    await publishWithDurability(mockSnsClient, topicArn, payload, context)
 
-    expect(publish).toHaveBeenCalledTimes(3)
+    expect(publish).toHaveBeenCalledTimes(1)
     expect(sendToDlq).toHaveBeenCalledTimes(1)
 
     const [, , envelope] = sendToDlq.mock.calls[0]
@@ -95,19 +77,28 @@ describe('publishWithDurability', () => {
       topicArn,
       errorMessage: 'SNS down',
       errorName: 'ServiceUnavailableError',
-      totalAttempts: 3,
       source: 'fcp-sfd-crm'
     })
     expect(envelope.metadata.failedAt).toBeDefined()
+  })
+
+  test('logs success after routing failed publish to DLQ', async () => {
+    publish.mockRejectedValue(new Error('SNS down'))
+    sendToDlq.mockResolvedValue()
+
+    await publishWithDurability(mockSnsClient, topicArn, payload, context)
+
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ caseId: 'case-1', correlationId: 'corr-1' }),
+      'Failed SNS publish routed to DLQ'
+    )
   })
 
   test('logs CRITICAL and does not throw when DLQ send also fails', async () => {
     publish.mockRejectedValue(new Error('SNS down'))
     sendToDlq.mockRejectedValue(new Error('SQS also down'))
 
-    const promise = publishWithDurability(mockSnsClient, topicArn, payload, context)
-    await vi.runAllTimersAsync()
-    await expect(promise).resolves.toBeUndefined()
+    await expect(publishWithDurability(mockSnsClient, topicArn, payload, context)).resolves.toBeUndefined()
 
     expect(mockLogger.error).toHaveBeenCalledWith(
       expect.objectContaining({ caseId: 'case-1', correlationId: 'corr-1' }),
@@ -119,55 +110,6 @@ describe('publishWithDurability', () => {
     publish.mockRejectedValue(new Error('SNS down'))
     sendToDlq.mockRejectedValue(new Error('SQS down'))
 
-    const promise = publishWithDurability(mockSnsClient, topicArn, payload, context)
-    await vi.runAllTimersAsync()
-    await expect(promise).resolves.toBeUndefined()
-  })
-
-  test('logs success after routing to DLQ', async () => {
-    publish.mockRejectedValue(new Error('SNS down'))
-    sendToDlq.mockResolvedValue()
-
-    const promise = publishWithDurability(mockSnsClient, topicArn, payload, context)
-    await vi.runAllTimersAsync()
-    await promise
-
-    expect(mockLogger.info).toHaveBeenCalledWith(
-      expect.objectContaining({ caseId: 'case-1', correlationId: 'corr-1' }),
-      'Failed SNS publish routed to DLQ'
-    )
-  })
-
-  test('passes snsClient and topicArn to publish', async () => {
-    publish.mockResolvedValue()
-
-    const promise = publishWithDurability(mockSnsClient, topicArn, payload, context)
-    await vi.runAllTimersAsync()
-    await promise
-
-    expect(publish).toHaveBeenCalledWith(mockSnsClient, topicArn, payload)
-  })
-
-  test('logs warn on each failed attempt with attempt/maxAttempts info', async () => {
-    publish
-      .mockRejectedValueOnce(new Error('fail 1'))
-      .mockRejectedValueOnce(new Error('fail 2'))
-      .mockResolvedValue()
-
-    const promise = publishWithDurability(mockSnsClient, topicArn, payload, context)
-    await vi.runAllTimersAsync()
-    await promise
-
-    expect(mockLogger.warn).toHaveBeenCalledTimes(2)
-    expect(mockLogger.warn).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({ attempt: 1, maxAttempts: 3 }),
-      expect.any(String)
-    )
-    expect(mockLogger.warn).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({ attempt: 2, maxAttempts: 3 }),
-      expect.any(String)
-    )
+    await expect(publishWithDurability(mockSnsClient, topicArn, payload, context)).resolves.toBeUndefined()
   })
 })
