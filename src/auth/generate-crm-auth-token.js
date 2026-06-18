@@ -31,13 +31,23 @@ const generateCrmAuthToken = async () => {
     try {
       const event = buildReceivedEvent({ data: { security: { action: 'crm.token.request', status: 'failure', message: err.message, clientId }, audit: { status: 'failure', details: 'Unable to reach token endpoint' } } }, 'uk.gov.fcp.sfd.security.auth')
       const snsTopic = config.get(CRM_EVENTS_TOPIC_KEY)
-      Promise.resolve(publish(snsClient, snsTopic, event)).catch(() => { })
+      Promise.resolve(publish(snsClient, snsTopic, event)).catch((pubErr) => {
+        try {
+          logger.error({ err: pubErr, clientId }, 'Error publishing security.auth event')
+        } catch (logErr) {
+          // eslint-disable-next-line no-console
+          console.error('Failed to log security.auth publish error', logErr)
+        }
+      })
     } catch (e) {
       // Log publish/build errors for observability
       try {
         logger.error({ err: e, clientId }, 'Failed to build or publish security.auth event')
-      } catch (_) {
-        // ignore logging failures
+      } catch (logErr) {
+        // As a last resort, write to stderr so the exception isn't silently swallowed
+        // (keeps Sonar happy about handling exceptions)
+        // eslint-disable-next-line no-console
+        console.error('Failed to log security.auth publish error', logErr)
       }
     }
 
@@ -50,13 +60,23 @@ const generateCrmAuthToken = async () => {
     try {
       const event = buildReceivedEvent({ data: { security: { action: 'crm.token.request', status: 'failure', httpStatus: response.status, message: errorText, clientId }, audit: { status: 'failure', details: 'Invalid credentials' } } }, 'uk.gov.fcp.sfd.security.auth')
       const snsTopic = config.get(CRM_EVENTS_TOPIC_KEY)
-      Promise.resolve(publish(snsClient, snsTopic, event)).catch(() => { })
+      Promise.resolve(publish(snsClient, snsTopic, event)).catch((pubErr) => {
+        try {
+          logger.error({ err: pubErr, clientId, httpStatus: response.status }, 'Error publishing security.auth event')
+        } catch (logErr) {
+          // eslint-disable-next-line no-console
+          console.error('Failed to log security.auth publish error', logErr)
+        }
+      })
     } catch (e) {
       // Log publish/build errors for observability
       try {
         logger.error({ err: e, clientId, httpStatus: response.status }, 'Failed to build or publish security.auth event')
-      } catch (_) {
-        // ignore logging failures
+      } catch (logErr) {
+        // As a last resort, write to stderr so the exception isn't silently swallowed
+        // (keeps Sonar happy about handling exceptions)
+        // eslint-disable-next-line no-console
+        console.error('Failed to log security.auth publish error', logErr)
       }
     }
 
