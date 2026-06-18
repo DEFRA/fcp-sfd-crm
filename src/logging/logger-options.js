@@ -29,7 +29,7 @@ export const loggerOptions = {
     remove: true
   },
   level: logLevel,
-  ...(formatters[logFormat] || {}),
+  ...(formatters[logFormat]),
   nesting: true,
   mixin: () => {
     const mixinValues = {}
