@@ -75,6 +75,7 @@
     "fast-xml-parser": "5.7.1",
     "fast-xml-builder": "1.2.0",
     "@hapi/content": "6.0.2",
-    "uuid": "14.0.0"
+    "uuid": "14.0.0",
+    "joi": "18.2.1"
   }
 }
