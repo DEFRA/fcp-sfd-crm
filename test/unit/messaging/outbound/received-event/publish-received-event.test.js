@@ -2,11 +2,11 @@ import { vi, describe, beforeEach, test, expect } from 'vitest'
 import { createLogger } from '../../../../../src/logging/logger.js'
 import { config } from '../../../../../src/config/index.js'
 import { snsClient } from '../../../../../src/messaging/sns/client.js'
-import { publishWithDurability } from '../../../../../src/messaging/outbound/publish-retry.js'
+import { publishWithDurability } from '../../../../../src/messaging/outbound/durable-publish.js'
 import { publishReceivedEvent } from '../../../../../src/messaging/outbound/received-event/publish-received-event.js'
 import mockCrmRequest from '../../../../mocks/v1-received-event.js'
 
-vi.mock('../../../../../src/messaging/outbound/publish-retry.js', () => ({
+vi.mock('../../../../../src/messaging/outbound/durable-publish.js', () => ({
   publishWithDurability: vi.fn()
 }))
 

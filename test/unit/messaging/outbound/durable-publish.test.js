@@ -29,7 +29,7 @@ vi.mock('../../../../src/config/index.js', () => ({
 
 const { publish } = await import('../../../../src/messaging/sns/publish.js')
 const { sendToDlq } = await import('../../../../src/messaging/sqs/send-to-dlq.js')
-const { publishWithDurability } = await import('../../../../src/messaging/outbound/publish-retry.js')
+const { publishWithDurability } = await import('../../../../src/messaging/outbound/durable-publish.js')
 
 const mockSnsClient = {}
 const topicArn = 'arn:aws:sns:eu-west-2:123:fcp_sfd_crm_events'

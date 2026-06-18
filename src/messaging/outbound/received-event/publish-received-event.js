@@ -5,7 +5,7 @@ import { eventToTypeMap } from '../../../constants/events.js'
 import { buildReceivedEvent } from './build-received-event.js'
 import { receivedEventSchema, validationOptions } from '../../../api/schemas/index.js'
 import { logOutboundValidationFailure } from '../../../utils/validation-logger.js'
-import { publishWithDurability } from '../publish-retry.js'
+import { publishWithDurability } from '../durable-publish.js'
 
 const snsTopic = config.get('messaging.crmEvents.topicArn')
 
