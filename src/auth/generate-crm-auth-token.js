@@ -5,6 +5,7 @@ import { publish } from '../messaging/sns/publish.js'
 import { buildReceivedEvent } from '../messaging/outbound/received-event/build-received-event.js'
 
 const CRM_EVENTS_TOPIC_KEY = 'messaging.crmEvents.topicArn'
+const SECURITY_AUTH_EVENT = 'uk.gov.fcp.sfd.security.auth'
 
 const generateCrmAuthToken = async () => {
   const { createLogger } = await import('../logging/logger.js')
@@ -29,7 +30,7 @@ const generateCrmAuthToken = async () => {
   } catch (err) {
     // Emit security/audit event for network/auth failures
     try {
-      const event = buildReceivedEvent({ data: { security: { action: 'crm.token.request', status: 'failure', message: err.message, clientId }, audit: { status: 'failure', details: 'Unable to reach token endpoint' } } }, 'uk.gov.fcp.sfd.security.auth')
+      const event = buildReceivedEvent({ data: { security: { action: 'crm.token.request', status: 'failure', message: err.message, clientId }, audit: { status: 'failure', details: 'Unable to reach token endpoint' } } }, SECURITY_AUTH_EVENT)
       const snsTopic = config.get(CRM_EVENTS_TOPIC_KEY)
       Promise.resolve(publish(snsClient, snsTopic, event)).catch((pubErr) => {
         try {
@@ -58,7 +59,7 @@ const generateCrmAuthToken = async () => {
     const errorText = await response.text()
     // Emit security/audit event for auth failure
     try {
-      const event = buildReceivedEvent({ data: { security: { action: 'crm.token.request', status: 'failure', httpStatus: response.status, message: errorText, clientId }, audit: { status: 'failure', details: 'Invalid credentials' } } }, 'uk.gov.fcp.sfd.security.auth')
+      const event = buildReceivedEvent({ data: { security: { action: 'crm.token.request', status: 'failure', httpStatus: response.status, message: errorText, clientId }, audit: { status: 'failure', details: 'Invalid credentials' } } }, SECURITY_AUTH_EVENT)
       const snsTopic = config.get(CRM_EVENTS_TOPIC_KEY)
       Promise.resolve(publish(snsClient, snsTopic, event)).catch((pubErr) => {
         try {
