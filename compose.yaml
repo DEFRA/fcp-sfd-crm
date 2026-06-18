@@ -45,6 +45,7 @@ services:
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-test}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-test}
       CRM_EVENTS_TOPIC_ARN: ${CRM_EVENTS_TOPIC_ARN}
+      AUDIT_TOPIC_ARN: arn:aws:sns:eu-west-2:000000000000:fcp_audit_fcp_sfd_crm
     networks:
       - fcp-sfd
 

@@ -39,6 +39,15 @@ export const messagingConfig = {
         default: null,
         env: 'CRM_EVENTS_TOPIC_ARN'
       }
+    },
+    audit: {
+      topicArn: {
+        doc: 'ARN for the audit SNS topic',
+        format: String,
+        default: null,
+        nullable: true,
+        env: 'AUDIT_TOPIC_ARN'
+      }
     }
   }
 }
