@@ -112,4 +112,28 @@ describe('publishWithDurability', () => {
 
     await expect(publishWithDurability(mockSnsClient, topicArn, payload, context)).resolves.toBeUndefined()
   })
+
+  test('falls back to "unknown" errorMessage when error has no message', async () => {
+    const err = { name: 'CustomError' }
+    publish.mockRejectedValue(err)
+    sendToDlq.mockResolvedValue()
+
+    await publishWithDurability(mockSnsClient, topicArn, payload, context)
+
+    const [, , envelope] = sendToDlq.mock.calls[0]
+    expect(envelope.metadata.errorMessage).toBe('unknown')
+    expect(envelope.metadata.errorName).toBe('CustomError')
+  })
+
+  test('falls back to "Error" errorName when error has no name', async () => {
+    const err = { message: 'something broke' }
+    publish.mockRejectedValue(err)
+    sendToDlq.mockResolvedValue()
+
+    await publishWithDurability(mockSnsClient, topicArn, payload, context)
+
+    const [, , envelope] = sendToDlq.mock.calls[0]
+    expect(envelope.metadata.errorMessage).toBe('something broke')
+    expect(envelope.metadata.errorName).toBe('Error')
+  })
 })

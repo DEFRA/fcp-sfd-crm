@@ -116,6 +116,20 @@ describe('sendToDlq', () => {
     )
   })
 
+  test('falls back to defaults for missing metadata fields', async () => {
+    const envelope = makeEnvelope({ metadata: null })
+    await sendToDlq(mockSqsClient, 'https://queue-url', envelope)
+
+    expect(SendMessageCommand).toHaveBeenCalledWith(
+      expect.objectContaining({
+        MessageAttributes: expect.objectContaining({
+          source: { DataType: 'String', StringValue: 'fcp-sfd-crm' },
+          failureReason: { DataType: 'String', StringValue: 'unknown' }
+        })
+      })
+    )
+  })
+
   test('propagates error when sqsClient.send throws', async () => {
     mockSqsClient.send.mockRejectedValue(new Error('SQS unavailable'))
 
