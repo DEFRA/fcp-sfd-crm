@@ -60,6 +60,10 @@ describe('CRM repository', () => {
         }
       )
       expect(result).toEqual({ contactId: '6ff3f89f-efe6-f455-fff6-bfff1f808e6' })
+      // wait for setImmediate-published events to be invoked
+      await new Promise(resolve => setImmediate(resolve))
+      expect(mockBuildReceivedEvent).toHaveBeenCalled()
+      expect(mockPublish).toHaveBeenCalled()
     })
 
     test('should return first contact when multiple results', async () => {
@@ -140,6 +144,10 @@ describe('CRM repository', () => {
         }
       )
       expect(result).toEqual({ accountId: '7dd1d67d-cdc4-f233-ddf4-9efe9e686c4' })
+      // wait for any scheduled publish operations
+      await new Promise(resolve => setImmediate(resolve))
+      expect(mockBuildReceivedEvent).toHaveBeenCalled()
+      expect(mockPublish).toHaveBeenCalled()
     })
 
     test('should return first account when multiple results', async () => {

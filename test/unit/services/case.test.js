@@ -155,6 +155,15 @@ describe('case service', () => {
       )
     })
 
+    it('should emit document.created after case creation', async () => {
+      await createCase(validPayload)
+
+      expect(mockPublishReceivedEvent).toHaveBeenCalled()
+      const callArg = mockPublishReceivedEvent.mock.calls[0][0]
+      expect(callArg.type).toBe(crmEvents.DOCUMENT_CREATED)
+      expect(callArg.data).toMatchObject({ caseId: 'mock-case-id', correlationId: 'corr-1' })
+    })
+
     it('should log when a new case is created', async () => {
       await createCase(validPayload)
 

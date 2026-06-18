@@ -115,6 +115,21 @@ async function createNewCase({ authToken, transformedPayload, correlationId, fil
   await markFileProcessed(correlationId, fileId)
 
   logger.info({ correlationId, caseId: response.caseId }, 'Case created')
+  // Emit document.created event so downstream systems can act on the
+  // newly-created case. Include correlationId and caseId from the inbound
+  // CloudEvents payload.
+  const eventData = {
+    correlationId,
+    caseId: response.caseId,
+    crn: transformedPayload?.crn ? Number(transformedPayload.crn) : undefined,
+    sbi: transformedPayload?.sbi ? Number(transformedPayload.sbi) : undefined
+  }
+
+  Promise.resolve(publishReceivedEvent({ type: crmEvents.DOCUMENT_CREATED, data: eventData }))
+    .catch(err => {
+      logger.error({ err, caseId: response.caseId, correlationId }, 'Error publishing document.created event after case creation')
+    })
+
   return response
 }
 
