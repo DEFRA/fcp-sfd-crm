@@ -31,18 +31,18 @@ const mockAuditEvent = {
   }
 }
 
-describe('publishAuditEvent', () => {
+describe('sendAuditEvent', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
   test('should call publishAuditEvent with event and service-level config', async () => {
-    const { publishAuditEvent: _publishAuditEvent } = await import('@defra/fcp-audit-publisher')
-    const { publishAuditEvent } = await import('../../../../../src/messaging/outbound/audit/publish-audit-event.js')
+    const { publishAuditEvent } = await import('@defra/fcp-audit-publisher')
+    const { sendAuditEvent } = await import('../../../../../src/messaging/outbound/audit/publish-audit-event.js')
 
-    await publishAuditEvent(mockAuditEvent)
+    await sendAuditEvent(mockAuditEvent)
 
-    expect(_publishAuditEvent).toHaveBeenCalledWith(
+    expect(publishAuditEvent).toHaveBeenCalledWith(
       mockAuditEvent,
       expect.objectContaining({
         application: 'fcp-sfd-crm',
@@ -55,22 +55,22 @@ describe('publishAuditEvent', () => {
   })
 
   test('should not throw when publishAuditEvent rejects', async () => {
-    const { publishAuditEvent: _publishAuditEvent } = await import('@defra/fcp-audit-publisher')
-    const { publishAuditEvent } = await import('../../../../../src/messaging/outbound/audit/publish-audit-event.js')
+    const { publishAuditEvent } = await import('@defra/fcp-audit-publisher')
+    const { sendAuditEvent } = await import('../../../../../src/messaging/outbound/audit/publish-audit-event.js')
 
-    _publishAuditEvent.mockRejectedValueOnce(new Error('SNS failure'))
+    publishAuditEvent.mockRejectedValueOnce(new Error('SNS failure'))
 
-    await expect(publishAuditEvent(mockAuditEvent)).resolves.not.toThrow()
+    await expect(sendAuditEvent(mockAuditEvent)).resolves.not.toThrow()
   })
 
   test('should log error when publishAuditEvent rejects', async () => {
-    const { publishAuditEvent: _publishAuditEvent } = await import('@defra/fcp-audit-publisher')
-    const { publishAuditEvent } = await import('../../../../../src/messaging/outbound/audit/publish-audit-event.js')
+    const { publishAuditEvent } = await import('@defra/fcp-audit-publisher')
+    const { sendAuditEvent } = await import('../../../../../src/messaging/outbound/audit/publish-audit-event.js')
 
     const mockError = new Error('SNS failure')
-    _publishAuditEvent.mockRejectedValueOnce(mockError)
+    publishAuditEvent.mockRejectedValueOnce(mockError)
 
-    await publishAuditEvent(mockAuditEvent)
+    await sendAuditEvent(mockAuditEvent)
 
     expect(mockLogger.error).toHaveBeenCalledWith(
       { event: { type: 'audit_publish_failed', outcome: 'failure', reason: mockError.message } },

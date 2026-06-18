@@ -1,4 +1,4 @@
-import { publishAuditEvent as _publishAuditEvent } from '@defra/fcp-audit-publisher'
+import { publishAuditEvent } from '@defra/fcp-audit-publisher'
 import { snsClient } from '../../sns/client.js'
 import { config } from '../../../config/index.js'
 import { createLogger } from '../../../logging/logger.js'
@@ -16,9 +16,9 @@ const auditPublishConfig = {
   ip: '0.0.0.0'
 }
 
-export const publishAuditEvent = async (event) => {
+export const sendAuditEvent = async (event) => {
   try {
-    await _publishAuditEvent(event, auditPublishConfig)
+    await publishAuditEvent(event, auditPublishConfig)
   } catch (err) {
     logger.error(
       { event: { type: 'audit_publish_failed', outcome: 'failure', reason: err.message } },
