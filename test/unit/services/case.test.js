@@ -295,5 +295,39 @@ describe('case service', () => {
       expect(callArg.type).toBe(crmEvents.DOCUMENT_CREATED)
       expect(callArg.data).toMatchObject({ metadataId: 'meta-2', correlationId: 'corr-2', caseId: 'existing-case-id' })
     })
+
+    it('should log an error if publishing document.created fails after case creation', async () => {
+      // cause publish to fail
+      mockPublishReceivedEvent.mockRejectedValueOnce(new Error('publish fail'))
+
+      await createCase(validPayload)
+
+      // allow microtasks to run for the async publish catch handler
+      await new Promise(resolve => setTimeout(resolve, 0))
+
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        expect.objectContaining({ caseId: 'mock-case-id', correlationId: 'corr-1' }),
+        'Error publishing document.created event after case creation'
+      )
+    })
+
+    it('should log an error if publishing document.created fails after metadata creation', async () => {
+      upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: 'existing-case-id', isCreator: false })
+      // ensure online submission id and metadata creation succeed
+      getOnlineSubmissionId.mockResolvedValue({ rpaOnlinesubmissionid: 'ols-2', error: null })
+      createMetadataForOnlineSubmission.mockResolvedValue({ metadataId: 'meta-3', error: null })
+      // cause publish to fail
+      mockPublishReceivedEvent.mockRejectedValueOnce(new Error('publish fail 2'))
+
+      await createCase(validPayload)
+
+      // allow microtasks to run for the async publish catch handler
+      await new Promise(resolve => setTimeout(resolve, 0))
+
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        expect.objectContaining({ caseId: 'existing-case-id', correlationId: 'corr-1', metadataId: 'meta-3' }),
+        'Error publishing document.created event after metadata creation'
+      )
+    })
   })
 })

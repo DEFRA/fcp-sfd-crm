@@ -7,6 +7,9 @@ import { buildReceivedEvent } from '../messaging/outbound/received-event/build-r
 const CRM_EVENTS_TOPIC_KEY = 'messaging.crmEvents.topicArn'
 const SECURITY_AUTH_EVENT = 'uk.gov.fcp.sfd.security.auth'
 const SECURITY_AUTH_LOG = 'security.auth'
+const SECURITY_AUTH_PUBLISH_ERROR = `Error publishing ${SECURITY_AUTH_LOG} event`
+const SECURITY_AUTH_FAILED_TO_LOG = `Failed to log ${SECURITY_AUTH_LOG} publish error`
+const SECURITY_AUTH_FAILED_BUILD_PUBLISH = `Failed to build or publish ${SECURITY_AUTH_LOG} event`
 
 const generateCrmAuthToken = async () => {
   const { createLogger } = await import('../logging/logger.js')
@@ -35,21 +38,21 @@ const generateCrmAuthToken = async () => {
       const snsTopic = config.get(CRM_EVENTS_TOPIC_KEY)
       Promise.resolve(publish(snsClient, snsTopic, event)).catch((pubErr) => {
         try {
-          logger.error({ err: pubErr, clientId }, `Error publishing ${SECURITY_AUTH_LOG} event`)
+          logger.error({ err: pubErr, clientId }, SECURITY_AUTH_PUBLISH_ERROR)
         } catch (logErr) {
           // eslint-disable-next-line no-console
-          console.error(`Failed to log ${SECURITY_AUTH_LOG} publish error`, logErr)
+          console.error(SECURITY_AUTH_FAILED_TO_LOG, logErr)
         }
       })
     } catch (e) {
       // Log publish/build errors for observability
       try {
-        logger.error({ err: e, clientId }, `Failed to build or publish ${SECURITY_AUTH_LOG} event`)
+        logger.error({ err: e, clientId }, SECURITY_AUTH_FAILED_BUILD_PUBLISH)
       } catch (logErr) {
         // As a last resort, write to stderr so the exception isn't silently swallowed
         // (keeps Sonar happy about handling exceptions)
         // eslint-disable-next-line no-console
-        console.error(`Failed to log ${SECURITY_AUTH_LOG} publish error`, logErr)
+        console.error(SECURITY_AUTH_FAILED_TO_LOG, logErr)
       }
     }
 
@@ -64,21 +67,21 @@ const generateCrmAuthToken = async () => {
       const snsTopic = config.get(CRM_EVENTS_TOPIC_KEY)
       Promise.resolve(publish(snsClient, snsTopic, event)).catch((pubErr) => {
         try {
-          logger.error({ err: pubErr, clientId, httpStatus: response.status }, `Error publishing ${SECURITY_AUTH_LOG} event`)
+          logger.error({ err: pubErr, clientId, httpStatus: response.status }, SECURITY_AUTH_PUBLISH_ERROR)
         } catch (logErr) {
           // eslint-disable-next-line no-console
-          console.error(`Failed to log ${SECURITY_AUTH_LOG} publish error`, logErr)
+          console.error(SECURITY_AUTH_FAILED_TO_LOG, logErr)
         }
       })
     } catch (e) {
       // Log publish/build errors for observability
       try {
-        logger.error({ err: e, clientId, httpStatus: response.status }, `Failed to build or publish ${SECURITY_AUTH_LOG} event`)
+        logger.error({ err: e, clientId, httpStatus: response.status }, SECURITY_AUTH_FAILED_BUILD_PUBLISH)
       } catch (logErr) {
         // As a last resort, write to stderr so the exception isn't silently swallowed
         // (keeps Sonar happy about handling exceptions)
         // eslint-disable-next-line no-console
-        console.error(`Failed to log ${SECURITY_AUTH_LOG} publish error`, logErr)
+        console.error(SECURITY_AUTH_FAILED_TO_LOG, logErr)
       }
     }
 
