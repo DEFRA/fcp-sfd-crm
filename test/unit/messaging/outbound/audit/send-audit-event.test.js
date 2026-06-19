@@ -38,7 +38,7 @@ describe('sendAuditEvent', () => {
 
   test('should call publishAuditEvent with event and service-level config', async () => {
     const { publishAuditEvent } = await import('@defra/fcp-audit-publisher')
-    const { sendAuditEvent } = await import('../../../../../src/messaging/outbound/audit/publish-audit-event.js')
+    const { sendAuditEvent } = await import('../../../../../src/messaging/outbound/audit/send-audit-event.js')
 
     await sendAuditEvent(mockAuditEvent)
 
@@ -56,7 +56,7 @@ describe('sendAuditEvent', () => {
 
   test('should not throw when publishAuditEvent rejects', async () => {
     const { publishAuditEvent } = await import('@defra/fcp-audit-publisher')
-    const { sendAuditEvent } = await import('../../../../../src/messaging/outbound/audit/publish-audit-event.js')
+    const { sendAuditEvent } = await import('../../../../../src/messaging/outbound/audit/send-audit-event.js')
 
     publishAuditEvent.mockRejectedValueOnce(new Error('SNS failure'))
 
@@ -65,7 +65,7 @@ describe('sendAuditEvent', () => {
 
   test('should log error when publishAuditEvent rejects', async () => {
     const { publishAuditEvent } = await import('@defra/fcp-audit-publisher')
-    const { sendAuditEvent } = await import('../../../../../src/messaging/outbound/audit/publish-audit-event.js')
+    const { sendAuditEvent } = await import('../../../../../src/messaging/outbound/audit/send-audit-event.js')
 
     const mockError = new Error('SNS failure')
     publishAuditEvent.mockRejectedValueOnce(mockError)
