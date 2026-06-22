@@ -127,10 +127,12 @@ const onCompleteHook = (request, response, error, retryStateByRequest) => {
   // covers the loop-exhausted path where shouldRetry was never called on
   // the last failure, and the success path.
   const attempts = state.finalAttempt ?? Math.max(1, state.lastAttempt + 1)
+  const httpStatusMatch = state.terminalReason?.match(/^http_(\d+)$/)
   const metadata = {
     attempts,
     category: state.category,
-    terminalReason: state.terminalReason
+    terminalReason: state.terminalReason,
+    status: httpStatusMatch ? parseInt(httpStatusMatch[1], 10) : null
   }
 
   if (error) {

@@ -133,6 +133,12 @@ async function addMetadataToExistingCase ({ authToken, caseId, correlationId, fi
   })
 
   if (metadataError) {
+    if (metadataError.retryMetadata?.category === 'retryable') {
+      const error = new Error('Failed to add metadata for additional file')
+      error.retryable = true
+      error.retryMetadata = metadataError.retryMetadata
+      throw error
+    }
     logger.error({ correlationId, caseId, fileId, error: metadataError }, 'Failed to add metadata for additional file')
     const error = new Error('Failed to add metadata for additional file')
     error.retryable = false

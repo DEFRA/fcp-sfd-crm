@@ -176,7 +176,8 @@ describe('httpClient — network errors (retryable)', () => {
     expect(thrown.retryMetadata).toEqual({
       attempts: 3,
       category: 'retryable',
-      terminalReason: 'ECONNREFUSED'
+      terminalReason: 'ECONNREFUSED',
+      status: null
     })
     expect(mockLogger.error).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -252,7 +253,8 @@ describe('httpClient — unknown errors', () => {
     expect(thrown.retryMetadata).toEqual({
       attempts: 2,
       category: 'unknown',
-      terminalReason: 'mystery failure'
+      terminalReason: 'mystery failure',
+      status: null
     })
   })
 
@@ -374,5 +376,46 @@ describe('authHttpClient — distinct client with shorter timeout', () => {
     const fetchHandler = async () => { calls++; return new Response('unauthorized', { status: 401 }) }
     await authHttpClient(url, { fetchHandler })
     expect(calls).toBe(1)
+  })
+})
+
+describe('retryMetadata.status field', () => {
+  test('status is null for network errors', async () => {
+    const fetchHandler = async () => { throw new Error('ECONNRESET') }
+    let thrown
+    try {
+      await httpClient(url, { fetchHandler })
+    } catch (err) {
+      thrown = err
+    }
+    expect(thrown.retryMetadata.status).toBeNull()
+  })
+
+  test('status is null for unknown errors', async () => {
+    const fetchHandler = async () => { throw new Error('mystery failure') }
+    let thrown
+    try {
+      await httpClient(url, { fetchHandler })
+    } catch (err) {
+      thrown = err
+    }
+    expect(thrown.retryMetadata.status).toBeNull()
+  })
+
+  test('status field is present in retryMetadata shape', async () => {
+    const fetchHandler = async () => { throw new Error('ECONNRESET') }
+    let thrown
+    try {
+      await httpClient(url, { fetchHandler })
+    } catch (err) {
+      thrown = err
+    }
+    expect(thrown.retryMetadata).toHaveProperty('status')
+    expect(thrown.retryMetadata).toMatchObject({
+      attempts: expect.any(Number),
+      category: expect.any(String),
+      terminalReason: expect.any(String),
+      status: null
+    })
   })
 })

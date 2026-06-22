@@ -53,6 +53,10 @@ vi.mock('../../../../src/utils/validation-logger.js', () => ({
   logInboundValidationFailure: vi.fn()
 }))
 
+vi.mock('../../../../src/logging/logger.js', () => ({
+  createLogger: vi.fn(() => ({ info: vi.fn(), error: vi.fn() }))
+}))
+
 let startCRMListener, stopCRMListener, setLogger, mockLogger
 
 beforeEach(async () => {
@@ -65,9 +69,6 @@ beforeEach(async () => {
   mockConsumer.start.mockClear()
   mockConsumer.stop.mockClear()
   mockConsumer._listeners = {}
-  vi.mock('../../../../../src/logging/logger.js', () => ({
-    createLogger: vi.fn(() => mockLogger)
-  }))
   const consumerModule = await import('../../../../src/messaging/inbound/consumer.js')
   startCRMListener = consumerModule.startCRMListener
   stopCRMListener = consumerModule.stopCRMListener
@@ -103,12 +104,13 @@ describe('CRM request sqs consumer', () => {
     async function setupAndImportConsumer () {
       mockConsumer._listeners = {}
       const logger = { info: vi.fn(), error: vi.fn() }
+      const sqsClient = { config: { endpoint: 'mock-endpoint' }, send: vi.fn().mockResolvedValue({}) }
       mockLoggerRef = logger
-      vi.mock('../../../../../src/logging/logger.js', () => ({ createLogger: vi.fn(() => logger) }))
-      vi.mock('../../../../../src/config/index.js', () => ({
+      vi.mock('../../../../src/config/index.js', () => ({
         config: {
           get: vi.fn((key) => {
             if (key === 'messaging.crmRequest.queueUrl') return 'mock-queue-url'
+            if (key === 'messaging.crmRequest.deadLetterUrl') return 'mock-dlq-url'
             if (key === 'messaging.batchSize') return 1
             if (key === 'messaging.waitTimeSeconds') return 1
             if (key === 'messaging.pollingWaitTime') return 1
@@ -120,7 +122,7 @@ describe('CRM request sqs consumer', () => {
       const consumerModule = await import('../../../../src/messaging/inbound/consumer.js')
       consumerModule.setLogger(logger)
       const { createCase } = await import('../../../../src/services/case.js')
-      return { startCRMListener: consumerModule.startCRMListener, logger, createCase }
+      return { startCRMListener: consumerModule.startCRMListener, logger, createCase, sqsClient }
     }
 
     test('should log consumer start', async () => {
@@ -217,9 +219,8 @@ describe('CRM request sqs consumer', () => {
     })
 
     test('should not call createCase for schema-invalid but parseable payload', async () => {
-      const { startCRMListener: start, createCase } = await setupAndImportConsumer()
-      const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
-      start(mockSqsClient)
+      const { startCRMListener: start, createCase, sqsClient } = await setupAndImportConsumer()
+      start(sqsClient)
 
       // payload missing required file.fileId/fileName to fail schema validation
       const message = {
@@ -242,9 +243,8 @@ describe('CRM request sqs consumer', () => {
     })
 
     test('should call logInboundValidationFailure on schema-invalid payload', async () => {
-      const { startCRMListener: start } = await setupAndImportConsumer()
-      const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
-      start(mockSqsClient)
+      const { startCRMListener: start, sqsClient } = await setupAndImportConsumer()
+      start(sqsClient)
 
       const message = {
         Body: JSON.stringify({
@@ -266,14 +266,19 @@ describe('CRM request sqs consumer', () => {
     })
 
     test('should log error for invalid JSON in handleMessage', async () => {
-      const { startCRMListener: start, logger } = await setupAndImportConsumer()
-      const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
-      start(mockSqsClient)
-      const message = { Body: 'invalid-json' }
+      const { startCRMListener: start, logger, sqsClient } = await setupAndImportConsumer()
+      start(sqsClient)
+      const message = { MessageId: 'msg-bad-json', Body: 'invalid-json' }
 
       const result = await capturedHandleMessage(message)
 
-      expect(logger.error).toHaveBeenCalledWith('Invalid JSON in inbound message', expect.any(SyntaxError))
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: expect.objectContaining({ type: 'crm.dlq.message_received' }),
+          error: expect.objectContaining({ errorClassification: 'invalid_json' })
+        }),
+        'Message sent to DLQ'
+      )
       expect(result).toEqual(message)
     })
 
@@ -360,9 +365,8 @@ describe('CRM request sqs consumer', () => {
     })
 
     test('non-retryable error without retryMetadata is discarded and logs nulls', async () => {
-      const { startCRMListener: start, logger, createCase } = await setupAndImportConsumer()
-      const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
-      start(mockSqsClient)
+      const { startCRMListener: start, logger, createCase, sqsClient } = await setupAndImportConsumer()
+      start(sqsClient)
       const err = new Error('Generic failure')
       // no retryable, no retryMetadata
       createCase.mockRejectedValueOnce(err)
@@ -392,9 +396,8 @@ describe('CRM request sqs consumer', () => {
     })
 
     test('unknown retryMetadata.category treated as non-retryable unless retryable flag set', async () => {
-      const { startCRMListener: start, logger, createCase } = await setupAndImportConsumer()
-      const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
-      start(mockSqsClient)
+      const { startCRMListener: start, logger, createCase, sqsClient } = await setupAndImportConsumer()
+      start(sqsClient)
       const err = new Error('Unknown category')
       err.retryMetadata = { category: 'unknown', status: 520 }
       // not setting err.retryable => non-retryable path
@@ -425,9 +428,8 @@ describe('CRM request sqs consumer', () => {
     })
 
     test('empty and null Body are treated as invalid JSON and return message', async () => {
-      const { startCRMListener: start, logger } = await setupAndImportConsumer()
-      const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
-      start(mockSqsClient)
+      const { startCRMListener: start, logger, sqsClient } = await setupAndImportConsumer()
+      start(sqsClient)
 
       const resultEmpty = await capturedHandleMessage({ Body: '' })
       expect(logger.error).toHaveBeenCalled()
@@ -436,6 +438,122 @@ describe('CRM request sqs consumer', () => {
       const resultNull = await capturedHandleMessage({ Body: null })
       expect(logger.error).toHaveBeenCalled()
       expect(resultNull).toEqual({ Body: null })
+    })
+
+
+
+    describe('DLQ routing', () => {
+      test('sends non-retryable message to DLQ and logs crm.dlq.message_received', async () => {
+        const { startCRMListener: start, logger, createCase, sqsClient } = await setupAndImportConsumer()
+        start(sqsClient)
+        const err = new Error('Non-retryable CRM failure')
+        err.retryMetadata = { category: 'non-retryable', terminalReason: 'http_422', status: 422 }
+        createCase.mockRejectedValueOnce(err)
+        const message = {
+          MessageId: 'msg-dlq-1',
+          Body: JSON.stringify({ id: 'evt-dlq-1', source: '/test', specversion: '1.0', type: 'test.type', datacontenttype: 'application/json', time: new Date().toISOString(), data: { crn: '123', sbi: '321', file: { fileId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479', fileName: 'doc.pdf', url: 'https://example.com/api/v1/blobs/f47ac10b-58cc-4372-a567-0e02b2c3d479' }, correlationId: '550e8400-e29b-41d4-a716-446655440000', sourceSystem: 'fcp-sfd-frontend', submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6' } })
+        }
+
+        const result = await capturedHandleMessage(message)
+
+        expect(sqsClient.send).toHaveBeenCalledWith(
+          expect.objectContaining({ input: expect.objectContaining({ QueueUrl: 'mock-dlq-url', MessageBody: message.Body }) })
+        )
+        expect(logger.error).toHaveBeenCalledWith(
+          expect.objectContaining({
+            event: expect.objectContaining({ type: 'crm.dlq.message_received', reference: 'msg-dlq-1' }),
+            error: expect.objectContaining({ errorClassification: 'non-retryable', fileId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479' })
+          }),
+          'Message sent to DLQ'
+        )
+        expect(result).toEqual(message)
+      })
+
+      test('still deletes from main queue when DLQ send fails', async () => {
+        const { startCRMListener: start, logger, createCase, sqsClient } = await setupAndImportConsumer()
+        start(sqsClient)
+        sqsClient.send.mockRejectedValueOnce(new Error('DLQ unavailable'))
+        const err = new Error('Non-retryable')
+        createCase.mockRejectedValueOnce(err)
+        const message = {
+          MessageId: 'msg-dlq-fail',
+          Body: JSON.stringify({ id: 'evt-dlq-fail', source: '/test', specversion: '1.0', type: 'test.type', datacontenttype: 'application/json', time: new Date().toISOString(), data: { crn: '123', sbi: '321', file: { fileId: '550e8400-e29b-41d4-a716-446655440001', fileName: 'doc.pdf', url: 'https://example.com/api/v1/blobs/550e8400-e29b-41d4-a716-446655440001' }, correlationId: '550e8400-e29b-41d4-a716-446655440000', sourceSystem: 'fcp-sfd-frontend', submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6' } })
+        }
+
+        const result = await capturedHandleMessage(message)
+
+        expect(result).toEqual(message)
+        expect(logger.error).toHaveBeenCalledWith(
+          expect.objectContaining({ event: expect.objectContaining({ type: 'crm.dlq.send_failed' }) }),
+          'Failed to send message to DLQ — message will be deleted from main queue'
+        )
+      })
+
+      test('sends invalid JSON message to DLQ', async () => {
+        const { startCRMListener: start, sqsClient } = await setupAndImportConsumer()
+        start(sqsClient)
+        const message = { MessageId: 'msg-bad-json-2', Body: 'not-valid-json{{' }
+
+        const result = await capturedHandleMessage(message)
+
+        expect(sqsClient.send).toHaveBeenCalledWith(
+          expect.objectContaining({ input: expect.objectContaining({ QueueUrl: 'mock-dlq-url' }) })
+        )
+        expect(result).toEqual(message)
+      })
+
+      test('sends schema-invalid message to DLQ', async () => {
+        const { startCRMListener: start, sqsClient } = await setupAndImportConsumer()
+        start(sqsClient)
+        const message = {
+          MessageId: 'msg-schema-bad',
+          Body: JSON.stringify({ id: 'evt-bad', source: '/test', specversion: '1.0', type: 'test.type', datacontenttype: 'application/json', time: new Date().toISOString(), data: { crn: '123', sbi: '321', file: {} } })
+        }
+
+        const result = await capturedHandleMessage(message)
+
+        expect(sqsClient.send).toHaveBeenCalledWith(
+          expect.objectContaining({ input: expect.objectContaining({ QueueUrl: 'mock-dlq-url' }) })
+        )
+        expect(result).toEqual(message)
+      })
+
+      test('does NOT send to DLQ for retryable error', async () => {
+        const { startCRMListener: start, createCase, sqsClient } = await setupAndImportConsumer()
+        start(sqsClient)
+        const err = new Error('Retryable')
+        err.retryable = true
+        createCase.mockRejectedValueOnce(err)
+        const message = {
+          MessageId: 'msg-retry',
+          Body: JSON.stringify({ id: 'evt-r', source: '/test', specversion: '1.0', type: 'test.type', datacontenttype: 'application/json', time: new Date().toISOString(), data: { crn: '123', sbi: '321', file: { fileId: '550e8400-e29b-41d4-a716-446655440002', fileName: 'doc.pdf', url: 'https://example.com/api/v1/blobs/550e8400-e29b-41d4-a716-446655440002' }, correlationId: '550e8400-e29b-41d4-a716-446655440000', sourceSystem: 'fcp-sfd-frontend', submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6' } })
+        }
+
+        const result = await capturedHandleMessage(message)
+
+        expect(sqsClient.send).not.toHaveBeenCalled()
+        expect(result).toBeUndefined()
+      })
+
+      test('logs crm.dlq.message_replayed for messages with replayed_from=DLQ attribute', async () => {
+        const { startCRMListener: start, logger, createCase, sqsClient } = await setupAndImportConsumer()
+        start(sqsClient)
+        createCase.mockResolvedValueOnce({ caseId: 'case-replayed' })
+        const message = {
+          MessageId: 'msg-replayed-1',
+          MessageAttributes: { replayed_from: { StringValue: 'DLQ', DataType: 'String' } },
+          Body: JSON.stringify({ id: 'evt-replay', source: '/test', specversion: '1.0', type: 'test.type', datacontenttype: 'application/json', time: new Date().toISOString(), data: { crn: '123', sbi: '321', file: { fileId: '550e8400-e29b-41d4-a716-446655440003', fileName: 'doc.pdf', url: 'https://example.com/api/v1/blobs/550e8400-e29b-41d4-a716-446655440003' }, correlationId: '550e8400-e29b-41d4-a716-446655440000', sourceSystem: 'fcp-sfd-frontend', submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6' } })
+        }
+
+        await capturedHandleMessage(message)
+
+        expect(logger.info).toHaveBeenCalledWith(
+          expect.objectContaining({
+            event: expect.objectContaining({ type: 'crm.dlq.message_replayed', reference: 'msg-replayed-1' })
+          }),
+          'Processing replayed DLQ message'
+        )
+      })
     })
 
     test('setLogger injection replaces internal logger used by events', async () => {
@@ -487,9 +605,8 @@ describe('CRM request sqs consumer', () => {
 
     test('should log error and return message when createCase fails with non-retryable error', async () => {
       const { createCase } = await import('../../../../src/services/case.js')
-      const { startCRMListener: start, logger } = await setupAndImportConsumer()
-      const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
-      start(mockSqsClient)
+      const { startCRMListener: start, logger, sqsClient } = await setupAndImportConsumer()
+      start(sqsClient)
       const nonRetryError = new Error('CRM API failed')
       nonRetryError.retryMetadata = { category: 'non-retryable', status: 400 }
       createCase.mockRejectedValueOnce(nonRetryError)
