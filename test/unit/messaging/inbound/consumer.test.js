@@ -62,6 +62,7 @@ let startCRMListener, stopCRMListener, setLogger, mockLogger
 beforeEach(async () => {
   vi.resetModules()
   mockLogger = {
+    fatal: vi.fn(),
     info: vi.fn(),
     error: vi.fn()
   }

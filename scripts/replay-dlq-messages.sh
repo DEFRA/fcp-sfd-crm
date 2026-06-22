@@ -70,10 +70,8 @@ while true; do
     --output json 2>/dev/null || echo '{}')
 
   # node is used for JSON parsing — guaranteed available in CDP Node.js container images.
-  MESSAGE_COUNT=$(node -e "
-    const d = $(echo "$RESPONSE" | node -e 'let d=\"\";process.stdin.on(\"data\",c=>d+=c).on(\"end\",()=>process.stdout.write(JSON.stringify(JSON.parse(d).Messages||[])))');
-    process.stdout.write(String(d.length));
-  " 2>/dev/null || echo 0)
+  PARSE="node scripts/lib/parse-sqs-batch.js"
+  MESSAGE_COUNT=$(echo "$RESPONSE" | $PARSE count 2>/dev/null || echo 0)
 
   if [ "$MESSAGE_COUNT" -eq 0 ]; then
     echo "No more messages on DLQ. Done."
@@ -82,9 +80,9 @@ while true; do
 
   i=0
   while [ "$i" -lt "$MESSAGE_COUNT" ]; do
-    MSG_ID=$(echo "$RESPONSE" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const m=JSON.parse(d).Messages[$i];process.stdout.write(m.MessageId)})")
-    RECEIPT=$(echo "$RESPONSE" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const m=JSON.parse(d).Messages[$i];process.stdout.write(m.ReceiptHandle)})")
-    BODY=$(echo "$RESPONSE" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const m=JSON.parse(d).Messages[$i];process.stdout.write(m.Body)})")
+    MSG_ID=$(echo "$RESPONSE" | $PARSE get "$i" MessageId)
+    RECEIPT=$(echo "$RESPONSE" | $PARSE get "$i" ReceiptHandle)
+    BODY=$(echo "$RESPONSE" | $PARSE get "$i" Body)
 
     # Send to main queue with replay attributes
     # shellcheck disable=SC2086

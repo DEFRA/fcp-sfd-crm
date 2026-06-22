@@ -22,7 +22,7 @@ These are defined in `cdp-tenant-config` under `sqs_queues[name=fcp_sfd_crm_requ
 Messages land on the DLQ under two conditions:
 
 1. **Non-retryable failure** — consumer explicitly sent the message to the DLQ (4xx from CRM API, invalid JSON, schema validation failure). Log entry: `event.type = crm.dlq.message_received`.
-2. **Retry exhaustion** — SQS automatically moved the message after `maxReceiveCount` receive attempts with retryable errors (5xx, timeouts).
+2. **Retry exhaustion** — the consumer returned `undefined` (leaving the message visible) after a retryable error (5xx, timeout). After `maxReceiveCount` consecutive receives SQS automatically moves the message to the DLQ. **No** `crm.dlq.message_received` log entry is emitted for this path — look instead for repeated `Retryable error, leaving message on queue` log entries for the affected `MessageId`.
 
 Check DLQ depth:
 
