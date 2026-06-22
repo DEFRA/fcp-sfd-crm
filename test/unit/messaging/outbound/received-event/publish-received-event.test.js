@@ -2,11 +2,13 @@ import { vi, describe, beforeEach, test, expect } from 'vitest'
 import { createLogger } from '../../../../../src/logging/logger.js'
 import { config } from '../../../../../src/config/index.js'
 import { snsClient } from '../../../../../src/messaging/sns/client.js'
-import { publish } from '../../../../../src/messaging/sns/publish.js'
+import { publishWithDurability } from '../../../../../src/messaging/outbound/durable-publish.js'
 import { publishReceivedEvent } from '../../../../../src/messaging/outbound/received-event/publish-received-event.js'
 import mockCrmRequest from '../../../../mocks/v1-received-event.js'
 
-vi.mock('../../../../../src/messaging/sns/publish.js')
+vi.mock('../../../../../src/messaging/outbound/durable-publish.js', () => ({
+  publishWithDurability: vi.fn()
+}))
 
 vi.mock('../../../../../src/logging/logger.js', () => ({
   createLogger: vi.fn().mockReturnValue({
@@ -23,16 +25,21 @@ describe('Publish received request', () => {
     vi.clearAllMocks()
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-01-27T11:00:00.000Z'))
+    publishWithDurability.mockResolvedValue()
   })
 
   test('should publish a received request with type CREATED if request event type is CREATED', async () => {
     await publishReceivedEvent(mockCrmRequest)
 
-    expect(publish).toHaveBeenCalledWith(
+    expect(publishWithDurability).toHaveBeenCalledWith(
       snsClient,
       config.get('messaging.crmEvents.topicArn'),
       expect.objectContaining({
         type: 'uk.gov.fcp.sfd.crm.case.created'
+      }),
+      expect.objectContaining({
+        caseId: mockCrmRequest.data.caseId,
+        correlationId: mockCrmRequest.data.correlationId
       })
     )
   })
@@ -40,7 +47,7 @@ describe('Publish received request', () => {
   test('should publish and include all original message data within the event', async () => {
     await publishReceivedEvent(mockCrmRequest)
 
-    expect(publish).toHaveBeenCalledWith(
+    expect(publishWithDurability).toHaveBeenCalledWith(
       snsClient,
       config.get('messaging.crmEvents.topicArn'),
       expect.objectContaining({
@@ -49,7 +56,8 @@ describe('Publish received request', () => {
           correlationId: mockCrmRequest.id,
           caseType: 'case-created'
         }
-      })
+      }),
+      expect.any(Object)
     )
   })
 
@@ -60,32 +68,20 @@ describe('Publish received request', () => {
     }
     await publishReceivedEvent(messageWithoutCorrelationId)
 
-    expect(publish).toHaveBeenCalledWith(
+    expect(publishWithDurability).toHaveBeenCalledWith(
       snsClient,
       config.get('messaging.crmEvents.topicArn'),
       expect.objectContaining({
         data: expect.objectContaining({
           correlationId: mockCrmRequest.id
         })
-      })
+      }),
+      expect.objectContaining({ correlationId: mockCrmRequest.id })
     )
   })
 
-  test('should log error if publishing of event fails', async () => {
-    const mockError = new Error('Publish error')
-
-    publish.mockRejectedValue(mockError)
-
-    await publishReceivedEvent(mockCrmRequest)
-
-    expect(mockLogger.error).toHaveBeenCalledWith(
-      { err: mockError },
-      `Error publishing received CRM request event | caseId=${mockCrmRequest.data.caseId} correlationId=${mockCrmRequest.data.correlationId} topicArn=${config.get('messaging.crmEvents.topicArn')}`
-    )
-  })
-
-  test('should not throw when publish fails', async () => {
-    publish.mockRejectedValue(new Error('Publish error'))
+  test('should not throw when publishWithDurability resolves (publish or DLQ succeeded)', async () => {
+    publishWithDurability.mockResolvedValue()
 
     await expect(publishReceivedEvent(mockCrmRequest)).resolves.not.toThrow()
   })
@@ -112,7 +108,7 @@ describe('Publish received request', () => {
     expect(mockLogger.error).toHaveBeenCalledWith('Unsupported CloudEvent type: unsupported-event-type')
   })
 
-  test('should not call publish when outbound payload is invalid', async () => {
+  test('should not call publishWithDurability when outbound payload is invalid', async () => {
     const invalidMessage = {
       id: 'msg-1',
       type: 'uk.gov.fcp.sfd.crm.case.created',
@@ -123,6 +119,6 @@ describe('Publish received request', () => {
 
     await expect(publishReceivedEvent(invalidMessage)).rejects.toThrow()
 
-    expect(publish).not.toHaveBeenCalled()
+    expect(publishWithDurability).not.toHaveBeenCalled()
   })
 })

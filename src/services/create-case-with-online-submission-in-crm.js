@@ -57,35 +57,14 @@ const publishEvents = ({ caseId, crn, sbi, correlationId }) => {
     sbi: Number(sbi)
   }
 
-  Promise.resolve(publishReceivedEvent({ type: crmEvents.CASE_CREATED, data: eventData }))
-    .catch(err => {
-      logger.error({ err, caseId, correlationId }, 'Error publishing received CRM request event')
+  try {
+    await publishReceivedEvent({
+      type: crmEvents.CASE_CREATED,
+      data: eventData
     })
-
-  Promise.resolve(publishReceivedEvent({
-    type: crmEvents.DOCUMENT_CREATED,
-    data: {
-      correlationId,
-      caseId,
-      crn: Number(crn),
-      sbi: Number(sbi)
-    }
-  }))
-    .catch(err => {
-      logger.error({ err, caseId, correlationId }, 'Error publishing document.created event')
-    })
-}
-
-export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi, caseData, onlineSubmissionActivity, correlationId }) => {
-  validateParams({ authToken, crn, sbi, caseData, onlineSubmissionActivity, correlationId })
-
-  const { contactId, accountId } = await ensureContactAndAccount(authToken, crn, sbi)
-
-  const caseId = await callCreateCase({ authToken, caseData, onlineSubmissionActivity, contactId, accountId, correlationId })
-
-  const rpaOnlinesubmissionid = await fetchRpaOnlinesubmissionidWrapper(authToken, caseId, correlationId)
-
-  publishEvents({ caseId, crn, sbi, correlationId })
+  } catch (err) {
+    logger.error({ err, caseId, correlationId }, 'publishReceivedEvent threw unexpectedly — case creation still succeeded')
+  }
 
   return {
     contactId,
