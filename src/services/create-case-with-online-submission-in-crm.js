@@ -76,15 +76,14 @@ export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi,
     sbi: Number(sbi)
   }
 
-  // Fire-and-forget publishing; handle any rejection to avoid unhandled rejections
-  Promise.resolve(publishReceivedEvent(
-    {
+  try {
+    await publishReceivedEvent({
       type: crmEvents.CASE_CREATED,
       data: eventData
-    }
-  )).catch(err => {
-    logger.error({ err, caseId, correlationId }, 'Error publishing received CRM request event')
-  })
+    })
+  } catch (err) {
+    logger.error({ err, caseId, correlationId }, 'publishReceivedEvent threw unexpectedly — case creation still succeeded')
+  }
 
   return {
     contactId,

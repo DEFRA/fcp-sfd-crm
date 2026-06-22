@@ -14,8 +14,13 @@ vi.mock('../../../src/repos/crm.js', () => ({
   createMetadataForOnlineSubmission: vi.fn()
 }))
 
+vi.mock('../../../src/messaging/outbound/received-event/publish-received-event.js', () => ({
+  publishReceivedEvent: vi.fn()
+}))
+
 const { createCaseWithOnlineSubmissionInCrm } = await import('../../../src/services/create-case-with-online-submission-in-crm.js')
 const { getContactIdFromCrn, getAccountIdFromSbi, createCaseWithOnlineSubmission, getOnlineSubmissionId } = await import('../../../src/repos/crm.js')
+const { publishReceivedEvent } = await import('../../../src/messaging/outbound/received-event/publish-received-event.js')
 
 describe('createCaseWithOnlineSubmissionInCrm edge cases', () => {
   beforeEach(() => {
@@ -79,6 +84,23 @@ describe('createCaseWithOnlineSubmissionInCrm edge cases', () => {
     getAccountIdFromSbi.mockResolvedValue({ accountId: 'aid' })
     createCaseWithOnlineSubmission.mockResolvedValue({ caseId: 'cid', error: null })
     getOnlineSubmissionId.mockResolvedValue({ rpaOnlinesubmissionid: 'ols-1', error: null })
+    const result = await createCaseWithOnlineSubmissionInCrm({
+      authToken: 't',
+      crn: 'c',
+      sbi: 's',
+      caseData: {},
+      onlineSubmissionActivity: {},
+      correlationId: 'test-correlation-id'
+    })
+    expect(result).toEqual({ contactId: 'id', accountId: 'aid', caseId: 'cid', rpaOnlinesubmissionid: 'ols-1' })
+  })
+
+  it('should return ids and not throw when publishReceivedEvent fails', async () => {
+    getContactIdFromCrn.mockResolvedValue({ contactId: 'id' })
+    getAccountIdFromSbi.mockResolvedValue({ accountId: 'aid' })
+    createCaseWithOnlineSubmission.mockResolvedValue({ caseId: 'cid', error: null })
+    getOnlineSubmissionId.mockResolvedValue({ rpaOnlinesubmissionid: 'ols-1', error: null })
+    publishReceivedEvent.mockRejectedValue(new Error('SNS publish failed'))
     const result = await createCaseWithOnlineSubmissionInCrm({
       authToken: 't',
       crn: 'c',
