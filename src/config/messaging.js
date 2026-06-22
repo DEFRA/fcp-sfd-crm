@@ -43,7 +43,7 @@ export const messagingConfig = {
         doc: 'URL for the outbound SNS publish dead letter queue',
         format: String,
         default: null,
-        env: 'CRM_EVENTS_PUBLISH_DLQ_URL'
+        env: 'CRM_DEAD_LETTER_QUEUE_URL'
       }
     },
     audit: {
