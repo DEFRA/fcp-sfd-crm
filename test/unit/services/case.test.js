@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, test, expect, vi, beforeEach } from 'vitest'
 
 const mockLogger = { info: vi.fn(), error: vi.fn() }
 
@@ -248,7 +248,7 @@ describe('case service', () => {
       expect(markFileProcessed).not.toHaveBeenCalled()
     })
 
-    it('should throw with retryable=true when metadata creation fails with a retryable HTTP error', async () => {
+    test('should throw with retryable=true when metadata creation fails with a retryable HTTP error', async () => {
       const retryErr = new Error('Service unavailable')
       retryErr.retryMetadata = { category: 'retryable', terminalReason: 'http_503', status: 503 }
       upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: 'existing-case-id', isCreator: false })
@@ -263,7 +263,7 @@ describe('case service', () => {
       expect(markFileProcessed).not.toHaveBeenCalled()
     })
 
-    it('should throw with retryable=false when metadata creation fails with a non-retryable HTTP error', async () => {
+    test('should throw with retryable=false when metadata creation fails with a non-retryable HTTP error', async () => {
       const nonRetryErr = new Error('Bad request')
       nonRetryErr.retryMetadata = { category: 'non-retryable', terminalReason: 'http_400', status: 400 }
       upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: 'existing-case-id', isCreator: false })

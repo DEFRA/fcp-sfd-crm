@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, test, expect, vi, beforeEach } from 'vitest'
+
 
 const mockLogger = { info: vi.fn(), error: vi.fn() }
 
@@ -32,7 +33,7 @@ beforeEach(() => {
 })
 
 describe('ensureContactAndAccount', () => {
-  it('returns contactId and accountId on success', async () => {
+  test('returns contactId and accountId on success', async () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: 'c1' })
     getAccountIdFromSbi.mockResolvedValue({ accountId: 'a1' })
 
@@ -41,7 +42,7 @@ describe('ensureContactAndAccount', () => {
     expect(result).toEqual({ contactId: 'c1', accountId: 'a1' })
   })
 
-  it('throws with retryable=true when contact lookup gets a retryable HTTP error', async () => {
+  test('throws with retryable=true when contact lookup gets a retryable HTTP error', async () => {
     const err = makeRetryableError()
     getContactIdFromCrn.mockResolvedValue({ contactId: null, error: err })
 
@@ -52,7 +53,7 @@ describe('ensureContactAndAccount', () => {
     expect(thrown.message).toContain('Retryable error looking up contact')
   })
 
-  it('throws 422 when contact lookup gets a non-retryable HTTP error', async () => {
+  test('throws 422 when contact lookup gets a non-retryable HTTP error', async () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: null, error: makeNonRetryableError() })
 
     const thrown = await ensureContactAndAccount('token', 'crn1', 'sbi1').catch(e => e)
@@ -62,7 +63,7 @@ describe('ensureContactAndAccount', () => {
     expect(thrown.retryable).toBeUndefined()
   })
 
-  it('throws 422 on genuine not-found (no error, no contactId)', async () => {
+  test('throws 422 on genuine not-found (no error, no contactId)', async () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: null })
 
     const thrown = await ensureContactAndAccount('token', 'crn1', 'sbi1').catch(e => e)
@@ -71,7 +72,7 @@ describe('ensureContactAndAccount', () => {
     expect(thrown.output.statusCode).toBe(422)
   })
 
-  it('throws with retryable=true when account lookup gets a retryable HTTP error', async () => {
+  test('throws with retryable=true when account lookup gets a retryable HTTP error', async () => {
     const err = makeRetryableError()
     getContactIdFromCrn.mockResolvedValue({ contactId: 'c1' })
     getAccountIdFromSbi.mockResolvedValue({ accountId: null, error: err })
@@ -83,7 +84,7 @@ describe('ensureContactAndAccount', () => {
     expect(thrown.message).toContain('Retryable error looking up account')
   })
 
-  it('throws 422 when account lookup gets a non-retryable HTTP error', async () => {
+  test('throws 422 when account lookup gets a non-retryable HTTP error', async () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: 'c1' })
     getAccountIdFromSbi.mockResolvedValue({ accountId: null, error: makeNonRetryableError() })
 
@@ -93,7 +94,7 @@ describe('ensureContactAndAccount', () => {
     expect(thrown.output.statusCode).toBe(422)
   })
 
-  it('throws 422 on genuine not-found for account (no error, no accountId)', async () => {
+  test('throws 422 on genuine not-found for account (no error, no accountId)', async () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: 'c1' })
     getAccountIdFromSbi.mockResolvedValue({ accountId: null })
 
@@ -105,7 +106,7 @@ describe('ensureContactAndAccount', () => {
 })
 
 describe('fetchRpaOnlineSubmissionIdOrThrow', () => {
-  it('returns the submission ID on success', async () => {
+  test('returns the submission ID on success', async () => {
     getOnlineSubmissionId.mockResolvedValue({ rpaOnlinesubmissionid: 'sub-1', error: null })
 
     const result = await fetchRpaOnlineSubmissionIdOrThrow('token', 'case-1', { correlationId: 'corr-1' })
@@ -113,7 +114,7 @@ describe('fetchRpaOnlineSubmissionIdOrThrow', () => {
     expect(result).toBe('sub-1')
   })
 
-  it('throws with retryable=true when repo returns a retryable HTTP error', async () => {
+  test('throws with retryable=true when repo returns a retryable HTTP error', async () => {
     const err = makeRetryableError()
     getOnlineSubmissionId.mockResolvedValue({ rpaOnlinesubmissionid: null, error: err })
 
@@ -124,7 +125,7 @@ describe('fetchRpaOnlineSubmissionIdOrThrow', () => {
     expect(thrown.message).toBe('Failed to retrieve online submission id')
   })
 
-  it('throws with retryable=false when repo returns a non-retryable HTTP error', async () => {
+  test('throws with retryable=false when repo returns a non-retryable HTTP error', async () => {
     getOnlineSubmissionId.mockResolvedValue({ rpaOnlinesubmissionid: null, error: makeNonRetryableError() })
 
     const thrown = await fetchRpaOnlineSubmissionIdOrThrow('token', 'case-1', { correlationId: 'corr-1' }).catch(e => e)
@@ -133,7 +134,7 @@ describe('fetchRpaOnlineSubmissionIdOrThrow', () => {
     expect(thrown.message).toBe('Failed to retrieve online submission id')
   })
 
-  it('throws with retryable=false when submission ID is genuinely not found (no error)', async () => {
+  test('throws with retryable=false when submission ID is genuinely not found (no error)', async () => {
     getOnlineSubmissionId.mockResolvedValue({ rpaOnlinesubmissionid: null, error: null })
 
     const thrown = await fetchRpaOnlineSubmissionIdOrThrow('token', 'case-1', { correlationId: 'corr-1' }).catch(e => e)
@@ -142,7 +143,7 @@ describe('fetchRpaOnlineSubmissionIdOrThrow', () => {
     expect(thrown.message).toBe('Failed to retrieve online submission id')
   })
 
-  it('works without context argument', async () => {
+  test('works without context argument', async () => {
     getOnlineSubmissionId.mockResolvedValue({ rpaOnlinesubmissionid: null, error: makeNonRetryableError() })
 
     const thrown = await fetchRpaOnlineSubmissionIdOrThrow('token', 'case-1').catch(e => e)

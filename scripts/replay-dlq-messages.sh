@@ -69,8 +69,6 @@ while true; do
     --message-attribute-names All \
     --output json 2>/dev/null || echo '{}')
 
-  MESSAGES=$(echo "$RESPONSE" | grep -c '"MessageId"' || true)
-  if [ "$MESSAGES" -eq 0 ]; then
   # node is used for JSON parsing — guaranteed available in CDP Node.js container images.
   MESSAGE_COUNT=$(node -e "
     const d = $(echo "$RESPONSE" | node -e 'let d=\"\";process.stdin.on(\"data\",c=>d+=c).on(\"end\",()=>process.stdout.write(JSON.stringify(JSON.parse(d).Messages||[])))');

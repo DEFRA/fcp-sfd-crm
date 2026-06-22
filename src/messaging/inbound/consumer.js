@@ -28,9 +28,9 @@ const sendToDlq = async (sqsClient, dlqUrl, message, logContext) => {
         reference: message.MessageId
       },
       error: logContext
-    }, 'Message sent to DLQ')
+    }, 'Message routed to DLQ')
   } catch (dlqErr) {
-    logger.error({
+    logger.fatal({
       event: {
         type: 'crm.dlq.send_failed',
         action: 'send_to_dlq',

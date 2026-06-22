@@ -54,7 +54,7 @@ vi.mock('../../../../src/utils/validation-logger.js', () => ({
 }))
 
 vi.mock('../../../../src/logging/logger.js', () => ({
-  createLogger: vi.fn(() => ({ info: vi.fn(), error: vi.fn() }))
+  createLogger: vi.fn(() => ({ info: vi.fn(), error: vi.fn(), fatal: vi.fn() }))
 }))
 
 let startCRMListener, stopCRMListener, setLogger, mockLogger
@@ -103,7 +103,7 @@ describe('CRM request sqs consumer', () => {
 
     async function setupAndImportConsumer () {
       mockConsumer._listeners = {}
-      const logger = { info: vi.fn(), error: vi.fn() }
+      const logger = { info: vi.fn(), error: vi.fn(), fatal: vi.fn() }
       const sqsClient = { config: { endpoint: 'mock-endpoint' }, send: vi.fn().mockResolvedValue({}) }
       mockLoggerRef = logger
       vi.mock('../../../../src/config/index.js', () => ({
@@ -277,7 +277,7 @@ describe('CRM request sqs consumer', () => {
           event: expect.objectContaining({ type: 'crm.dlq.message_received' }),
           error: expect.objectContaining({ errorClassification: 'invalid_json' })
         }),
-        'Message sent to DLQ'
+        'Message routed to DLQ'
       )
       expect(result).toEqual(message)
     })
@@ -464,7 +464,7 @@ describe('CRM request sqs consumer', () => {
             event: expect.objectContaining({ type: 'crm.dlq.message_received', reference: 'msg-dlq-1' }),
             error: expect.objectContaining({ errorClassification: 'non-retryable', fileId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479' })
           }),
-          'Message sent to DLQ'
+          'Message routed to DLQ'
         )
         expect(result).toEqual(message)
       })
@@ -483,7 +483,7 @@ describe('CRM request sqs consumer', () => {
         const result = await capturedHandleMessage(message)
 
         expect(result).toEqual(message)
-        expect(logger.error).toHaveBeenCalledWith(
+        expect(logger.fatal).toHaveBeenCalledWith(
           expect.objectContaining({ event: expect.objectContaining({ type: 'crm.dlq.send_failed' }) }),
           'Failed to send message to DLQ — message will be deleted from main queue'
         )
