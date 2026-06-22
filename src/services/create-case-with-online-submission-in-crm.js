@@ -49,7 +49,7 @@ const callCreateCase = async ({ authToken, caseData, onlineSubmissionActivity, c
   return caseId
 }
 
-const publishEvents = ({ caseId, crn, sbi, correlationId }) => {
+const publishEvents = async ({ caseId, crn, sbi, correlationId }) => {
   const eventData = {
     correlationId,
     caseId,
@@ -65,14 +65,8 @@ const publishEvents = ({ caseId, crn, sbi, correlationId }) => {
   } catch (err) {
     logger.error({ err, caseId, correlationId }, 'publishReceivedEvent threw unexpectedly — case creation still succeeded')
   }
-
-  return {
-    contactId,
-    accountId,
-    caseId,
-    rpaOnlinesubmissionid
-  }
 }
+
 
 // Wrapper kept to preserve the original behaviour of using correlationId for logging
 const fetchRpaOnlinesubmissionidWrapper = async (authToken, caseId, correlationId) => {
@@ -90,4 +84,18 @@ const fetchRpaOnlinesubmissionidWrapper = async (authToken, caseId, correlationI
     thrown.retryMetadata = err?.retryMetadata ?? null
     throw thrown
   }
+}
+
+export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, correlationId, crn, sbi, caseData, onlineSubmissionActivity }) => {
+  validateParams({ authToken, crn, sbi, caseData, onlineSubmissionActivity, correlationId })
+
+  const { contactId, accountId } = await ensureContactAndAccount(authToken, crn, sbi)
+
+  const caseId = await callCreateCase({ authToken, caseData, onlineSubmissionActivity, contactId, accountId, correlationId })
+
+  await publishEvents({ caseId, crn, sbi, correlationId })
+
+  const rpaOnlinesubmissionid = await fetchRpaOnlinesubmissionidWrapper(authToken, caseId, correlationId)
+
+  return { contactId, accountId, caseId, rpaOnlinesubmissionid }
 }
