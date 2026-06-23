@@ -4,6 +4,7 @@ import { createCaseWithOnlineSubmissionInCrm } from './create-case-with-online-s
 import { upsertCase, updateCaseId, markFileProcessed } from '../repos/cases.js'
 import { createMetadataForOnlineSubmission } from '../repos/crm.js'
 import { fetchRpaOnlineSubmissionIdOrThrow } from './crm-helpers.js'
+import { messages } from '../constants/messages.js'
 
 const logger = createLogger()
 
@@ -133,8 +134,14 @@ async function addMetadataToExistingCase ({ authToken, caseId, correlationId, fi
   })
 
   if (metadataError) {
-    logger.error({ correlationId, caseId, fileId, error: metadataError }, 'Failed to add metadata for additional file')
-    const error = new Error('Failed to add metadata for additional file')
+    if (metadataError.retryMetadata?.category === 'retryable') {
+      const retryableErr = new Error(messages.METADATA_FAILURE)
+      retryableErr.retryable = true
+      retryableErr.retryMetadata = metadataError.retryMetadata
+      throw retryableErr
+    }
+    logger.error({ correlationId, caseId, fileId, error: metadataError }, messages.METADATA_FAILURE)
+    const error = new Error(messages.METADATA_FAILURE)
     error.retryable = false
     throw error
   }

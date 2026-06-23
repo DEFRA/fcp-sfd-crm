@@ -10,7 +10,11 @@ create_queue() {
   local QUEUE_NAME=$1
   local DLQ_NAME="${QUEUE_NAME}-deadletter"
 
-  aws sqs create-queue --queue-name "${DLQ_NAME}" --region "${AWS_REGION}"
+  aws sqs create-queue --queue-name "${DLQ_NAME}" --region "${AWS_REGION}" \
+    --attributes '{
+      "VisibilityTimeout": "300",
+      "MessageRetentionPeriod": "1209600"
+    }'
 
   DLQ_ARN=$(aws sqs get-queue-attributes \
     --queue-url "${AWS_ENDPOINT_URL}/000000000000/${DLQ_NAME}" \
