@@ -6,6 +6,7 @@ import {
   getContactIdFromCrn,
   getAccountIdFromSbi
 } from '../repos/crm.js'
+import { messages } from '../constants/messages.js'
 
 const logger = createLogger()
 const { constants: httpConstants } = http2
@@ -68,26 +69,25 @@ export async function ensureContactAndAccount (authToken, crn, sbi) {
 
 export async function fetchRpaOnlineSubmissionIdOrThrow (authToken, caseId, context = {}) {
   const { correlationId } = context
-  const SUBMISSION_ID_FAILURE_MSG = 'Failed to retrieve online submission id'
 
   const { rpaOnlinesubmissionid, error } = await getOnlineSubmissionId(authToken, caseId)
 
   if (error) {
     if (error.retryMetadata?.category === 'retryable') {
-      const retryableErr = new Error(SUBMISSION_ID_FAILURE_MSG)
+      const retryableErr = new Error(messages.SUBMISSION_ID_FAILURE)
       retryableErr.retryable = true
       retryableErr.retryMetadata = error.retryMetadata
       throw retryableErr
     }
-    logger.error({ correlationId, caseId, error }, SUBMISSION_ID_FAILURE_MSG)
-    const err = new Error(SUBMISSION_ID_FAILURE_MSG)
+    logger.error({ correlationId, caseId, error }, messages.SUBMISSION_ID_FAILURE)
+    const err = new Error(messages.SUBMISSION_ID_FAILURE)
     err.retryable = false
     throw err
   }
 
   if (!rpaOnlinesubmissionid) {
     logger.error({ correlationId, caseId }, 'Online submission id not found')
-    const err = new Error(SUBMISSION_ID_FAILURE_MSG)
+    const err = new Error(messages.SUBMISSION_ID_FAILURE)
     err.retryable = false
     throw err
   }
