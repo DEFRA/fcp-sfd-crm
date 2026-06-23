@@ -45,8 +45,8 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
 
     const result = await createCaseWithOnlineSubmissionInCrm(request)
 
-    expect(getContactIdFromCrn).toHaveBeenCalledWith('mock-bearer-token', 'mock-crn')
-    expect(getAccountIdFromSbi).toHaveBeenCalledWith('mock-bearer-token', 'mock-sbi')
+    expect(getContactIdFromCrn).toHaveBeenCalledWith('mock-bearer-token', 'mock-crn', { correlationId: 'mock-correlation-id' })
+    expect(getAccountIdFromSbi).toHaveBeenCalledWith('mock-bearer-token', 'mock-sbi', { correlationId: 'mock-correlation-id' })
 
     expect(createCaseWithOnlineSubmission).toHaveBeenCalledWith({
       authToken: 'mock-bearer-token',

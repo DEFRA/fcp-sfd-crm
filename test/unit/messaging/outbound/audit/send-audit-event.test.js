@@ -6,7 +6,7 @@ vi.mock('@defra/fcp-audit-publisher', () => ({
 }))
 
 vi.mock('../../../../../src/messaging/sns/client.js', () => ({
-  snsClient: {}
+  snsClient: { send: vi.fn().mockResolvedValue({ MessageId: 'mock-message-id' }) }
 }))
 
 vi.mock('../../../../../src/logging/logger.js', () => ({

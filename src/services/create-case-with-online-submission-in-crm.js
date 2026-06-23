@@ -89,7 +89,7 @@ const fetchRpaOnlinesubmissionidWrapper = async (authToken, caseId, correlationI
 export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, correlationId, crn, sbi, caseData, onlineSubmissionActivity }) => {
   validateParams({ authToken, crn, sbi, caseData, onlineSubmissionActivity, correlationId })
 
-  const { contactId, accountId } = await ensureContactAndAccount(authToken, crn, sbi)
+  const { contactId, accountId } = await ensureContactAndAccount(authToken, crn, sbi, correlationId)
 
   const caseId = await callCreateCase({ authToken, caseData, onlineSubmissionActivity, contactId, accountId, correlationId })
 

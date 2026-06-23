@@ -26,7 +26,7 @@ vi.mock('../../../src/messaging/sns/publish.js', () => ({
   publish: mockPublish
 }))
 vi.mock('../../../src/messaging/sns/client.js', () => ({
-  snsClient: {}
+  snsClient: { send: vi.fn().mockResolvedValue({ MessageId: 'mock-message-id' }) }
 }))
 vi.mock('../../../src/messaging/outbound/received-event/build-received-event.js', () => ({
   buildReceivedEvent: mockBuildReceivedEvent
