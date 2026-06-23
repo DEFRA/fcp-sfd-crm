@@ -48,7 +48,7 @@ export const sendAuditEvent = async (event) => {
     }
 
     if (d.caseId) {
-      out.audit.entities.push({ entity: 'case', action: 'created', entityid: String(d.caseId) })
+      out.audit.entities.push({ entity: 'document', action: 'created', entityid: String(d.caseId) })
     }
 
     if (d.metadataId) {

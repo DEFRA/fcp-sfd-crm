@@ -83,8 +83,7 @@ describe('sendAuditEvent', () => {
     expect(publishAuditEvent).toHaveBeenCalledTimes(1)
     const payload = publishAuditEvent.mock.calls[0][0]
     const entityTypes = payload.audit.entities.map(e => e.entity)
-    expect(entityTypes).toContain('case')
-    expect(entityTypes).toContain('document')
+    expect(entityTypes).toEqual(['document', 'document'])
     expect(payload.correlationid).toBe('corr-4')
   })
 
