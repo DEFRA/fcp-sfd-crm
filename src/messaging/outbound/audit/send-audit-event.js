@@ -2,7 +2,6 @@ import { publishAuditEvent } from '@defra/fcp-audit-publisher'
 import { snsClient } from '../../sns/client.js'
 import { config } from '../../../config/index.js'
 import { createLogger } from '../../../logging/logger.js'
-import { buildReceivedEvent } from '../received-event/build-received-event.js'
 
 const logger = createLogger()
 
@@ -19,19 +18,7 @@ const auditPublishConfig = {
 
 export const sendAuditEvent = async (event) => {
   try {
-    // If publishAuditEvent is a test mock (vi.fn), call it with the same
-    // object we received so unit tests (which assert the call) continue to
-    // work. Otherwise produce a CloudEvent (via `buildReceivedEvent`) where
-    // `data` contains the expected identifiers and audit details and publish
-    // that.
-    const isMock = publishAuditEvent && publishAuditEvent.mock
-
-    if (isMock) {
-      await publishAuditEvent(event, auditPublishConfig)
-      return
-    }
-
-    // Real publisher: build the flattened event shape expected by the
+    // Build the flattened event shape expected by the
     // audit-publisher (lowercase keys, `audit.entities[].entityid`, etc.).
     const d = (event?.id && event?.specversion && event?.source)
       ? (event.data || {})
