@@ -60,9 +60,16 @@ const getContactIdFromCrn = async (authToken, crn, context = {}) => {
 
         // Also emit audit event (background) but don't let failures bubble up
         setImmediate(() => {
-          sendAuditEvent(event).catch(err => {
+          sendAuditEvent({
+            correlationId: context?.correlationId,
+            contactId,
+            accounts: {
+              crn,
+              ...(context?.sbi ? { sbi: context.sbi } : {})
+            }
+          }).catch(err => {
             const reason = String(err?.message || '').toLowerCase().includes('schema') ? 'schema' : 'transport'
-            import('../logging/logger.js').then(m => m.createLogger().error({ event: { type: event.type, reference: event.data?.correlationId ?? null, reason } }, 'audit_publish_failed')).catch(noop)
+            import('../logging/logger.js').then(m => m.createLogger().error({ event: { type: 'uk.gov.fcp.sfd.person.read', reference: context?.correlationId ?? null, reason } }, 'audit_publish_failed')).catch(noop)
           })
         })
       } catch (err) {
@@ -83,10 +90,17 @@ const getContactIdFromCrn = async (authToken, crn, context = {}) => {
         // Audit emission must happen before business error is surfaced; do it
         // but swallow audit errors so business flow continues.
         try {
-          await sendAuditEvent(failEvent)
+          await sendAuditEvent({
+            correlationId: context?.correlationId,
+            accounts: {
+              crn,
+              ...(context?.sbi ? { sbi: context.sbi } : {})
+            },
+            audit: { status: 'failure', details: 'CRN not found' }
+          })
         } catch (err) {
           const reason = String(err?.message || '').toLowerCase().includes('schema') ? 'schema' : 'transport'
-          import('../logging/logger.js').then(m => m.createLogger().error({ event: { type: failEvent.type, reference: failEvent.data?.correlationId ?? null, reason } }, 'audit_publish_failed')).catch(noop)
+          import('../logging/logger.js').then(m => m.createLogger().error({ event: { type: 'uk.gov.fcp.sfd.person.read', reference: context?.correlationId ?? null, reason } }, 'audit_publish_failed')).catch(noop)
         }
       } catch (err) {
         import('../logging/logger.js').then(m => m.createLogger().error({ err, crn }, 'Failed to build or publish person.read failure event')).catch(noop)
@@ -133,9 +147,13 @@ const getAccountIdFromSbi = async (authToken, sbi, context = {}) => {
         })
 
         setImmediate(() => {
-          sendAuditEvent(event).catch(err => {
+          sendAuditEvent({
+            correlationId: context?.correlationId,
+            accountId,
+            accounts: { sbi }
+          }).catch(err => {
             const reason = String(err?.message || '').toLowerCase().includes('schema') ? 'schema' : 'transport'
-            import('../logging/logger.js').then(m => m.createLogger().error({ event: { type: event.type, reference: event.data?.correlationId ?? null, reason } }, 'audit_publish_failed')).catch(noop)
+            import('../logging/logger.js').then(m => m.createLogger().error({ event: { type: 'uk.gov.fcp.sfd.business.read', reference: context?.correlationId ?? null, reason } }, 'audit_publish_failed')).catch(noop)
           })
         })
       } catch (err) {
@@ -153,10 +171,14 @@ const getAccountIdFromSbi = async (authToken, sbi, context = {}) => {
 
         // Audit emission must happen before business error surfaced
         try {
-          await sendAuditEvent(failEvent)
+          await sendAuditEvent({
+            correlationId: context?.correlationId,
+            accounts: { sbi },
+            audit: { status: 'failure', details: 'SBI not found' }
+          })
         } catch (err) {
           const reason = String(err?.message || '').toLowerCase().includes('schema') ? 'schema' : 'transport'
-          import('../logging/logger.js').then(m => m.createLogger().error({ event: { type: failEvent.type, reference: failEvent.data?.correlationId ?? null, reason } }, 'audit_publish_failed')).catch(noop)
+          import('../logging/logger.js').then(m => m.createLogger().error({ event: { type: 'uk.gov.fcp.sfd.business.read', reference: context?.correlationId ?? null, reason } }, 'audit_publish_failed')).catch(noop)
         }
       } catch (err) {
         import('../logging/logger.js').then(m => m.createLogger().error({ err, sbi }, 'Failed to build or publish business.read failure event')).catch(noop)

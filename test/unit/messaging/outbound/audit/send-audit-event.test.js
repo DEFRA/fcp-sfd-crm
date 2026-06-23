@@ -20,11 +20,9 @@ vi.mock('../../../../../src/logging/logger.js', () => ({
 const mockLogger = createLogger()
 
 const mockAuditEvent = {
-  id: '1',
-  specversion: '1.0',
-  source: 'test',
-  type: 'person.read',
-  data: { contactId: 'cid-1', accounts: { crn: '123' }, correlationId: 'corr-1' }
+  contactId: 'cid-1',
+  accounts: { crn: '123' },
+  correlationId: 'corr-1'
 }
 
 describe('sendAuditEvent', () => {
@@ -60,7 +58,7 @@ describe('sendAuditEvent', () => {
     const { publishAuditEvent } = await import('@defra/fcp-audit-publisher')
     const { sendAuditEvent } = await import('../../../../../src/messaging/outbound/audit/send-audit-event.js')
 
-    await sendAuditEvent({ data: { accountId: 'acc-1', accounts: { sbi: '999' }, correlationId: 'corr-3' } })
+    await sendAuditEvent({ accountId: 'acc-1', accounts: { sbi: '999' }, correlationId: 'corr-3' })
 
     expect(publishAuditEvent).toHaveBeenCalledWith(
       {
@@ -78,7 +76,7 @@ describe('sendAuditEvent', () => {
     const { publishAuditEvent } = await import('@defra/fcp-audit-publisher')
     const { sendAuditEvent } = await import('../../../../../src/messaging/outbound/audit/send-audit-event.js')
 
-    await sendAuditEvent({ data: { caseId: 'case-99', metadataId: 'meta-99', correlationId: 'corr-4' } })
+    await sendAuditEvent({ caseId: 'case-99', metadataId: 'meta-99', correlationId: 'corr-4' })
 
     expect(publishAuditEvent).toHaveBeenCalledTimes(1)
     const payload = publishAuditEvent.mock.calls[0][0]
@@ -91,7 +89,7 @@ describe('sendAuditEvent', () => {
     const { publishAuditEvent } = await import('@defra/fcp-audit-publisher')
     const { sendAuditEvent } = await import('../../../../../src/messaging/outbound/audit/send-audit-event.js')
 
-    await sendAuditEvent({ data: { audit: { status: 'failure', details: { reason: 'CRN not found' } } } })
+    await sendAuditEvent({ audit: { status: 'failure', details: { reason: 'CRN not found' } } })
 
     expect(publishAuditEvent).toHaveBeenCalledWith(
       {
@@ -125,7 +123,7 @@ describe('sendAuditEvent', () => {
     const { publishAuditEvent } = await import('@defra/fcp-audit-publisher')
     const { sendAuditEvent } = await import('../../../../../src/messaging/outbound/audit/send-audit-event.js')
 
-    await sendAuditEvent({ data: { audit: { details: 'plain message' } } })
+    await sendAuditEvent({ audit: { details: 'plain message' } })
 
     expect(publishAuditEvent).toHaveBeenCalledWith(
       {

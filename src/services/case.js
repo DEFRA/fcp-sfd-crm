@@ -6,7 +6,6 @@ import { createMetadataForOnlineSubmission } from '../repos/crm.js'
 import { fetchRpaOnlineSubmissionIdOrThrow } from './crm-helpers.js'
 import { publishReceivedEvent } from '../messaging/outbound/received-event/publish-received-event.js'
 import { crmEvents } from '../constants/events.js'
-import { buildReceivedEvent } from '../messaging/outbound/received-event/build-received-event.js'
 import { sendAuditEvent } from '../messaging/outbound/audit/send-audit-event.js'
 import { messages } from '../constants/messages.js'
 
@@ -135,17 +134,12 @@ async function createNewCase({ authToken, transformedPayload, correlationId, fil
 
   // Also emit an audit copy of document.created (fire-and-forget). Audit
   // failures must not affect case processing.
-  try {
-    const auditEvt = buildReceivedEvent({ data: eventData }, crmEvents.DOCUMENT_CREATED)
-    setImmediate(() => {
-      sendAuditEvent(auditEvt).catch(err => {
-        const reason = String(err?.message || '').toLowerCase().includes('schema') ? 'schema' : 'transport'
-        logger.error({ event: { type: auditEvt.type, reference: auditEvt.data?.correlationId ?? null, reason } }, 'audit_publish_failed')
-      })
+  setImmediate(() => {
+    sendAuditEvent(eventData).catch(err => {
+      const reason = String(err?.message || '').toLowerCase().includes('schema') ? 'schema' : 'transport'
+      logger.error({ event: { type: crmEvents.DOCUMENT_CREATED, reference: correlationId ?? null, reason } }, 'audit_publish_failed')
     })
-  } catch (e) {
-    logger.error({ err: e, caseId: response.caseId, correlationId }, 'Failed to build audit event for document.created')
-  }
+  })
 
   return response
 }
@@ -199,17 +193,12 @@ async function addMetadataToExistingCase({ authToken, caseId, correlationId, fil
     })
 
   // Emit audit copy of document.created for metadata creation
-  try {
-    const auditEvt = buildReceivedEvent({ data: eventData }, crmEvents.DOCUMENT_CREATED)
-    setImmediate(() => {
-      sendAuditEvent(auditEvt).catch(err => {
-        const reason = String(err?.message || '').toLowerCase().includes('schema') ? 'schema' : 'transport'
-        logger.error({ event: { type: auditEvt.type, reference: auditEvt.data?.correlationId ?? null, reason } }, 'audit_publish_failed')
-      })
+  setImmediate(() => {
+    sendAuditEvent(eventData).catch(err => {
+      const reason = String(err?.message || '').toLowerCase().includes('schema') ? 'schema' : 'transport'
+      logger.error({ event: { type: crmEvents.DOCUMENT_CREATED, reference: correlationId ?? null, reason } }, 'audit_publish_failed')
     })
-  } catch (e) {
-    logger.error({ err: e, caseId, correlationId, metadataId }, 'Failed to build audit event for document.created after metadata creation')
-  }
+  })
 
   return { caseId }
 }

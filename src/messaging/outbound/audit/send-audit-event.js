@@ -18,22 +18,21 @@ const auditPublishConfig = {
 
 export const sendAuditEvent = async (event) => {
   try {
-    // Build the flattened event shape expected by the
-    // audit-publisher (lowercase keys, `audit.entities[].entityid`, etc.).
-    const d = (event?.id && event?.specversion && event?.source)
-      ? (event.data || {})
-      : (event?.data || event?.audit || event || {})
+    // Accept audit-domain input (not CloudEvents) and normalize to the
+    // payload shape expected by the audit publisher.
+    const d = event || {}
+    const correlationId = d.correlationId || d.correlationid
 
     const out = {}
 
     // Map accounts if present
-    if (d.accounts) {
+    if (d.accounts && typeof d.accounts === 'object') {
       out.audit = out.audit || {}
       out.audit.accounts = { ...d.accounts }
     }
 
     // Map correlation id (publisher will generate one if missing)
-    if (d.correlationId) out.correlationid = String(d.correlationId)
+    if (correlationId) out.correlationid = String(correlationId)
 
     // Map entities into audit.entities with `entityid` (schema requires this)
     out.audit = out.audit || {}
@@ -71,7 +70,7 @@ export const sendAuditEvent = async (event) => {
       const sec = { ...d.security }
       if (sec.details && typeof sec.details !== 'object') sec.details = { message: String(sec.details) }
       const payload = { security: sec }
-      if (d.correlationId) payload.correlationid = String(d.correlationId)
+      if (correlationId) payload.correlationid = String(correlationId)
       await publishAuditEvent(payload, auditPublishConfig)
       return
     }
@@ -82,7 +81,7 @@ export const sendAuditEvent = async (event) => {
     out.audit.accounts = out.audit.accounts || {}
 
     const payload = { audit: out.audit }
-    if (d.correlationId) payload.correlationid = String(d.correlationId)
+    if (correlationId) payload.correlationid = String(correlationId)
 
     await publishAuditEvent(payload, auditPublishConfig)
   } catch (err) {
