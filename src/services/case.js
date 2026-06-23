@@ -8,6 +8,7 @@ import { publishReceivedEvent } from '../messaging/outbound/received-event/publi
 import { crmEvents } from '../constants/events.js'
 import { buildReceivedEvent } from '../messaging/outbound/received-event/build-received-event.js'
 import { sendAuditEvent } from '../messaging/outbound/audit/send-audit-event.js'
+import { messages } from '../constants/messages.js'
 
 const logger = createLogger()
 
@@ -166,8 +167,14 @@ async function addMetadataToExistingCase({ authToken, caseId, correlationId, fil
   })
 
   if (metadataError) {
-    logger.error({ correlationId, caseId, fileId, error: metadataError }, 'Failed to add metadata for additional file')
-    const error = new Error('Failed to add metadata for additional file')
+    if (metadataError.retryMetadata?.category === 'retryable') {
+      const retryableErr = new Error(messages.METADATA_FAILURE)
+      retryableErr.retryable = true
+      retryableErr.retryMetadata = metadataError.retryMetadata
+      throw retryableErr
+    }
+    logger.error({ correlationId, caseId, fileId, error: metadataError }, messages.METADATA_FAILURE)
+    const error = new Error(messages.METADATA_FAILURE)
     error.retryable = false
     throw error
   }
