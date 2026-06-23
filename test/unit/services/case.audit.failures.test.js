@@ -17,62 +17,62 @@ const { upsertCase, updateCaseId, markFileProcessed } = await import('../../../s
 const { sendAuditEvent } = await import('../../../src/messaging/outbound/audit/send-audit-event.js')
 
 describe('case service audit publish failures', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    upsertCase.mockResolvedValue({ isNew: true, isDuplicateFile: false, caseId: null, isCreator: true })
-    updateCaseId.mockResolvedValue({ modifiedCount: 1 })
-    markFileProcessed.mockResolvedValue({ modifiedCount: 1 })
-    createCaseWithOnlineSubmissionInCrm.mockResolvedValue({ caseId: 'case-100' })
-  })
+    beforeEach(() => {
+        vi.clearAllMocks()
+        upsertCase.mockResolvedValue({ isNew: true, isDuplicateFile: false, caseId: null, isCreator: true })
+        updateCaseId.mockResolvedValue({ modifiedCount: 1 })
+        markFileProcessed.mockResolvedValue({ modifiedCount: 1 })
+        createCaseWithOnlineSubmissionInCrm.mockResolvedValue({ caseId: 'case-100' })
+    })
 
-  test('logs audit_publish_failed when sendAuditEvent rejects after case creation (schema)', async () => {
-    // make sendAuditEvent reject with a schema-like error
-    sendAuditEvent.mockRejectedValueOnce(new Error('Schema validation failed'))
+    test('logs audit_publish_failed when sendAuditEvent rejects after case creation (schema)', async () => {
+        // make sendAuditEvent reject with a schema-like error
+        sendAuditEvent.mockRejectedValueOnce(new Error('Schema validation failed'))
 
-    const payload = {
-      data: {
-        correlationId: 'corr-schema',
-        file: { fileId: 'file-a', fileName: 'a.txt' },
-        crn: 'crn-x'
-      }
-    }
+        const payload = {
+            data: {
+                correlationId: 'corr-schema',
+                file: { fileId: 'file-a', fileName: 'a.txt' },
+                crn: 'crn-x'
+            }
+        }
 
-    const res = await createCase(payload)
-    // allow background setImmediate tasks to run
-    await new Promise(r => setImmediate(r))
+        const res = await createCase(payload)
+        // allow background setImmediate tasks to run
+        await new Promise(r => setImmediate(r))
 
-    expect(res.caseId).toBe('case-100')
-    expect(mockLogger.error).toHaveBeenCalled()
-    // assert that our logger was called with the audit_publish_failed tag
-    const call = mockLogger.error.mock.calls.find(c => String(c[1]).includes('audit_publish_failed'))
-    expect(call).toBeTruthy()
-  })
+        expect(res.caseId).toBe('case-100')
+        expect(mockLogger.error).toHaveBeenCalled()
+        // assert that our logger was called with the audit_publish_failed tag
+        const call = mockLogger.error.mock.calls.find(c => String(c[1]).includes('audit_publish_failed'))
+        expect(call).toBeTruthy()
+    })
 
-  test('logs audit_publish_failed when sendAuditEvent rejects after metadata creation (transport)', async () => {
-    // Reach addMetadata path
-    upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: 'existing-case', isCreator: false })
-    // mock repos/crm helpers to provide online submission id and metadata creation
-    const reposCrm = await import('../../../src/repos/crm.js')
-    vi.spyOn(reposCrm, 'getOnlineSubmissionId').mockResolvedValue({ rpaOnlinesubmissionid: 'rpa-1', error: null })
-    vi.spyOn(reposCrm, 'createMetadataForOnlineSubmission').mockResolvedValue({ metadataId: 'meta-900', error: null })
+    test('logs audit_publish_failed when sendAuditEvent rejects after metadata creation (transport)', async () => {
+        // Reach addMetadata path
+        upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: 'existing-case', isCreator: false })
+        // mock repos/crm helpers to provide online submission id and metadata creation
+        const reposCrm = await import('../../../src/repos/crm.js')
+        vi.spyOn(reposCrm, 'getOnlineSubmissionId').mockResolvedValue({ rpaOnlinesubmissionid: 'rpa-1', error: null })
+        vi.spyOn(reposCrm, 'createMetadataForOnlineSubmission').mockResolvedValue({ metadataId: 'meta-900', error: null })
 
-    // simulate transport error from audit publisher
-    sendAuditEvent.mockRejectedValueOnce(new Error('publish-transport-failure'))
+        // simulate transport error from audit publisher
+        sendAuditEvent.mockRejectedValueOnce(new Error('publish-transport-failure'))
 
-    const payload = {
-      data: {
-        correlationId: 'corr-transport',
-        file: { fileId: 'file-b', fileName: 'b.txt' },
-        crn: 'crn-y'
-      }
-    }
+        const payload = {
+            data: {
+                correlationId: 'corr-transport',
+                file: { fileId: 'file-b', fileName: 'b.txt' },
+                crn: 'crn-y'
+            }
+        }
 
-    const res = await createCase(payload)
-    await new Promise(r => setImmediate(r))
+        const res = await createCase(payload)
+        await new Promise(r => setImmediate(r))
 
-    expect(res.caseId).toBe('existing-case')
-    expect(mockLogger.error).toHaveBeenCalled()
-    const call = mockLogger.error.mock.calls.find(c => String(c[1]).includes('audit_publish_failed'))
-    expect(call).toBeTruthy()
-  })
+        expect(res.caseId).toBe('existing-case')
+        expect(mockLogger.error).toHaveBeenCalled()
+        const call = mockLogger.error.mock.calls.find(c => String(c[1]).includes('audit_publish_failed'))
+        expect(call).toBeTruthy()
+    })
 })
