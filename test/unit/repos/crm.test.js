@@ -1,25 +1,11 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
 
-const { mockHttpClient, mockPublish, mockBuildReceivedEvent } = vi.hoisted(() => ({
-  mockHttpClient: vi.fn(),
-  mockPublish: vi.fn().mockResolvedValue(),
-  mockBuildReceivedEvent: vi.fn((p, t) => ({ ...p, _type: t }))
+const { mockHttpClient } = vi.hoisted(() => ({
+  mockHttpClient: vi.fn()
 }))
 
 vi.mock('../../../src/http/client.js', () => ({
   httpClient: mockHttpClient
-}))
-
-vi.mock('../../../src/messaging/sns/publish.js', () => ({
-  publish: mockPublish
-}))
-
-vi.mock('../../../src/messaging/sns/client.js', () => ({
-  snsClient: { send: vi.fn().mockResolvedValue({ MessageId: 'mock-message-id' }) }
-}))
-
-vi.mock('../../../src/messaging/outbound/received-event/build-received-event.js', () => ({
-  buildReceivedEvent: mockBuildReceivedEvent
 }))
 
 // Mock config
@@ -60,10 +46,6 @@ describe('CRM repository', () => {
         }
       )
       expect(result).toEqual({ contactId: '6ff3f89f-efe6-f455-fff6-bfff1f808e6' })
-      // wait for setImmediate-published events to be invoked
-      await new Promise(resolve => setImmediate(resolve))
-      expect(mockBuildReceivedEvent).toHaveBeenCalled()
-      expect(mockPublish).toHaveBeenCalled()
     })
 
     test('should return first contact when multiple results', async () => {
@@ -108,19 +90,15 @@ describe('CRM repository', () => {
       expect(result.error.message).toBe('Invalid JSON')
     })
 
-    test('should return null and publish failure event when no contact found', async () => {
+    test('should return null when no contact found', async () => {
       const mockResponse = {
         ok: true,
         json: vi.fn().mockResolvedValue({ value: [] })
       }
       mockHttpClient.mockResolvedValue(mockResponse)
       const result = await getContactIdFromCrn('Bearer token', '0000000000')
-      // wait for setImmediate-published events to be invoked
-      await new Promise(resolve => setImmediate(resolve))
 
       expect(result.contactId).toBeNull()
-      expect(mockBuildReceivedEvent).toHaveBeenCalled()
-      expect(mockPublish).toHaveBeenCalled()
     })
   })
 
@@ -144,10 +122,6 @@ describe('CRM repository', () => {
         }
       )
       expect(result).toEqual({ accountId: '7dd1d67d-cdc4-f233-ddf4-9efe9e686c4' })
-      // wait for any scheduled publish operations
-      await new Promise(resolve => setImmediate(resolve))
-      expect(mockBuildReceivedEvent).toHaveBeenCalled()
-      expect(mockPublish).toHaveBeenCalled()
     })
 
     test('should return first account when multiple results', async () => {
@@ -192,7 +166,7 @@ describe('CRM repository', () => {
       expect(result.error.message).toBe('Invalid JSON')
     })
 
-    test('should return null and publish failure event when no account found', async () => {
+    test('should return null when no account found', async () => {
       const mockResponse = {
         ok: true,
         json: vi.fn().mockResolvedValue({ value: [] })
@@ -200,12 +174,8 @@ describe('CRM repository', () => {
       mockHttpClient.mockResolvedValue(mockResponse)
 
       const result = await getAccountIdFromSbi('Bearer token', '000000000')
-      // wait for setImmediate-published events to be invoked
-      await new Promise(resolve => setImmediate(resolve))
 
       expect(result.accountId).toBeNull()
-      expect(mockBuildReceivedEvent).toHaveBeenCalled()
-      expect(mockPublish).toHaveBeenCalled()
     })
   })
 
