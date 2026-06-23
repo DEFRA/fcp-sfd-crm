@@ -46,7 +46,7 @@ export async function ensureContactAndAccount(authToken, crn, sbi, correlationId
     throw unprocessableEntity('Contact ID not found')
   }
 
-  const { accountId, error: accountError } = await getAccountIdFromSbi(authToken, sbi)
+  const { accountId, error: accountError } = await getAccountIdFromSbi(authToken, sbi, { correlationId })
 
   if (accountError) {
     if (accountError.retryMetadata?.category === 'retryable') {
