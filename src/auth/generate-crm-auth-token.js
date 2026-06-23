@@ -3,6 +3,7 @@ import { authHttpClient } from '../http/client.js'
 import { snsClient } from '../messaging/sns/client.js'
 import { publish } from '../messaging/sns/publish.js'
 import { buildReceivedEvent } from '../messaging/outbound/received-event/build-received-event.js'
+import { createLogger } from '../logging/logger.js'
 
 const CRM_EVENTS_TOPIC_KEY = 'messaging.crmEvents.topicArn'
 const SECURITY_AUTH_EVENT = 'uk.gov.fcp.sfd.security.auth'
@@ -10,10 +11,9 @@ const SECURITY_AUTH_LOG = 'security.auth'
 const SECURITY_AUTH_PUBLISH_ERROR = `Error publishing ${SECURITY_AUTH_LOG} event`
 const SECURITY_AUTH_FAILED_TO_LOG = `Failed to log ${SECURITY_AUTH_LOG} publish error`
 const SECURITY_AUTH_FAILED_BUILD_PUBLISH = `Failed to build or publish ${SECURITY_AUTH_LOG} event`
+const logger = createLogger()
 
 const generateCrmAuthToken = async () => {
-  const { createLogger } = await import('../logging/logger.js')
-  const logger = createLogger()
   const { tokenEndpoint, clientId, clientSecret, scope } = config.get('auth')
 
   const form = new URLSearchParams({
