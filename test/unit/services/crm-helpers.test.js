@@ -2,9 +2,7 @@ import { describe, test, expect, vi, beforeEach } from 'vitest'
 
 
 const mockLogger = { info: vi.fn(), error: vi.fn() }
-const mockPublish = vi.fn().mockResolvedValue(true)
 const mockSendAuditEvent = vi.fn().mockResolvedValue(true)
-const mockBuildReceivedEvent = vi.fn((payload, type) => ({ ...payload, type }))
 
 vi.mock('../../../src/logging/logger.js', () => ({
   createLogger: () => mockLogger
@@ -12,23 +10,8 @@ vi.mock('../../../src/logging/logger.js', () => ({
 
 vi.mock('../../../src/config/index.js', () => ({
   config: {
-    get: vi.fn((key) => {
-      if (key === 'messaging.crmEvents.topicArn') return 'arn:topic'
-      return null
-    })
+    get: vi.fn(() => null)
   }
-}))
-
-vi.mock('../../../src/messaging/sns/client.js', () => ({
-  snsClient: { send: vi.fn().mockResolvedValue({ MessageId: 'mock-message-id' }) }
-}))
-
-vi.mock('../../../src/messaging/sns/publish.js', () => ({
-  publish: mockPublish
-}))
-
-vi.mock('../../../src/messaging/outbound/received-event/build-received-event.js', () => ({
-  buildReceivedEvent: mockBuildReceivedEvent
 }))
 
 vi.mock('../../../src/messaging/outbound/audit/send-audit-event.js', () => ({
@@ -69,7 +52,6 @@ describe('ensureContactAndAccount', () => {
 
     expect(result).toEqual({ contactId: 'c1', accountId: 'a1' })
     await new Promise(r => setImmediate(r))
-    expect(mockPublish).toHaveBeenCalledTimes(2)
     expect(mockSendAuditEvent).toHaveBeenCalledTimes(2)
   })
 
@@ -115,35 +97,6 @@ describe('ensureContactAndAccount', () => {
     expect(mockLogger.error).toHaveBeenCalledWith(
       expect.objectContaining({ event: expect.objectContaining({ type: 'uk.gov.fcp.sfd.business.read' }) }),
       'audit_publish_failed'
-    )
-  })
-
-  test('logs publish error when person.read SNS publish fails', async () => {
-    getContactIdFromCrn.mockResolvedValue({ contactId: 'c1' })
-    const err = makeRetryableError()
-    getAccountIdFromSbi.mockResolvedValue({ accountId: null, error: err })
-    mockPublish.mockRejectedValueOnce(new Error('sns person fail'))
-
-    await ensureContactAndAccount('token', 'crn1', 'sbi1', 'corr-4').catch(() => { })
-    await new Promise(r => setImmediate(r))
-
-    expect(mockLogger.error).toHaveBeenCalledWith(
-      expect.objectContaining({ contactId: 'c1', crn: 'crn1' }),
-      'Error publishing person.read event'
-    )
-  })
-
-  test('logs publish error when business.read SNS publish fails', async () => {
-    getContactIdFromCrn.mockResolvedValue({ contactId: 'c1' })
-    getAccountIdFromSbi.mockResolvedValue({ accountId: 'a1' })
-    mockPublish.mockRejectedValueOnce(new Error('sns business fail'))
-
-    await ensureContactAndAccount('token', 'crn1', 'sbi1', 'corr-5')
-    await Promise.resolve()
-
-    expect(mockLogger.error).toHaveBeenCalledWith(
-      expect.objectContaining({ accountId: 'a1', sbi: 'sbi1' }),
-      'Error publishing business.read event'
     )
   })
 

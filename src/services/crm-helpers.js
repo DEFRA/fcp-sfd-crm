@@ -1,10 +1,6 @@
 import http2 from 'node:http2'
 import Boom from '@hapi/boom'
 import { createLogger } from '../logging/logger.js'
-import { config } from '../config/index.js'
-import { snsClient } from '../messaging/sns/client.js'
-import { publish } from '../messaging/sns/publish.js'
-import { buildReceivedEvent } from '../messaging/outbound/received-event/build-received-event.js'
 import { sendAuditEvent } from '../messaging/outbound/audit/send-audit-event.js'
 import {
   getOnlineSubmissionId,
@@ -15,7 +11,6 @@ import { messages } from '../constants/messages.js'
 
 const logger = createLogger()
 const { constants: httpConstants } = http2
-const CRM_EVENTS_TOPIC_KEY = 'messaging.crmEvents.topicArn'
 
 const unprocessableEntity = (message) => {
   const error = new Error(message)
@@ -34,8 +29,6 @@ export function assertRequiredParams(requiredParams) {
 }
 
 export async function ensureContactAndAccount(authToken, crn, sbi, correlationId) {
-  const snsTopic = config.get(CRM_EVENTS_TOPIC_KEY)
-
   const { contactId, error: contactError } = await getContactIdFromCrn(authToken, crn, { correlationId })
 
   if (contactError) {
@@ -50,21 +43,6 @@ export async function ensureContactAndAccount(authToken, crn, sbi, correlationId
   }
 
   if (!contactId) {
-    const failEvent = buildReceivedEvent({
-      data: {
-        contactId: null,
-        accounts: { crn, sbi },
-        audit: { status: 'failure', details: 'CRN not found' },
-        correlationId
-      }
-    }, 'uk.gov.fcp.sfd.person.read')
-
-    setImmediate(() => {
-      publish(snsClient, snsTopic, failEvent).catch(err => {
-        logger.error({ err, crn }, 'Error publishing person.read failure event')
-      })
-    })
-
     try {
       await sendAuditEvent({
         correlationId,
@@ -79,20 +57,6 @@ export async function ensureContactAndAccount(authToken, crn, sbi, correlationId
     logger.error(`No contact found for CRN: ${crn}`)
     throw unprocessableEntity('Contact ID not found')
   }
-
-  const personReadEvent = buildReceivedEvent({
-    data: {
-      contactId,
-      accounts: { crn, sbi },
-      correlationId
-    }
-  }, 'uk.gov.fcp.sfd.person.read')
-
-  setImmediate(() => {
-    publish(snsClient, snsTopic, personReadEvent).catch(err => {
-      logger.error({ err, contactId, crn }, 'Error publishing person.read event')
-    })
-  })
 
   setImmediate(() => {
     sendAuditEvent({
@@ -119,21 +83,6 @@ export async function ensureContactAndAccount(authToken, crn, sbi, correlationId
   }
 
   if (!accountId) {
-    const failEvent = buildReceivedEvent({
-      data: {
-        accountId: null,
-        accounts: { sbi },
-        audit: { status: 'failure', details: 'SBI not found' },
-        correlationId
-      }
-    }, 'uk.gov.fcp.sfd.business.read')
-
-    setImmediate(() => {
-      publish(snsClient, snsTopic, failEvent).catch(err => {
-        logger.error({ err, sbi }, 'Error publishing business.read failure event')
-      })
-    })
-
     try {
       await sendAuditEvent({
         correlationId,
@@ -148,18 +97,6 @@ export async function ensureContactAndAccount(authToken, crn, sbi, correlationId
     logger.error(`No account found for SBI: ${sbi}`)
     throw unprocessableEntity('Account ID not found')
   }
-
-  const businessReadEvent = buildReceivedEvent({
-    data: {
-      accountId,
-      accounts: { sbi },
-      correlationId
-    }
-  }, 'uk.gov.fcp.sfd.business.read')
-
-  Promise.resolve(publish(snsClient, snsTopic, businessReadEvent)).catch(err => {
-    logger.error({ err, accountId, sbi }, 'Error publishing business.read event')
-  })
 
   setImmediate(() => {
     sendAuditEvent({
