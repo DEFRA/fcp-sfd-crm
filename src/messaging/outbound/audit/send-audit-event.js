@@ -16,74 +16,87 @@ const auditPublishConfig = {
   ip: '0.0.0.0'
 }
 
+const buildEntities = (eventData) => {
+  const entities = []
+
+  if (eventData.contactId) {
+    entities.push({ entity: 'person', action: 'read', entityid: String(eventData.contactId) })
+  }
+
+  if (eventData.accountId) {
+    entities.push({ entity: 'business', action: 'read', entityid: String(eventData.accountId) })
+  }
+
+  if (eventData.caseId) {
+    entities.push({ entity: 'document', action: 'created', entityid: String(eventData.caseId) })
+  }
+
+  if (eventData.metadataId) {
+    entities.push({ entity: 'document', action: 'created', entityid: String(eventData.metadataId) })
+  }
+
+  if (entities.length === 0) {
+    entities.push({ entity: 'service', action: 'event', entityid: '' })
+  }
+
+  return entities
+}
+
+const normalizeDetails = (details) => {
+  if (details && typeof details !== 'object') {
+    return { message: String(details) }
+  }
+
+  return details
+}
+
+const buildSecurityPayload = (eventData, correlationId) => {
+  const security = { ...eventData.security }
+  security.details = normalizeDetails(security.details)
+
+  const securityPayload = { security }
+
+  if (correlationId) {
+    securityPayload.correlationid = String(correlationId)
+  }
+
+  return securityPayload
+}
+
+const buildAuditPayload = (eventData, correlationId) => {
+  const audit = {
+    entities: buildEntities(eventData),
+    accounts: eventData.accounts && typeof eventData.accounts === 'object' ? { ...eventData.accounts } : {}
+  }
+
+  if (eventData.audit && typeof eventData.audit === 'object') {
+    if (eventData.audit.status) {
+      audit.status = eventData.audit.status
+    }
+
+    audit.details = normalizeDetails(eventData.audit.details)
+  }
+
+  const payload = { audit }
+
+  if (correlationId) {
+    payload.correlationid = String(correlationId)
+  }
+
+  return payload
+}
+
 export const sendAuditEvent = async (event) => {
   try {
-    // Accept audit-domain input (not CloudEvents) and normalize to the
-    // payload shape expected by the audit publisher.
-    const d = event || {}
-    const correlationId = d.correlationId || d.correlationid
+    const eventData = event || {}
+    const correlationId = eventData.correlationId || eventData.correlationid
 
-    const out = {}
-
-    // Map accounts if present
-    if (d.accounts && typeof d.accounts === 'object') {
-      out.audit = out.audit || {}
-      out.audit.accounts = { ...d.accounts }
-    }
-
-    // Map correlation id (publisher will generate one if missing)
-    if (correlationId) out.correlationid = String(correlationId)
-
-    // Map entities into audit.entities with `entityid` (schema requires this)
-    out.audit = out.audit || {}
-    out.audit.entities = out.audit.entities || []
-
-    if (d.contactId) {
-      out.audit.entities.push({ entity: 'person', action: 'read', entityid: String(d.contactId) })
-    }
-
-    if (d.accountId) {
-      out.audit.entities.push({ entity: 'business', action: 'read', entityid: String(d.accountId) })
-    }
-
-    if (d.caseId) {
-      out.audit.entities.push({ entity: 'document', action: 'created', entityid: String(d.caseId) })
-    }
-
-    if (d.metadataId) {
-      out.audit.entities.push({ entity: 'document', action: 'created', entityid: String(d.metadataId) })
-    }
-
-    // If caller provided an audit.status or audit.details, copy them
-    if (d.audit && typeof d.audit === 'object') {
-      if (d.audit.status) out.audit.status = d.audit.status
-      if (d.audit.details) out.audit.details = d.audit.details
-    }
-
-    // Ensure at least one entity exists
-    if (!out.audit.entities || out.audit.entities.length === 0) {
-      out.audit.entities = [{ entity: 'service', action: 'event', entityid: '' }]
-    }
-
-    // If a security object was provided, send a security payload
-    if (d.security) {
-      const sec = { ...d.security }
-      if (sec.details && typeof sec.details !== 'object') sec.details = { message: String(sec.details) }
-      const securityPayload = { security: sec }
-      if (correlationId) securityPayload.correlationid = String(correlationId)
-      await publishAuditEvent(securityPayload, auditPublishConfig)
+    if (eventData.security) {
+      await publishAuditEvent(buildSecurityPayload(eventData, correlationId), auditPublishConfig)
       return
     }
 
-    // Ensure details is an object (schema requires object)
-    if (out.audit.details && typeof out.audit.details !== 'object') out.audit.details = { message: String(out.audit.details) }
-    // Ensure accounts is an object
-    out.audit.accounts = out.audit.accounts || {}
-
-    const payload = { audit: out.audit }
-    if (correlationId) payload.correlationid = String(correlationId)
-
-    await publishAuditEvent(payload, auditPublishConfig)
+    await publishAuditEvent(buildAuditPayload(eventData, correlationId), auditPublishConfig)
   } catch (err) {
     logger.error(
       { event: { type: 'audit_publish_failed', outcome: 'failure', reason: err.message } },
