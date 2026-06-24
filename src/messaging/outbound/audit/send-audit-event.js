@@ -69,9 +69,9 @@ export const sendAuditEvent = async (event) => {
     if (d.security) {
       const sec = { ...d.security }
       if (sec.details && typeof sec.details !== 'object') sec.details = { message: String(sec.details) }
-      const payload = { security: sec }
-      if (correlationId) payload.correlationid = String(correlationId)
-      await publishAuditEvent(payload, auditPublishConfig)
+      const securityPayload = { security: sec }
+      if (correlationId) securityPayload.correlationid = String(correlationId)
+      await publishAuditEvent(securityPayload, auditPublishConfig)
       return
     }
 
