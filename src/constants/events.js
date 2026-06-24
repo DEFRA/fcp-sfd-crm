@@ -2,8 +2,8 @@ import { caseTypes } from './case-types.js'
 
 export const crmEvents = {
   CASE_CREATED: 'uk.gov.fcp.sfd.crm.case.created',
-  DOCUMENT_UPLOAD: 'uk.gov.fcp.sfd.document.uploaded'
-  , DOCUMENT_CREATED: 'uk.gov.fcp.sfd.document.created'
+  DOCUMENT_UPLOAD: 'uk.gov.fcp.sfd.document.uploaded',
+  DOCUMENT_CREATED: 'uk.gov.fcp.sfd.document.created'
 }
 
 export const eventToTypeMap = {
