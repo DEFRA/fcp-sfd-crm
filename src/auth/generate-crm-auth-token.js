@@ -1,16 +1,8 @@
 import { config } from '../config/index.js'
 import { authHttpClient } from '../http/client.js'
-import { snsClient } from '../messaging/sns/client.js'
-import { publish } from '../messaging/sns/publish.js'
-import { buildReceivedEvent } from '../messaging/outbound/received-event/build-received-event.js'
+import { sendAuditEvent } from '../messaging/outbound/audit/send-audit-event.js'
 import { createLogger } from '../logging/logger.js'
 
-const CRM_EVENTS_TOPIC_KEY = 'messaging.crmEvents.topicArn'
-const SECURITY_AUTH_EVENT = 'uk.gov.fcp.sfd.security.auth'
-const SECURITY_AUTH_LOG = 'security.auth'
-const SECURITY_AUTH_PUBLISH_ERROR = `Error publishing ${SECURITY_AUTH_LOG} event`
-const SECURITY_AUTH_FAILED_TO_LOG = `Failed to log ${SECURITY_AUTH_LOG} publish error`
-const SECURITY_AUTH_FAILED_BUILD_PUBLISH = `Failed to build or publish ${SECURITY_AUTH_LOG} event`
 const logger = createLogger()
 
 const generateCrmAuthToken = async () => {
@@ -32,59 +24,13 @@ const generateCrmAuthToken = async () => {
       body: form.toString()
     })
   } catch (err) {
-    // Emit security/audit event for network/auth failures
-    try {
-      const event = buildReceivedEvent({ data: { security: { action: 'crm.token.request', status: 'failure', message: err.message, clientId }, audit: { status: 'failure', details: 'Unable to reach token endpoint' } } }, SECURITY_AUTH_EVENT)
-      const snsTopic = config.get(CRM_EVENTS_TOPIC_KEY)
-      Promise.resolve(publish(snsClient, snsTopic, event)).catch((pubErr) => {
-        try {
-          logger.error({ err: pubErr, clientId }, SECURITY_AUTH_PUBLISH_ERROR)
-        } catch (logErr) {
-          // eslint-disable-next-line no-console
-          console.error(SECURITY_AUTH_FAILED_TO_LOG, logErr)
-        }
-      })
-    } catch (e) {
-      // Log publish/build errors for observability
-      try {
-        logger.error({ err: e, clientId }, SECURITY_AUTH_FAILED_BUILD_PUBLISH)
-      } catch (logErr) {
-        // As a last resort, write to stderr so the exception isn't silently swallowed
-        // (keeps Sonar happy about handling exceptions)
-        // eslint-disable-next-line no-console
-        console.error(SECURITY_AUTH_FAILED_TO_LOG, logErr)
-      }
-    }
-
+    sendAuditEvent({ security: { action: 'crm.token.request', status: 'failure', message: err.message, clientId } })
     throw new Error(`Unable to reach token endpoint: ${err.message}`)
   }
 
   if (!response.ok) {
     const errorText = await response.text()
-    // Emit security/audit event for auth failure
-    try {
-      const event = buildReceivedEvent({ data: { security: { action: 'crm.token.request', status: 'failure', httpStatus: response.status, message: errorText, clientId }, audit: { status: 'failure', details: 'Invalid credentials' } } }, SECURITY_AUTH_EVENT)
-      const snsTopic = config.get(CRM_EVENTS_TOPIC_KEY)
-      Promise.resolve(publish(snsClient, snsTopic, event)).catch((pubErr) => {
-        try {
-          logger.error({ err: pubErr, clientId, httpStatus: response.status }, SECURITY_AUTH_PUBLISH_ERROR)
-        } catch (logErr) {
-          // eslint-disable-next-line no-console
-          console.error(SECURITY_AUTH_FAILED_TO_LOG, logErr)
-        }
-      })
-    } catch (e) {
-      // Log publish/build errors for observability
-      try {
-        logger.error({ err: e, clientId, httpStatus: response.status }, SECURITY_AUTH_FAILED_BUILD_PUBLISH)
-      } catch (logErr) {
-        // As a last resort, write to stderr so the exception isn't silently swallowed
-        // (keeps Sonar happy about handling exceptions)
-        // eslint-disable-next-line no-console
-        console.error(SECURITY_AUTH_FAILED_TO_LOG, logErr)
-      }
-    }
-
+    sendAuditEvent({ security: { action: 'crm.token.request', status: 'failure', httpStatus: response.status, message: errorText, clientId } })
     throw new Error(`Auth failed: ${response.status} ${response.statusText} - ${errorText}`)
   }
 
