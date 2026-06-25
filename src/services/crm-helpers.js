@@ -17,6 +17,60 @@ const unprocessableEntity = (message) => {
   return Boom.boomify(error, { statusCode: httpConstants.HTTP_STATUS_UNPROCESSABLE_ENTITY })
 }
 
+const isRetryableLookupError = (error) => error?.retryMetadata?.category === 'retryable'
+
+const throwRetryableLookupError = (message, retryMetadata) => {
+  const err = new Error(message)
+  err.retryable = true
+  err.retryMetadata = retryMetadata
+  throw err
+}
+
+const getAuditFailureReason = (err) =>
+  String(err?.message || '').toLowerCase().includes('schema') ? 'schema' : 'transport'
+
+const logAuditPublishFailed = (type, correlationId, err) => {
+  const reason = getAuditFailureReason(err)
+  logger.error({ event: { type, reference: correlationId ?? null, reason } }, 'audit_publish_failed')
+}
+
+const sendAuditEventSafely = async (payload, type, correlationId) => {
+  try {
+    await sendAuditEvent(payload)
+  } catch (err) {
+    logAuditPublishFailed(type, correlationId, err)
+  }
+}
+
+const sendAuditEventAsync = (payload, type, correlationId) => {
+  setImmediate(() => {
+    sendAuditEvent(payload).catch(err => {
+      logAuditPublishFailed(type, correlationId, err)
+    })
+  })
+}
+
+const handleLookupError = ({ error, retryMessage, lookupLogMessage, notFoundMessage }) => {
+  if (isRetryableLookupError(error)) {
+    throwRetryableLookupError(retryMessage, error.retryMetadata)
+  }
+
+  logger.error(lookupLogMessage)
+  throw unprocessableEntity(notFoundMessage)
+}
+
+const handleNotFound = async ({
+  correlationId,
+  auditPayload,
+  auditType,
+  lookupLogMessage,
+  notFoundMessage
+}) => {
+  await sendAuditEventSafely(auditPayload, auditType, correlationId)
+  logger.error(lookupLogMessage)
+  throw unprocessableEntity(notFoundMessage)
+}
+
 export function assertRequiredParams(requiredParams) {
   for (const [param, value] of Object.entries(requiredParams)) {
     const errorMessage = `Missing required parameter: ${param}`
@@ -32,82 +86,72 @@ export async function ensureContactAndAccount(authToken, crn, sbi, correlationId
   const { contactId, error: contactError } = await getContactIdFromCrn(authToken, crn, { correlationId })
 
   if (contactError) {
-    if (contactError.retryMetadata?.category === 'retryable') {
-      const err = new Error(`Retryable error looking up contact for CRN: ${crn}`)
-      err.retryable = true
-      err.retryMetadata = contactError.retryMetadata
-      throw err
-    }
-    logger.error(`No contact found for CRN: ${crn}, error: ${contactError}`)
-    throw unprocessableEntity('Contact ID not found')
+    handleLookupError({
+      error: contactError,
+      retryMessage: `Retryable error looking up contact for CRN: ${crn}`,
+      lookupLogMessage: `No contact found for CRN: ${crn}, error: ${contactError}`,
+      notFoundMessage: 'Contact ID not found'
+    })
   }
 
   if (!contactId) {
-    try {
-      await sendAuditEvent({
+    await handleNotFound({
+      correlationId,
+      auditPayload: {
         correlationId,
         accounts: { crn, sbi },
         audit: { status: 'failure', details: 'CRN not found' }
-      })
-    } catch (err) {
-      const reason = String(err?.message || '').toLowerCase().includes('schema') ? 'schema' : 'transport'
-      logger.error({ event: { type: 'uk.gov.fcp.sfd.person.read', reference: correlationId ?? null, reason } }, 'audit_publish_failed')
-    }
-
-    logger.error(`No contact found for CRN: ${crn}`)
-    throw unprocessableEntity('Contact ID not found')
+      },
+      auditType: 'uk.gov.fcp.sfd.person.read',
+      lookupLogMessage: `No contact found for CRN: ${crn}`,
+      notFoundMessage: 'Contact ID not found'
+    })
   }
 
-  setImmediate(() => {
-    sendAuditEvent({
+  sendAuditEventAsync(
+    {
       correlationId,
       contactId,
       accounts: { crn, sbi }
-    }).catch(err => {
-      const reason = String(err?.message || '').toLowerCase().includes('schema') ? 'schema' : 'transport'
-      logger.error({ event: { type: 'uk.gov.fcp.sfd.person.read', reference: correlationId ?? null, reason } }, 'audit_publish_failed')
-    })
-  })
+    },
+    'uk.gov.fcp.sfd.person.read',
+    correlationId
+  )
 
   const { accountId, error: accountError } = await getAccountIdFromSbi(authToken, sbi, { correlationId })
 
   if (accountError) {
-    if (accountError.retryMetadata?.category === 'retryable') {
-      const err = new Error(`Retryable error looking up account for SBI: ${sbi}`)
-      err.retryable = true
-      err.retryMetadata = accountError.retryMetadata
-      throw err
-    }
-    logger.error(`No account found for SBI: ${sbi}, error: ${accountError}`)
-    throw unprocessableEntity('Account ID not found')
+    handleLookupError({
+      error: accountError,
+      retryMessage: `Retryable error looking up account for SBI: ${sbi}`,
+      lookupLogMessage: `No account found for SBI: ${sbi}, error: ${accountError}`,
+      notFoundMessage: 'Account ID not found'
+    })
   }
 
   if (!accountId) {
-    try {
-      await sendAuditEvent({
+    await handleNotFound({
+      correlationId,
+      auditPayload: {
         correlationId,
         accounts: { sbi },
         audit: { status: 'failure', details: 'SBI not found' }
-      })
-    } catch (err) {
-      const reason = String(err?.message || '').toLowerCase().includes('schema') ? 'schema' : 'transport'
-      logger.error({ event: { type: 'uk.gov.fcp.sfd.business.read', reference: correlationId ?? null, reason } }, 'audit_publish_failed')
-    }
-
-    logger.error(`No account found for SBI: ${sbi}`)
-    throw unprocessableEntity('Account ID not found')
+      },
+      auditType: 'uk.gov.fcp.sfd.business.read',
+      lookupLogMessage: `No account found for SBI: ${sbi}`,
+      notFoundMessage: 'Account ID not found'
+    })
   }
 
-  setImmediate(() => {
-    sendAuditEvent({
+  sendAuditEventAsync(
+    {
       correlationId,
       accountId,
       accounts: { sbi }
-    }).catch(err => {
-      const reason = String(err?.message || '').toLowerCase().includes('schema') ? 'schema' : 'transport'
-      logger.error({ event: { type: 'uk.gov.fcp.sfd.business.read', reference: correlationId ?? null, reason } }, 'audit_publish_failed')
-    })
-  })
+    },
+    'uk.gov.fcp.sfd.business.read',
+    correlationId
+  )
 
   return { contactId, accountId }
 }
