@@ -1,6 +1,7 @@
 import http2 from 'node:http2'
 import Boom from '@hapi/boom'
 import { createLogger } from '../logging/logger.js'
+import { sendAuditEvent } from '../messaging/outbound/audit/send-audit-event.js'
 import {
   getOnlineSubmissionId,
   getContactIdFromCrn,
@@ -16,7 +17,61 @@ const unprocessableEntity = (message) => {
   return Boom.boomify(error, { statusCode: httpConstants.HTTP_STATUS_UNPROCESSABLE_ENTITY })
 }
 
-export function assertRequiredParams (requiredParams) {
+const isRetryableLookupError = (error) => error?.retryMetadata?.category === 'retryable'
+
+const throwRetryableLookupError = (message, retryMetadata) => {
+  const err = new Error(message)
+  err.retryable = true
+  err.retryMetadata = retryMetadata
+  throw err
+}
+
+const getAuditFailureReason = (err) =>
+  String(err?.message || '').toLowerCase().includes('schema') ? 'schema' : 'transport'
+
+const logAuditPublishFailed = (type, correlationId, err) => {
+  const reason = getAuditFailureReason(err)
+  logger.error({ event: { type, reference: correlationId ?? null, reason } }, 'audit_publish_failed')
+}
+
+const sendAuditEventSafely = async (payload, type, correlationId) => {
+  try {
+    await sendAuditEvent(payload)
+  } catch (err) {
+    logAuditPublishFailed(type, correlationId, err)
+  }
+}
+
+const sendAuditEventAsync = (payload, type, correlationId) => {
+  setImmediate(() => {
+    sendAuditEvent(payload).catch(err => {
+      logAuditPublishFailed(type, correlationId, err)
+    })
+  })
+}
+
+const handleLookupError = ({ error, retryMessage, lookupLogMessage, notFoundMessage }) => {
+  if (isRetryableLookupError(error)) {
+    throwRetryableLookupError(retryMessage, error.retryMetadata)
+  }
+
+  logger.error(lookupLogMessage)
+  throw unprocessableEntity(notFoundMessage)
+}
+
+const handleNotFound = async ({
+  correlationId,
+  auditPayload,
+  auditType,
+  lookupLogMessage,
+  notFoundMessage
+}) => {
+  await sendAuditEventSafely(auditPayload, auditType, correlationId)
+  logger.error(lookupLogMessage)
+  throw unprocessableEntity(notFoundMessage)
+}
+
+export function assertRequiredParams(requiredParams) {
   for (const [param, value] of Object.entries(requiredParams)) {
     const errorMessage = `Missing required parameter: ${param}`
 
@@ -27,47 +82,81 @@ export function assertRequiredParams (requiredParams) {
   }
 }
 
-export async function ensureContactAndAccount (authToken, crn, sbi) {
-  const { contactId, error: contactError } = await getContactIdFromCrn(authToken, crn)
+export async function ensureContactAndAccount(authToken, crn, sbi, correlationId) {
+  const { contactId, error: contactError } = await getContactIdFromCrn(authToken, crn, { correlationId })
 
   if (contactError) {
-    if (contactError.retryMetadata?.category === 'retryable') {
-      const err = new Error(`Retryable error looking up contact for CRN: ${crn}`)
-      err.retryable = true
-      err.retryMetadata = contactError.retryMetadata
-      throw err
-    }
-    logger.error(`No contact found for CRN: ${crn}, error: ${contactError}`)
-    throw unprocessableEntity('Contact ID not found')
+    handleLookupError({
+      error: contactError,
+      retryMessage: `Retryable error looking up contact for CRN: ${crn}`,
+      lookupLogMessage: `No contact found for CRN: ${crn}, error: ${contactError}`,
+      notFoundMessage: 'Contact ID not found'
+    })
   }
 
   if (!contactId) {
-    logger.error(`No contact found for CRN: ${crn}`)
-    throw unprocessableEntity('Contact ID not found')
+    await handleNotFound({
+      correlationId,
+      auditPayload: {
+        correlationId,
+        accounts: { crn, sbi },
+        audit: { status: 'failure', details: 'CRN not found' }
+      },
+      auditType: 'uk.gov.fcp.sfd.person.read',
+      lookupLogMessage: `No contact found for CRN: ${crn}`,
+      notFoundMessage: 'Contact ID not found'
+    })
   }
 
-  const { accountId, error: accountError } = await getAccountIdFromSbi(authToken, sbi)
+  sendAuditEventAsync(
+    {
+      correlationId,
+      contactId,
+      accounts: { crn, sbi }
+    },
+    'uk.gov.fcp.sfd.person.read',
+    correlationId
+  )
+
+  const { accountId, error: accountError } = await getAccountIdFromSbi(authToken, sbi, { correlationId })
 
   if (accountError) {
-    if (accountError.retryMetadata?.category === 'retryable') {
-      const err = new Error(`Retryable error looking up account for SBI: ${sbi}`)
-      err.retryable = true
-      err.retryMetadata = accountError.retryMetadata
-      throw err
-    }
-    logger.error(`No account found for SBI: ${sbi}, error: ${accountError}`)
-    throw unprocessableEntity('Account ID not found')
+    handleLookupError({
+      error: accountError,
+      retryMessage: `Retryable error looking up account for SBI: ${sbi}`,
+      lookupLogMessage: `No account found for SBI: ${sbi}, error: ${accountError}`,
+      notFoundMessage: 'Account ID not found'
+    })
   }
 
   if (!accountId) {
-    logger.error(`No account found for SBI: ${sbi}`)
-    throw unprocessableEntity('Account ID not found')
+    await handleNotFound({
+      correlationId,
+      auditPayload: {
+        correlationId,
+        accounts: { sbi },
+        audit: { status: 'failure', details: 'SBI not found' }
+      },
+      auditType: 'uk.gov.fcp.sfd.business.read',
+      lookupLogMessage: `No account found for SBI: ${sbi}`,
+      notFoundMessage: 'Account ID not found'
+    })
   }
+
+  sendAuditEventAsync(
+    {
+      correlationId,
+      accountId,
+      accounts: { sbi }
+    },
+    'uk.gov.fcp.sfd.business.read',
+    correlationId
+  )
 
   return { contactId, accountId }
 }
 
-export async function fetchRpaOnlineSubmissionIdOrThrow (authToken, caseId, context = {}) {
+export async function fetchRpaOnlineSubmissionIdOrThrow(authToken, caseId, context = {}) {
   const { correlationId } = context
 
   const { rpaOnlinesubmissionid, error } = await getOnlineSubmissionId(authToken, caseId)

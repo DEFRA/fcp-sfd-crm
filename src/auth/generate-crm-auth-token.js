@@ -1,5 +1,9 @@
 import { config } from '../config/index.js'
 import { authHttpClient } from '../http/client.js'
+import { sendAuditEvent } from '../messaging/outbound/audit/send-audit-event.js'
+import { createLogger } from '../logging/logger.js'
+
+const logger = createLogger()
 
 const generateCrmAuthToken = async () => {
   const { tokenEndpoint, clientId, clientSecret, scope } = config.get('auth')
@@ -20,11 +24,13 @@ const generateCrmAuthToken = async () => {
       body: form.toString()
     })
   } catch (err) {
+    sendAuditEvent({ security: { action: 'crm.token.request', status: 'failure', message: err.message, clientId } })
     throw new Error(`Unable to reach token endpoint: ${err.message}`)
   }
 
   if (!response.ok) {
     const errorText = await response.text()
+    sendAuditEvent({ security: { action: 'crm.token.request', status: 'failure', httpStatus: response.status, message: errorText, clientId } })
     throw new Error(`Auth failed: ${response.status} ${response.statusText} - ${errorText}`)
   }
 

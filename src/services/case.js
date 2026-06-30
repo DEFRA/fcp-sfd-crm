@@ -4,6 +4,9 @@ import { createCaseWithOnlineSubmissionInCrm } from './create-case-with-online-s
 import { upsertCase, updateCaseId, markFileProcessed } from '../repos/cases.js'
 import { createMetadataForOnlineSubmission } from '../repos/crm.js'
 import { fetchRpaOnlineSubmissionIdOrThrow } from './crm-helpers.js'
+import { publishReceivedEvent } from '../messaging/outbound/received-event/publish-received-event.js'
+import { crmEvents } from '../constants/events.js'
+import { sendAuditEvent } from '../messaging/outbound/audit/send-audit-event.js'
 import { messages } from '../constants/messages.js'
 
 const logger = createLogger()
@@ -15,7 +18,7 @@ const ONE_HOUR_MS = 60 * 60 * 1000
  * @param {object} cloudEventPayload - CloudEvents format payload with data property
  * @returns {object} Transformed payload
  */
-export function transformPayload (cloudEventPayload) {
+export function transformPayload(cloudEventPayload) {
   // Extract data from CloudEvents format
   const { data } = cloudEventPayload
 
@@ -65,7 +68,7 @@ export function transformPayload (cloudEventPayload) {
  *
  * @param {object} payload - parsed CloudEvents message payload
  */
-export async function createCase (payload) {
+export async function createCase(payload) {
   const { correlationId, file } = payload.data
   const fileId = file?.fileId
 
@@ -83,10 +86,10 @@ export async function createCase (payload) {
     return createNewCase({ authToken, transformedPayload, correlationId, fileId })
   }
 
-  return addMetadataToExistingCase({ authToken, caseId: prep.caseId, correlationId, file, fileId })
+  return addMetadataToExistingCase({ authToken, caseId: prep.caseId, correlationId, file, fileId, transformedPayload })
 }
 
-async function prepareCase ({ correlationId, fileId }) {
+async function prepareCase({ correlationId, fileId }) {
   const { isNew, isDuplicateFile, caseId, isCreator } = await upsertCase(correlationId, fileId)
 
   if (isDuplicateFile) {
@@ -107,17 +110,41 @@ async function prepareCase ({ correlationId, fileId }) {
   return { action: 'addMetadata', caseId }
 }
 
-async function createNewCase ({ authToken, transformedPayload, correlationId, fileId }) {
+async function createNewCase({ authToken, transformedPayload, correlationId, fileId }) {
   const response = await createCaseWithOnlineSubmissionInCrm({ authToken, ...transformedPayload })
 
   await updateCaseId(correlationId, response.caseId)
   await markFileProcessed(correlationId, fileId)
 
   logger.info({ correlationId, caseId: response.caseId }, 'Case created')
+  // Emit document.created event so downstream systems can act on the
+  // newly-created case. Include correlationId and caseId from the inbound
+  // CloudEvents payload.
+  const eventData = {
+    correlationId,
+    caseId: response.caseId,
+    crn: transformedPayload?.crn ? Number(transformedPayload.crn) : undefined,
+    sbi: transformedPayload?.sbi ? Number(transformedPayload.sbi) : undefined
+  }
+
+  Promise.resolve(publishReceivedEvent({ type: crmEvents.DOCUMENT_CREATED, data: eventData }))
+    .catch(err => {
+      logger.error({ err, caseId: response.caseId, correlationId }, 'Error publishing document.created event after case creation')
+    })
+
+  // Also emit an audit copy of document.created (fire-and-forget). Audit
+  // failures must not affect case processing.
+  setImmediate(() => {
+    sendAuditEvent(eventData).catch(err => {
+      const reason = String(err?.message || '').toLowerCase().includes('schema') ? 'schema' : 'transport'
+      logger.error({ event: { type: crmEvents.DOCUMENT_CREATED, reference: correlationId ?? null, reason } }, 'audit_publish_failed')
+    })
+  })
+
   return response
 }
 
-async function addMetadataToExistingCase ({ authToken, caseId, correlationId, file, fileId }) {
+async function addMetadataToExistingCase({ authToken, caseId, correlationId, file, fileId, transformedPayload }) {
   const rpaOnlinesubmissionid = await fetchRpaOnlineSubmissionIdOrThrow(authToken, caseId, { correlationId })
 
   const metadata = {
@@ -149,5 +176,29 @@ async function addMetadataToExistingCase ({ authToken, caseId, correlationId, fi
   await markFileProcessed(correlationId, fileId)
 
   logger.info({ correlationId, caseId, fileId, metadataId }, 'Metadata added to existing case')
+  // Emit document.created event with metadataId so downstream systems can act on the
+  // newly-created metadata record. Include correlationId and caseId and the original
+  // CRN/SBI if available from the transformed payload.
+  const eventData = {
+    correlationId,
+    caseId,
+    metadataId,
+    crn: transformedPayload?.crn ? Number(transformedPayload.crn) : undefined,
+    sbi: transformedPayload?.sbi ? Number(transformedPayload.sbi) : undefined
+  }
+
+  Promise.resolve(publishReceivedEvent({ type: crmEvents.DOCUMENT_CREATED, data: eventData }))
+    .catch(err => {
+      logger.error({ err, caseId, correlationId, metadataId }, 'Error publishing document.created event after metadata creation')
+    })
+
+  // Emit audit copy of document.created for metadata creation
+  setImmediate(() => {
+    sendAuditEvent(eventData).catch(err => {
+      const reason = String(err?.message || '').toLowerCase().includes('schema') ? 'schema' : 'transport'
+      logger.error({ event: { type: crmEvents.DOCUMENT_CREATED, reference: correlationId ?? null, reason } }, 'audit_publish_failed')
+    })
+  })
+
   return { caseId }
 }

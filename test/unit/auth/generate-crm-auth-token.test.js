@@ -6,8 +6,9 @@ import { generateCrmAuthToken } from '../../../src/auth/generate-crm-auth-token.
 // Mock dependencies
 import { config } from '../../../src/config/index.js'
 
-const { mockAuthHttpClient } = vi.hoisted(() => ({
-  mockAuthHttpClient: vi.fn()
+const { mockAuthHttpClient, mockSendAuditEvent } = vi.hoisted(() => ({
+  mockAuthHttpClient: vi.fn(),
+  mockSendAuditEvent: vi.fn().mockResolvedValue(undefined)
 }))
 
 vi.mock('../../../src/http/client.js', () => ({
@@ -20,14 +21,21 @@ vi.mock('../../../src/config/index.js', () => ({
   }
 }))
 
+vi.mock('../../../src/messaging/outbound/audit/send-audit-event.js', () => ({
+  sendAuditEvent: mockSendAuditEvent
+}))
+
 describe('generateCrmAuthToken', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    config.get.mockReturnValue({
-      clientId: 'fake-client',
-      clientSecret: 'fake-secret',
-      scope: 'fake-scope',
-      tokenEndpoint: 'https://login.microsoftonline.com/fake-tenant/oauth2/v2.0/token'
+    config.get.mockImplementation((key) => {
+      if (key === 'auth') return {
+        clientId: 'fake-client',
+        clientSecret: 'fake-secret',
+        scope: 'fake-scope',
+        tokenEndpoint: 'https://login.microsoftonline.com/fake-tenant/oauth2/v2.0/token'
+      }
+      return undefined
     })
   })
 
@@ -61,9 +69,9 @@ describe('generateCrmAuthToken', () => {
       text: vi.fn().mockResolvedValue('Invalid credentials')
     }
     mockAuthHttpClient.mockResolvedValue(mockFailResponse)
-
-    await expect(generateCrmAuthToken()).rejects.toThrow(
-      'Auth failed: 401 Unauthorized - Invalid credentials'
+    await expect(generateCrmAuthToken()).rejects.toThrow('Auth failed: 401 Unauthorized - Invalid credentials')
+    expect(mockSendAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ security: expect.objectContaining({ status: 'failure' }) })
     )
   })
 
@@ -100,9 +108,9 @@ describe('generateCrmAuthToken', () => {
 
   test('should throw error when token endpoint is down', async () => {
     mockAuthHttpClient.mockRejectedValue(new Error('Network error'))
-
-    await expect(generateCrmAuthToken()).rejects.toThrow(
-      'Unable to reach token endpoint: Network error'
+    await expect(generateCrmAuthToken()).rejects.toThrow('Unable to reach token endpoint: Network error')
+    expect(mockSendAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ security: expect.objectContaining({ status: 'failure' }) })
     )
   })
 })

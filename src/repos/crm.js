@@ -34,9 +34,9 @@ const getContactIdFromCrn = async (authToken, crn) => {
     })
     const responseJson = await response.json()
     // Future: handle no results - get status code 200 whether it finds it or not
-    return {
-      contactId: responseJson.value[0]?.contactid
-    }
+    const contactId = responseJson.value[0]?.contactid ?? null
+
+    return { contactId }
   } catch (err) {
     return {
       contactId: null,
@@ -60,9 +60,10 @@ const getAccountIdFromSbi = async (authToken, sbi) => {
 
     const responseJson = await response.json()
     // Future: handle no results - get status code 200 whether it finds it or not
-    return {
-      accountId: responseJson.value[0]?.accountid
-    }
+
+    const accountId = responseJson.value[0]?.accountid ?? null
+
+    return { accountId }
   } catch (err) {
     return {
       accountId: null,
@@ -71,47 +72,59 @@ const getAccountIdFromSbi = async (authToken, sbi) => {
   }
 }
 
+const buildActivityMetadataItem = ({ name, blobFileId, mimeType, documentTypeId }) => {
+  const item = {
+    rpa_name: name,
+    rpa_blobfileid: blobFileId,
+    'rpa_DocumentTypeMetaId@odata.bind': `/rpa_documenttypeses(${documentTypeId || DEFAULT_DOCUMENT_TYPE_ID})`
+  }
+
+  if (mimeType) {
+    item.rpa_filemimetype = mimeType
+  }
+  return item
+}
+
+const buildOnlineSubmissionEntry = (onlineSubmissionActivity, activityMetadataItem) => {
+  const { subject, description, scheduledStart, scheduledEnd, stateCode, statusCode } = onlineSubmissionActivity
+  return {
+    subject,
+    description,
+    scheduledstart: scheduledStart,
+    scheduledend: scheduledEnd,
+    rpa_onlinesubmissiondate: new Date().toISOString(),
+    rpa_onlinesubmissionid: randomBytes(10).toString('hex'),
+    statecode: stateCode,
+    statuscode: statusCode,
+    rpa_onlinesubmission_rpa_activitymetadata: [activityMetadataItem]
+  }
+}
+
+const buildCreateCasePayload = (caseData, onlineSubmissionActivity, activityMetadataItem) => {
+  const { title, caseDescription, contactId, accountId } = caseData
+  const onlinesubmission = buildOnlineSubmissionEntry(onlineSubmissionActivity, activityMetadataItem)
+
+  return {
+    title,
+    description: caseDescription,
+    caseorigincode: 100000002,
+    prioritycode: 2,
+    'customerid_contact@odata.bind': `/contacts(${contactId})`,
+    'rpa_Contact@odata.bind': `/contacts(${contactId})`,
+    'rpa_Organisation@odata.bind': `/accounts(${accountId})`,
+    rpa_isunknowncontact: false,
+    rpa_isunknownorganisation: false,
+    incident_rpa_onlinesubmissions: [onlinesubmission]
+  }
+}
+
 const createCaseWithOnlineSubmission = async (request) => {
   try {
     const { authToken, case: caseData, onlineSubmissionActivity } = request
-    const { title, caseDescription, contactId, accountId } = caseData
-    const { subject, description, scheduledStart, scheduledEnd, stateCode, statusCode, metadata } = onlineSubmissionActivity
-    const { name, blobFileId, mimeType } = metadata
+    const { metadata } = onlineSubmissionActivity
 
-    const activityMetadataItem = {
-      rpa_name: name,
-      rpa_blobfileid: blobFileId,
-      'rpa_DocumentTypeMetaId@odata.bind': `/rpa_documenttypeses(${DEFAULT_DOCUMENT_TYPE_ID})`
-    }
-
-    if (mimeType) {
-      activityMetadataItem.rpa_filemimetype = mimeType
-    }
-
-    const payload = {
-      title,
-      description: caseDescription,
-      caseorigincode: 100000002,
-      prioritycode: 2,
-      'customerid_contact@odata.bind': `/contacts(${contactId})`,
-      'rpa_Contact@odata.bind': `/contacts(${contactId})`,
-      'rpa_Organisation@odata.bind': `/accounts(${accountId})`,
-      rpa_isunknowncontact: false,
-      rpa_isunknownorganisation: false,
-      incident_rpa_onlinesubmissions: [
-        {
-          subject,
-          description,
-          scheduledstart: scheduledStart,
-          scheduledend: scheduledEnd,
-          rpa_onlinesubmissiondate: new Date().toISOString(),
-          rpa_onlinesubmissionid: randomBytes(10).toString('hex'),
-          statecode: stateCode,
-          statuscode: statusCode,
-          rpa_onlinesubmission_rpa_activitymetadata: [activityMetadataItem]
-        }
-      ]
-    }
+    const activityMetadataItem = buildActivityMetadataItem(metadata)
+    const payload = buildCreateCasePayload(caseData, onlineSubmissionActivity, activityMetadataItem)
 
     const response = await httpClient(`${baseUrl}/incidents`, {
       method: 'POST',
@@ -211,45 +224,12 @@ const createMetadataForOnlineSubmission = async (request) => {
 const createMetadataForExistingCase = async (request) => {
   try {
     const { authToken, caseId, metadata } = request
-    const { name, blobFileId, documentTypeId, contactId, accountId, mimeType } = metadata
 
-    const payload = {
-      rpa_name: name,
-      rpa_blobfileid: blobFileId
-    }
-
-    if (mimeType) {
-      payload.rpa_filemimetype = mimeType
-    }
-
-    if (documentTypeId) {
-      payload['rpa_DocumentTypeMetaId@odata.bind'] = `/rpa_documenttypeses(${documentTypeId})`
-    } else {
-      payload['rpa_DocumentTypeMetaId@odata.bind'] = `/rpa_documenttypeses(${DEFAULT_DOCUMENT_TYPE_ID})`
-    }
-
-    if (contactId) {
-      payload['rpa_Contact@odata.bind'] = `/contacts(${contactId})`
-    }
-    if (accountId) {
-      payload['rpa_Organisation@odata.bind'] = `/accounts(${accountId})`
-    }
-
-    const endpoint = `${baseUrl}/incidents(${caseId})/incident_rpa_activitymetadata`
-
-    const response = await httpClient(endpoint, {
-      method: 'POST',
-      headers: {
-        Authorization: authToken,
-        ...baseHeaders
-      },
-      body: JSON.stringify(payload)
-    })
-
-    const data = await response.json()
+    const payload = buildExistingCaseMetadataPayload(metadata)
+    const result = await postMetadataForCase(authToken, caseId, payload)
 
     return {
-      metadataId: data?.rpa_activitymetadataid || null,
+      metadataId: result?.rpa_activitymetadataid || null,
       error: null
     }
   } catch (err) {
@@ -260,6 +240,49 @@ const createMetadataForExistingCase = async (request) => {
   }
 }
 
+const buildExistingCaseMetadataPayload = (metadata) => {
+  const { name, blobFileId, documentTypeId, contactId, accountId, mimeType } = metadata
+
+  const payload = {
+    rpa_name: name,
+    rpa_blobfileid: blobFileId
+  }
+
+  if (mimeType) {
+    payload.rpa_filemimetype = mimeType
+  }
+
+  if (documentTypeId) {
+    payload['rpa_DocumentTypeMetaId@odata.bind'] = `/rpa_documenttypeses(${documentTypeId})`
+  } else {
+    payload['rpa_DocumentTypeMetaId@odata.bind'] = `/rpa_documenttypeses(${DEFAULT_DOCUMENT_TYPE_ID})`
+  }
+
+  if (contactId) {
+    payload['rpa_Contact@odata.bind'] = `/contacts(${contactId})`
+  }
+  if (accountId) {
+    payload['rpa_Organisation@odata.bind'] = `/accounts(${accountId})`
+  }
+
+  return payload
+}
+
+const postMetadataForCase = async (authToken, caseId, payload) => {
+  const endpoint = `${baseUrl}/incidents(${caseId})/incident_rpa_activitymetadata`
+
+  const response = await httpClient(endpoint, {
+    method: 'POST',
+    headers: {
+      Authorization: authToken,
+      ...baseHeaders
+    },
+    body: JSON.stringify(payload)
+  })
+
+  return response.json()
+}
+
 // Future: get document type
 export {
   getContactIdFromCrn,
@@ -268,5 +291,10 @@ export {
   getOnlineSubmissionId,
   createMetadataForOnlineSubmission
   ,
-  createMetadataForExistingCase
+  createMetadataForExistingCase,
+  // exported for testing
+  buildQuery,
+  buildActivityMetadataItem,
+  buildOnlineSubmissionEntry,
+  buildCreateCasePayload
 }

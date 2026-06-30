@@ -1,6 +1,8 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
 
-const mockHttpClient = vi.fn()
+const { mockHttpClient } = vi.hoisted(() => ({
+  mockHttpClient: vi.fn()
+}))
 
 vi.mock('../../../src/http/client.js', () => ({
   httpClient: mockHttpClient
@@ -87,6 +89,17 @@ describe('CRM repository', () => {
       expect(result.error).toBeInstanceOf(Error)
       expect(result.error.message).toBe('Invalid JSON')
     })
+
+    test('should return null when no contact found', async () => {
+      const mockResponse = {
+        ok: true,
+        json: vi.fn().mockResolvedValue({ value: [] })
+      }
+      mockHttpClient.mockResolvedValue(mockResponse)
+      const result = await getContactIdFromCrn('Bearer token', '0000000000')
+
+      expect(result.contactId).toBeNull()
+    })
   })
 
   describe('getAccountIdFromSbi', () => {
@@ -151,6 +164,18 @@ describe('CRM repository', () => {
       expect(result.accountId).toBeNull()
       expect(result.error).toBeInstanceOf(Error)
       expect(result.error.message).toBe('Invalid JSON')
+    })
+
+    test('should return null when no account found', async () => {
+      const mockResponse = {
+        ok: true,
+        json: vi.fn().mockResolvedValue({ value: [] })
+      }
+      mockHttpClient.mockResolvedValue(mockResponse)
+
+      const result = await getAccountIdFromSbi('Bearer token', '000000000')
+
+      expect(result.accountId).toBeNull()
     })
   })
 

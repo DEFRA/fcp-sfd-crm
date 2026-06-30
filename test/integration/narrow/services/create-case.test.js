@@ -4,8 +4,9 @@ vi.mock('../../../../src/auth/get-crm-auth-token.js', () => ({
   getCrmAuthToken: vi.fn(async () => 'mock-token')
 }))
 
+
 vi.mock('../../../../src/services/create-case-with-online-submission-in-crm.js', () => ({
-  createCaseWithOnlineSubmissionInCrm: vi.fn(async () => ({ caseId: 'int-case-1', contactId: 'c1', accountId: 'a1' }))
+  createCaseWithOnlineSubmissionInCrm: vi.fn(async () => ({ caseId: '11111111-1111-4111-8111-111111111111', contactId: 'c1', accountId: 'a1' }))
 }))
 
 import db from '../../../../src/data/db.js'
@@ -25,43 +26,43 @@ describe('Integration - createCase first request processing', () => {
   test('first request creates CRM case, stores result and returns it', async () => {
     const payload = {
       data: {
-        crn: 'crn-int',
-        sbi: 'sbi-int',
+        crn: 1050000000,
+        sbi: 105000000,
         crm: { title: 'Integration Test' },
-        file: { fileId: 'file-int-1', fileName: 'file.pdf', url: 'http://file', contentType: 'application/pdf' },
-        correlationId: 'corr-int-1'
+        file: { fileId: '11111111-2222-4222-8222-222222222222', fileName: 'file.pdf', url: 'http://file', contentType: 'application/pdf' },
+        correlationId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
       }
     }
 
     const response = await createCase(payload)
 
-    expect(response.caseId).toBe('int-case-1')
+    expect(response.caseId).toBe('11111111-1111-4111-8111-111111111111')
 
-    const doc = await db.collection(COLLECTION).findOne({ correlationId: 'corr-int-1' })
+    const doc = await db.collection(COLLECTION).findOne({ correlationId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' })
     expect(doc).toBeDefined()
-    expect(doc.caseId).toBe('int-case-1')
-    expect(doc.processedFileIds).toContain('file-int-1')
-    expect(doc.creatorFileId).toBe('file-int-1')
+    expect(doc.caseId).toBe('11111111-1111-4111-8111-111111111111')
+    expect(doc.processedFileIds).toContain('11111111-2222-4222-8222-222222222222')
+    expect(doc.creatorFileId).toBe('11111111-2222-4222-8222-222222222222')
   })
 
   test('subsequent identical message is skipped and returns existing caseId', async () => {
     const payload = {
       data: {
-        crn: 'crn-int',
-        sbi: 'sbi-int',
+        crn: 1050000000,
+        sbi: 105000000,
         crm: { title: 'Integration Test' },
-        file: { fileId: 'file-int-2', fileName: 'file.pdf', url: 'http://file', contentType: 'application/pdf' },
-        correlationId: 'corr-int-2'
+        file: { fileId: '33333333-3333-4333-8333-333333333333', fileName: 'file.pdf', url: 'http://file', contentType: 'application/pdf' },
+        correlationId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
       }
     }
 
     // first call
     const first = await createCase(payload)
-    expect(first.caseId).toBe('int-case-1')
+    expect(first.caseId).toBe('11111111-1111-4111-8111-111111111111')
 
     // second call with same correlationId + fileId should return skipped with caseId
     const second = await createCase(payload)
     expect(second.skipped).toBe(true)
-    expect(second.caseId).toBe('int-case-1')
+    expect(second.caseId).toBe('11111111-1111-4111-8111-111111111111')
   })
 })

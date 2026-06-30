@@ -2,9 +2,20 @@ import { describe, test, expect, vi, beforeEach } from 'vitest'
 
 
 const mockLogger = { info: vi.fn(), error: vi.fn() }
+const mockSendAuditEvent = vi.fn().mockResolvedValue(true)
 
 vi.mock('../../../src/logging/logger.js', () => ({
   createLogger: () => mockLogger
+}))
+
+vi.mock('../../../src/config/index.js', () => ({
+  config: {
+    get: vi.fn(() => null)
+  }
+}))
+
+vi.mock('../../../src/messaging/outbound/audit/send-audit-event.js', () => ({
+  sendAuditEvent: mockSendAuditEvent
 }))
 
 vi.mock('../../../src/repos/crm.js', () => ({
@@ -37,9 +48,11 @@ describe('ensureContactAndAccount', () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: 'c1' })
     getAccountIdFromSbi.mockResolvedValue({ accountId: 'a1' })
 
-    const result = await ensureContactAndAccount('token', 'crn1', 'sbi1')
+    const result = await ensureContactAndAccount('token', 'crn1', 'sbi1', 'corr-1')
 
     expect(result).toEqual({ contactId: 'c1', accountId: 'a1' })
+    await new Promise(r => setImmediate(r))
+    expect(mockSendAuditEvent).toHaveBeenCalledTimes(2)
   })
 
   test('throws with retryable=true when contact lookup gets a retryable HTTP error', async () => {
@@ -51,6 +64,40 @@ describe('ensureContactAndAccount', () => {
     expect(thrown.retryable).toBe(true)
     expect(thrown.retryMetadata).toEqual(err.retryMetadata)
     expect(thrown.message).toContain('Retryable error looking up contact')
+  })
+
+  test('logs audit_publish_failed when person.read audit send fails but continues flow', async () => {
+    getContactIdFromCrn.mockResolvedValue({ contactId: 'c1' })
+    getAccountIdFromSbi.mockResolvedValue({ accountId: 'a1' })
+    mockSendAuditEvent
+      .mockRejectedValueOnce(new Error('schema invalid'))
+      .mockResolvedValueOnce(true)
+
+    const result = await ensureContactAndAccount('token', 'crn1', 'sbi1', 'corr-2')
+    await new Promise(r => setImmediate(r))
+
+    expect(result).toEqual({ contactId: 'c1', accountId: 'a1' })
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ event: expect.objectContaining({ type: 'uk.gov.fcp.sfd.person.read' }) }),
+      'audit_publish_failed'
+    )
+  })
+
+  test('logs audit_publish_failed when business.read audit send fails but continues flow', async () => {
+    getContactIdFromCrn.mockResolvedValue({ contactId: 'c1' })
+    getAccountIdFromSbi.mockResolvedValue({ accountId: 'a1' })
+    mockSendAuditEvent
+      .mockResolvedValueOnce(true)
+      .mockRejectedValueOnce(new Error('transport failure'))
+
+    const result = await ensureContactAndAccount('token', 'crn1', 'sbi1', 'corr-3')
+    await new Promise(r => setImmediate(r))
+
+    expect(result).toEqual({ contactId: 'c1', accountId: 'a1' })
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ event: expect.objectContaining({ type: 'uk.gov.fcp.sfd.business.read' }) }),
+      'audit_publish_failed'
+    )
   })
 
   test('throws 422 when contact lookup gets a non-retryable HTTP error', async () => {
@@ -66,10 +113,29 @@ describe('ensureContactAndAccount', () => {
   test('throws 422 on genuine not-found (no error, no contactId)', async () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: null })
 
-    const thrown = await ensureContactAndAccount('token', 'crn1', 'sbi1').catch(e => e)
+    const thrown = await ensureContactAndAccount('token', 'crn1', 'sbi1', 'corr-1').catch(e => e)
 
     expect(thrown.isBoom).toBe(true)
     expect(thrown.output.statusCode).toBe(422)
+    expect(mockSendAuditEvent).toHaveBeenCalledWith({
+      correlationId: 'corr-1',
+      accounts: { crn: 'crn1', sbi: 'sbi1' },
+      audit: { status: 'failure', details: 'CRN not found' }
+    })
+  })
+
+  test('still throws 422 when contact not found and audit send fails', async () => {
+    getContactIdFromCrn.mockResolvedValue({ contactId: null })
+    mockSendAuditEvent.mockRejectedValueOnce(new Error('audit down'))
+
+    const thrown = await ensureContactAndAccount('token', 'crn1', 'sbi1', 'corr-6').catch(e => e)
+
+    expect(thrown.isBoom).toBe(true)
+    expect(thrown.output.statusCode).toBe(422)
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ event: expect.objectContaining({ type: 'uk.gov.fcp.sfd.person.read' }) }),
+      'audit_publish_failed'
+    )
   })
 
   test('throws with retryable=true when account lookup gets a retryable HTTP error', async () => {
@@ -98,10 +164,30 @@ describe('ensureContactAndAccount', () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: 'c1' })
     getAccountIdFromSbi.mockResolvedValue({ accountId: null })
 
-    const thrown = await ensureContactAndAccount('token', 'crn1', 'sbi1').catch(e => e)
+    const thrown = await ensureContactAndAccount('token', 'crn1', 'sbi1', 'corr-1').catch(e => e)
 
     expect(thrown.isBoom).toBe(true)
     expect(thrown.output.statusCode).toBe(422)
+    expect(mockSendAuditEvent).toHaveBeenCalledWith({
+      correlationId: 'corr-1',
+      accounts: { sbi: 'sbi1' },
+      audit: { status: 'failure', details: 'SBI not found' }
+    })
+  })
+
+  test('still throws 422 when account not found and audit send fails', async () => {
+    getContactIdFromCrn.mockResolvedValue({ contactId: 'c1' })
+    getAccountIdFromSbi.mockResolvedValue({ accountId: null })
+    mockSendAuditEvent.mockRejectedValue(new Error('audit down'))
+
+    const thrown = await ensureContactAndAccount('token', 'crn1', 'sbi1', 'corr-7').catch(e => e)
+
+    expect(thrown.isBoom).toBe(true)
+    expect(thrown.output.statusCode).toBe(422)
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ event: expect.objectContaining({ type: 'uk.gov.fcp.sfd.business.read' }) }),
+      'audit_publish_failed'
+    )
   })
 })
 
