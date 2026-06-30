@@ -265,11 +265,13 @@ const createMetadataForExistingCase = async (request) => {
 }
 
 const CASE_TYPE_MAX_LENGTH = 200
+const CONTROL_CHAR_UPPER_BOUND = 0x1f
+const DELETE_CHAR_CODE = 0x7f
 
 const hasControlChars = (str) => {
   for (let i = 0; i < str.length; i++) {
-    const code = str.charCodeAt(i)
-    if (code <= 0x1f || code === 0x7f) return true
+    const code = str.codePointAt(i)
+    if (code <= CONTROL_CHAR_UPPER_BOUND || code === DELETE_CHAR_CODE) { return true }
   }
   return false
 }
