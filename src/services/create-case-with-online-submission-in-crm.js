@@ -1,7 +1,8 @@
 import Boom from '@hapi/boom'
 import { createLogger } from '../logging/logger.js'
 import {
-  createCaseWithOnlineSubmission
+  createCaseWithOnlineSubmission,
+  getDocumentTypeMetadata
 } from '../repos/crm.js'
 import { assertRequiredParams, ensureContactAndAccount, fetchRpaOnlineSubmissionIdOrThrow } from './crm-helpers.js'
 import { crmEvents } from '../constants/events.js'
@@ -10,11 +11,12 @@ import { publishReceivedEvent } from '../messaging/outbound/received-event/publi
 const { internal } = Boom
 const logger = createLogger()
 
-export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi, caseData, onlineSubmissionActivity, correlationId }) => {
+export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi, caseType, caseData, onlineSubmissionActivity, correlationId }) => {
   const requiredParams = {
     authToken,
     crn,
     sbi,
+    caseType,
     caseData,
     onlineSubmissionActivity,
     correlationId
@@ -24,12 +26,34 @@ export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi,
 
   const { contactId, accountId } = await ensureContactAndAccount(authToken, crn, sbi)
 
+  const { documentTypeMetadata, error: docTypeError } = await getDocumentTypeMetadata(authToken, caseType)
+
+  if (docTypeError) {
+    logger.error({ correlationId, caseType, error: docTypeError }, 'Error looking up document type metadata')
+    if (docTypeError?.retryMetadata?.category === 'retryable') {
+      docTypeError.retryable = true
+      throw docTypeError
+    }
+    const err = internal('Unable to look up document type metadata from CRM')
+    err.retryable = true
+    err.retryMetadata = docTypeError?.retryMetadata ?? null
+    throw err
+  }
+
+  if (!documentTypeMetadata) {
+    logger.warn({ correlationId, caseType }, 'Document type metadata not found for caseType')
+    const err = internal(`No document type metadata found for caseType: ${caseType}`)
+    err.retryable = true
+    throw err
+  }
+
   const { caseId, error: caseError } = await createCaseWithOnlineSubmission({
     authToken,
     case: {
       ...caseData,
       contactId,
-      accountId
+      accountId,
+      documentTypeMetadata
     },
     onlineSubmissionActivity
   })

@@ -49,7 +49,7 @@ export function transformPayload (cloudEventPayload) {
   return {
     crn,
     sbi,
-    caseType: 'Document Upload',
+    caseType: crm?.caseType || 'Document Upload',
     caseData,
     onlineSubmissionActivity,
     correlationId

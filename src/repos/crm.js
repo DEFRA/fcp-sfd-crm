@@ -74,14 +74,16 @@ const getAccountIdFromSbi = async (authToken, sbi) => {
 const createCaseWithOnlineSubmission = async (request) => {
   try {
     const { authToken, case: caseData, onlineSubmissionActivity } = request
-    const { title, caseDescription, contactId, accountId } = caseData
+    const { title, caseDescription, contactId, accountId, documentTypeMetadata } = caseData
     const { subject, description, scheduledStart, scheduledEnd, stateCode, statusCode, metadata } = onlineSubmissionActivity
     const { name, blobFileId, mimeType } = metadata
+
+    const { schemeValue, subjectValue, documentTypesId } = documentTypeMetadata
 
     const activityMetadataItem = {
       rpa_name: name,
       rpa_blobfileid: blobFileId,
-      'rpa_DocumentTypeMetaId@odata.bind': `/rpa_documenttypeses(${DEFAULT_DOCUMENT_TYPE_ID})`
+      'rpa_DocumentTypeMetaId@odata.bind': `/rpa_documenttypeses(${documentTypesId})`
     }
 
     if (mimeType) {
@@ -96,6 +98,8 @@ const createCaseWithOnlineSubmission = async (request) => {
       'customerid_contact@odata.bind': `/contacts(${contactId})`,
       'rpa_Contact@odata.bind': `/contacts(${contactId})`,
       'rpa_Organisation@odata.bind': `/accounts(${accountId})`,
+      _rpa_scheme_value: schemeValue,
+      _rpa_subject_value: subjectValue,
       rpa_isunknowncontact: false,
       rpa_isunknownorganisation: false,
       incident_rpa_onlinesubmissions: [
@@ -260,13 +264,61 @@ const createMetadataForExistingCase = async (request) => {
   }
 }
 
-// Future: get document type
+const CASE_TYPE_MAX_LENGTH = 200
+
+const hasControlChars = (str) => {
+  for (let i = 0; i < str.length; i++) {
+    const code = str.charCodeAt(i)
+    if (code <= 0x1f || code === 0x7f) return true
+  }
+  return false
+}
+
+const getDocumentTypeMetadata = async (authToken, caseType) => {
+  if (!caseType || typeof caseType !== 'string' || caseType.length > CASE_TYPE_MAX_LENGTH || hasControlChars(caseType)) {
+    return {
+      documentTypeMetadata: null,
+      error: new Error(`Invalid caseType: must be a string of 1-${CASE_TYPE_MAX_LENGTH} characters with no control characters`)
+    }
+  }
+
+  const query = `/rpa_documenttypeses?${buildQuery({
+    $select: '_rpa_scheme_value,_rpa_subject_value',
+    $filter: `rpa_documenttype eq '${caseType}'`
+  })}`
+
+  try {
+    const response = await httpClient(`${baseUrl}${query}`, {
+      method: 'GET',
+      headers: { Authorization: authToken, ...baseHeaders }
+    })
+
+    const responseJson = await response.json()
+    const record = responseJson.value[0]
+
+    if (!record) {
+      return { documentTypeMetadata: null, error: null }
+    }
+
+    return {
+      documentTypeMetadata: {
+        schemeValue: record._rpa_scheme_value,
+        subjectValue: record._rpa_subject_value,
+        documentTypesId: record.rpa_documenttypesid
+      },
+      error: null
+    }
+  } catch (err) {
+    return { documentTypeMetadata: null, error: err }
+  }
+}
+
 export {
   getContactIdFromCrn,
   getAccountIdFromSbi,
   createCaseWithOnlineSubmission,
   getOnlineSubmissionId,
-  createMetadataForOnlineSubmission
-  ,
-  createMetadataForExistingCase
+  createMetadataForOnlineSubmission,
+  createMetadataForExistingCase,
+  getDocumentTypeMetadata
 }

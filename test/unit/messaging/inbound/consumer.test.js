@@ -441,8 +441,6 @@ describe('CRM request sqs consumer', () => {
       expect(resultNull).toEqual({ Body: null })
     })
 
-
-
     describe('DLQ routing', () => {
       test('sends non-retryable message to DLQ and logs crm.dlq.message_received', async () => {
         const { startCRMListener: start, logger, createCase, sqsClient } = await setupAndImportConsumer()

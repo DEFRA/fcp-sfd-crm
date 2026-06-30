@@ -1,7 +1,7 @@
 import Joi from 'joi'
 
 export const createCasePayloadSchema = Joi.object({
-  caseType: Joi.string().required(),
+  caseType: Joi.string().max(200).required(),
   crn: Joi.string().required(),
   sbi: Joi.string().required(),
   caseData: Joi.object({
