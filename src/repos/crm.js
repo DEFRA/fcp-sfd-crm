@@ -284,10 +284,11 @@ const getDocumentTypeMetadata = async (authToken, caseType) => {
     }
   }
 
-  const query = `/rpa_documenttypeses?${buildQuery({
-    $select: '_rpa_scheme_value,_rpa_subject_value',
-    $filter: `rpa_documenttype eq '${caseType}'`
-  })}`
+const escapedCaseType = caseType.replaceAll("'", "''")
+const query = `/rpa_documenttypeses?${buildQuery({
+  $select: '_rpa_scheme_value,_rpa_subject_value,rpa_documenttypesid',
+  $filter: `rpa_documenttype eq '${escapedCaseType}'`
+})}`
 
   try {
     const response = await httpClient(`${baseUrl}${query}`, {
