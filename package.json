@@ -63,7 +63,7 @@
   "devDependencies": {
     "@fetchkit/chaos-fetch": "1.2.2",
     "@vitest/coverage-v8": "4.1.9",
-    "autoprefixer": "10.5.0",
+    "autoprefixer": "10.5.1",
     "dotenv": "17.4.2",
     "eslint": "9.39.0",
     "neostandard": "0.13.0",
