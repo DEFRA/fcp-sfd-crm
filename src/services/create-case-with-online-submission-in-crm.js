@@ -15,6 +15,14 @@ async function resolveDocumentTypeOrThrow (authToken, caseType, correlationId) {
   const { documentTypeMetadata, error: docTypeError } = await getDocumentTypeMetadata(authToken, caseType)
 
   if (docTypeError) {
+    if (docTypeError.message?.startsWith('Invalid caseType:')) {
+      logger.warn({ correlationId, caseType, error: docTypeError }, 'Invalid caseType for document type lookup')
+      const err = Boom.badRequest(docTypeError.message)
+      err.retryable = false
+      err.retryMetadata = { category: 'non-retryable', status: 400 }
+      throw err
+    }
+
     logger.error({ correlationId, caseType, error: docTypeError }, 'Error looking up document type metadata')
     if (docTypeError?.retryMetadata?.category === 'retryable') {
       docTypeError.retryable = true
