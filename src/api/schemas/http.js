@@ -3,7 +3,7 @@ import Joi from 'joi'
 const CASE_TYPE_MAX_LENGTH = 200
 
 export const createCasePayloadSchema = Joi.object({
-  caseType: Joi.string().max(CASE_TYPE_MAX_LENGTH).required(),
+caseType: Joi.string().min(1).max(CASE_TYPE_MAX_LENGTH).pattern(/^[^\u0000-\u001F\u007F]*$/).required(),
   crn: Joi.string().required(),
   sbi: Joi.string().required(),
   caseData: Joi.object({
