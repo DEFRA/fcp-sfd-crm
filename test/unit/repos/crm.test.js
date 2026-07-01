@@ -507,7 +507,7 @@ describe('CRM repository', () => {
       const result = await getDocumentTypeMetadata('Bearer token', 'CS_Agreement_Evidence')
 
       expect(mockHttpClient).toHaveBeenCalledWith(
-        "https://crm.example.com/api/rpa_documenttypeses?%24select=_rpa_scheme_value,_rpa_subject_value&%24filter=rpa_documenttype%20eq%20'CS_Agreement_Evidence'",
+        "https://crm.example.com/api/rpa_documenttypeses?%24select=_rpa_scheme_value,_rpa_subject_value,rpa_documenttypesid&%24filter=rpa_documenttype%20eq%20'CS_Agreement_Evidence'",
         {
           method: 'GET',
           headers: { Authorization: 'Bearer token', Prefer: 'return=representation', 'Content-Type': 'application/json' }
