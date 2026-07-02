@@ -101,7 +101,7 @@ const startCRMListener = (sqsClient) => {
     waitTimeSeconds: config.get('messaging.waitTimeSeconds'),
     pollingWaitTime: config.get('messaging.pollingWaitTime'),
     sqs: sqsClient,
-    async handleMessage(message) {
+    async handleMessage (message) {
       if (message.MessageAttributes?.replayed_from?.StringValue === 'DLQ') {
         logger.info({
           event: {

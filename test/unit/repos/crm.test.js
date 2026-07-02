@@ -17,7 +17,7 @@ vi.mock('../../../src/config/index.js', () => ({
 }))
 
 // Import after mocks
-const { getContactIdFromCrn, getAccountIdFromSbi, createCaseWithOnlineSubmission } = await import('../../../src/repos/crm.js')
+const { getContactIdFromCrn, getAccountIdFromSbi, createCaseWithOnlineSubmission, getDocumentTypeMetadata } = await import('../../../src/repos/crm.js')
 
 describe('CRM repository', () => {
   beforeEach(() => {
@@ -171,7 +171,12 @@ describe('CRM repository', () => {
           title: 'Test case title',
           caseDescription: 'Test case description',
           contactId: 'contact-123',
-          accountId: 'account-456'
+          accountId: 'account-456',
+          documentTypeMetadata: {
+            schemeValue: 'scheme-abc',
+            subjectValue: 'subject-def',
+            documentTypesId: 'doctype-789'
+          }
         },
         onlineSubmissionActivity: {
           subject: 'Test submission subject',
@@ -214,6 +219,8 @@ describe('CRM repository', () => {
         'customerid_contact@odata.bind': '/contacts(contact-123)',
         'rpa_Contact@odata.bind': '/contacts(contact-123)',
         'rpa_Organisation@odata.bind': '/accounts(account-456)',
+        _rpa_scheme_value: 'scheme-abc',
+        _rpa_subject_value: 'subject-def',
         rpa_isunknowncontact: false,
         rpa_isunknownorganisation: false
       })
@@ -237,7 +244,7 @@ describe('CRM repository', () => {
       expect(submission.rpa_onlinesubmission_rpa_activitymetadata[0]).toEqual({
         rpa_name: 'test-document.pdf',
         rpa_blobfileid: 'blob-file-id-123',
-        'rpa_DocumentTypeMetaId@odata.bind': '/rpa_documenttypeses(4e88916b-aae2-ee11-904c-000d3adc1ec9)',
+        'rpa_DocumentTypeMetaId@odata.bind': '/rpa_documenttypeses(doctype-789)',
         rpa_filemimetype: 'application/pdf'
       })
 
@@ -259,7 +266,12 @@ describe('CRM repository', () => {
           title: 'Test case title',
           caseDescription: 'Test case description',
           contactId: 'contact-123',
-          accountId: 'account-456'
+          accountId: 'account-456',
+          documentTypeMetadata: {
+            schemeValue: 'scheme-abc',
+            subjectValue: 'subject-def',
+            documentTypesId: 'doctype-789'
+          }
         },
         onlineSubmissionActivity: {
           subject: 'Test submission subject',
@@ -293,7 +305,12 @@ describe('CRM repository', () => {
           title: 'Test',
           caseDescription: 'Test',
           contactId: 'contact-123',
-          accountId: 'account-456'
+          accountId: 'account-456',
+          documentTypeMetadata: {
+            schemeValue: 'scheme-abc',
+            subjectValue: 'subject-def',
+            documentTypesId: 'doctype-789'
+          }
         },
         onlineSubmissionActivity: {
           subject: 'Subject',
@@ -327,7 +344,12 @@ describe('CRM repository', () => {
           title: 'Test',
           caseDescription: 'Test',
           contactId: 'contact-123',
-          accountId: 'account-456'
+          accountId: 'account-456',
+          documentTypeMetadata: {
+            schemeValue: 'scheme-abc',
+            subjectValue: 'subject-def',
+            documentTypesId: 'doctype-789'
+          }
         },
         onlineSubmissionActivity: {
           subject: 'Subject',
@@ -465,6 +487,119 @@ describe('CRM repository', () => {
       const lastCall = mockHttpClient.mock.calls[0]
       const body = JSON.parse(lastCall[1].body)
       expect(body['rpa_DocumentTypeMetaId@odata.bind']).toBe('/rpa_documenttypeses(abcd-1234)')
+    })
+  })
+
+  describe('getDocumentTypeMetadata', () => {
+    test('should return document type metadata for valid caseType', async () => {
+      const mockResponse = {
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          value: [{
+            _rpa_scheme_value: 'd7655ccd-4c2d-ef11-840a-000d3ab4c5e3',
+            _rpa_subject_value: '4e1910c7-b0d7-ee11-904d-0022489fd23c',
+            rpa_documenttypesid: 'fe2785b9-f06e-f111-ab0c-7c1e5235c19d'
+          }]
+        })
+      }
+      mockHttpClient.mockResolvedValue(mockResponse)
+
+      const result = await getDocumentTypeMetadata('Bearer token', 'CS_Agreement_Evidence')
+
+      expect(mockHttpClient).toHaveBeenCalledWith(
+        "https://crm.example.com/api/rpa_documenttypeses?%24select=_rpa_scheme_value,_rpa_subject_value,rpa_documenttypesid&%24filter=rpa_documenttype%20eq%20'CS_Agreement_Evidence'",
+        {
+          method: 'GET',
+          headers: { Authorization: 'Bearer token', Prefer: 'return=representation', 'Content-Type': 'application/json' }
+        }
+      )
+      expect(result).toEqual({
+        documentTypeMetadata: {
+          schemeValue: 'd7655ccd-4c2d-ef11-840a-000d3ab4c5e3',
+          subjectValue: '4e1910c7-b0d7-ee11-904d-0022489fd23c',
+          documentTypesId: 'fe2785b9-f06e-f111-ab0c-7c1e5235c19d'
+        },
+        error: null
+      })
+    })
+
+    test('should return null documentTypeMetadata when no results found', async () => {
+      const mockResponse = {
+        ok: true,
+        json: vi.fn().mockResolvedValue({ value: [] })
+      }
+      mockHttpClient.mockResolvedValue(mockResponse)
+
+      const result = await getDocumentTypeMetadata('Bearer token', 'NonExistent_Type')
+
+      expect(result).toEqual({ documentTypeMetadata: null, error: null })
+    })
+
+    test('should return error when HTTP request fails', async () => {
+      const networkError = new Error('Network error')
+      mockHttpClient.mockRejectedValue(networkError)
+
+      const result = await getDocumentTypeMetadata('Bearer token', 'CS_Agreement_Evidence')
+
+      expect(result.documentTypeMetadata).toBeNull()
+      expect(result.error).toBe(networkError)
+    })
+
+    test('should return error for invalid caseType exceeding max length', async () => {
+      const longCaseType = 'a'.repeat(201)
+
+      const result = await getDocumentTypeMetadata('Bearer token', longCaseType)
+
+      expect(mockHttpClient).not.toHaveBeenCalled()
+      expect(result.documentTypeMetadata).toBeNull()
+      expect(result.error).toBeInstanceOf(Error)
+      expect(result.error.message).toContain('Invalid caseType')
+    })
+
+    test('should return error for caseType with control characters', async () => {
+      const result = await getDocumentTypeMetadata('Bearer token', 'bad\x00type')
+
+      expect(mockHttpClient).not.toHaveBeenCalled()
+      expect(result.documentTypeMetadata).toBeNull()
+      expect(result.error).toBeInstanceOf(Error)
+      expect(result.error.message).toContain('Invalid caseType')
+    })
+
+    test('should return error for empty caseType', async () => {
+      const result = await getDocumentTypeMetadata('Bearer token', '')
+
+      expect(mockHttpClient).not.toHaveBeenCalled()
+      expect(result.documentTypeMetadata).toBeNull()
+      expect(result.error).toBeInstanceOf(Error)
+    })
+
+    test('should return first result when multiple records returned', async () => {
+      const mockResponse = {
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          value: [
+            {
+              _rpa_scheme_value: 'first-scheme',
+              _rpa_subject_value: 'first-subject',
+              rpa_documenttypesid: 'first-id'
+            },
+            {
+              _rpa_scheme_value: 'second-scheme',
+              _rpa_subject_value: 'second-subject',
+              rpa_documenttypesid: 'second-id'
+            }
+          ]
+        })
+      }
+      mockHttpClient.mockResolvedValue(mockResponse)
+
+      const result = await getDocumentTypeMetadata('Bearer token', 'CS_Agreement_Evidence')
+
+      expect(result.documentTypeMetadata).toEqual({
+        schemeValue: 'first-scheme',
+        subjectValue: 'first-subject',
+        documentTypesId: 'first-id'
+      })
     })
   })
 

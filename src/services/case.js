@@ -10,6 +10,31 @@ const logger = createLogger()
 
 const ONE_HOUR_MS = 60 * 60 * 1000
 
+function buildCaseData (crm, file) {
+  return {
+    title: crm?.title || 'Document Upload',
+    caseDescription: `Document uploaded: ${file?.fileName || 'Unknown file'}`,
+    queue: crm?.caseType || 'Outgoing'
+  }
+}
+
+function buildOnlineSubmissionActivity (file, correlationId) {
+  return {
+    subject: `Document Upload - ${file?.fileName || 'Unknown'}`,
+    description: `File uploaded: ${file?.fileName || 'Unknown file'}\nCorrelation ID: ${correlationId}`,
+    scheduledStart: new Date().toISOString(),
+    scheduledEnd: new Date(Date.now() + ONE_HOUR_MS).toISOString(),
+    stateCode: 0,
+    statusCode: 1,
+    metadata: {
+      name: file?.fileName || 'unknown',
+      documentType: 'default',
+      blobFileId: file?.fileId || null,
+      mimeType: file?.contentType || null
+    }
+  }
+}
+
 /**
  * Transform CloudEvents payload to the format expected by createCaseWithOnlineSubmissionInCrm
  * @param {object} cloudEventPayload - CloudEvents format payload with data property
@@ -25,33 +50,12 @@ export function transformPayload (cloudEventPayload) {
 
   const { crn, sbi, crm, file, correlationId } = data
 
-  const caseData = {
-    title: crm?.title || 'Document Upload',
-    caseDescription: `Document uploaded: ${file?.fileName || 'Unknown file'}`,
-    queue: crm?.caseType || 'Outgoing'
-  }
-
-  const onlineSubmissionActivity = {
-    subject: `Document Upload - ${file?.fileName || 'Unknown'}`,
-    description: `File uploaded: ${file?.fileName || 'Unknown file'}\nCorrelation ID: ${correlationId}`,
-    scheduledStart: new Date().toISOString(),
-    scheduledEnd: new Date(Date.now() + ONE_HOUR_MS).toISOString(),
-    stateCode: 0,
-    statusCode: 1,
-    metadata: {
-      name: file?.fileName || 'unknown',
-      documentType: 'default',
-      blobFileId: file?.fileId || null,
-      mimeType: file?.contentType || null
-    }
-  }
-
   return {
     crn,
     sbi,
-    caseType: 'Document Upload',
-    caseData,
-    onlineSubmissionActivity,
+    caseType: crm?.caseType || 'Document Upload',
+    caseData: buildCaseData(crm, file),
+    onlineSubmissionActivity: buildOnlineSubmissionActivity(file, correlationId),
     correlationId
   }
 }
