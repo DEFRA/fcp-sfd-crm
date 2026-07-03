@@ -4,7 +4,7 @@ updates:
 - package-ecosystem: docker-compose
   directory: "/"
   schedule:
-    interval: daily
+    interval: weekly
   commit-message:
     prefix: chore
   open-pull-requests-limit: 5
