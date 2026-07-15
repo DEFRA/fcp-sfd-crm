@@ -5,7 +5,7 @@
   "main": "src/index.js",
   "type": "module",
   "engines": {
-    "node": ">=22",
+    "node": ">=24",
     "npm": ">=11.10"
   },
   "scripts": {
@@ -36,7 +36,9 @@
     "@aws-sdk/client-sns": "3.1080.0",
     "@aws-sdk/client-sqs": "3.1080.0",
     "@aws-sdk/credential-providers": "3.1080.0",
+    "@azure/identity": "4.13.1",
     "@defra/fcp-audit-publisher": "1.0.7",
+    "@defra/hapi-auth-oidc": "0.5.6",
     "@defra/hapi-tracing": "1.30.0",
     "@elastic/ecs-pino-format": "1.5.0",
     "@fetchkit/ffetch": "5.5.4",

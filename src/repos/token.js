@@ -1,10 +1,8 @@
 import { config } from '../config/index.js'
 import db from '../data/db.js'
 
-// set token value and expiry
-// generateCrmAuthToken returns token and expiresIn
-const setToken = async (tokenValue, expiresInMs) => {
-  const expiresAt = Date.now() + (expiresInMs * 1000)
+const setToken = async (tokenValue, expiresInSeconds) => {
+  const expiresAt = Date.now() + (expiresInSeconds * 1000)
 
   await db.collection('tokens').updateOne(
     { _id: config.get('auth.tokenId') },

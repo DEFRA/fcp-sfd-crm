@@ -5,7 +5,7 @@
 **fcp-sfd-crm** is a Node.js CRM orchestration service for the Single Front Door (SFD) platform. It handles case management, messaging (SQS/SNS), authentication with external CRM systems, and integrates with MongoDB for persistence.
 
 **Tech Stack:**
-- Node.js 22+ (ES modules)
+- Node.js 24+ (ES modules)
 - Hapi.js for HTTP API
 - MongoDB for data storage
 - AWS SQS/SNS for messaging
