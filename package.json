@@ -5,7 +5,7 @@
   "main": "src/index.js",
   "type": "module",
   "engines": {
-    "node": ">=22",
+    "node": ">=24",
     "npm": ">=11.10"
   },
   "scripts": {
