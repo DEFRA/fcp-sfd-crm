@@ -10,8 +10,8 @@ const getCrmAuthToken = async () => {
   }
 
   // Generate new token if not found or expired
-  const { token: newToken, expiresAt } = await generateCrmAuthToken()
-  await setToken(newToken, expiresAt)
+  const { token: newToken, expiresIn } = await generateCrmAuthToken()
+  await setToken(newToken, expiresIn)
 
   return newToken
 }

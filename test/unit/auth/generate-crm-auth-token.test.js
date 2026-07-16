@@ -1,17 +1,21 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
 
-// Thing under test
-import { generateCrmAuthToken } from '../../../src/auth/generate-crm-auth-token.js'
+const mockGetCredentials = vi.fn()
+const mockGetToken = vi.fn()
 
-// Mock dependencies
-import { config } from '../../../src/config/index.js'
-
-const { mockAuthHttpClient } = vi.hoisted(() => ({
-  mockAuthHttpClient: vi.fn()
+vi.mock('@defra/hapi-auth-oidc', () => ({
+  WebIdentityTokenProvider: vi.fn(function () {
+    this.getCredentials = mockGetCredentials
+  }),
+  MockProvider: vi.fn(function () {
+    this.getCredentials = mockGetCredentials
+  })
 }))
 
-vi.mock('../../../src/http/client.js', () => ({
-  authHttpClient: mockAuthHttpClient
+vi.mock('@azure/identity', () => ({
+  ClientAssertionCredential: vi.fn(function () {
+    this.getToken = mockGetToken
+  })
 }))
 
 vi.mock('../../../src/config/index.js', () => ({
@@ -20,89 +24,180 @@ vi.mock('../../../src/config/index.js', () => ({
   }
 }))
 
+vi.mock('../../../src/logging/logger.js', () => ({
+  createLogger: vi.fn().mockReturnValue({
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn()
+  })
+}))
+
+vi.mock('../../../src/http/client.js', () => ({
+  authHttpClient: vi.fn()
+}))
+
+const { WebIdentityTokenProvider, MockProvider } = await import('@defra/hapi-auth-oidc')
+const { ClientAssertionCredential } = await import('@azure/identity')
+const { config } = await import('../../../src/config/index.js')
+const { authHttpClient } = await import('../../../src/http/client.js')
+const { generateCrmAuthToken } = await import('../../../src/auth/generate-crm-auth-token.js')
+
+const baseAuthConfig = {
+  tenantId: 'fake-tenant',
+  clientId: 'fake-client',
+  clientSecret: 'fake-secret',
+  tokenEndpoint: 'https://login.microsoftonline.com/tenant/oauth2/v2.0/token',
+  scope: 'https://fake.crm/.default'
+}
+
+const baseFederatedConfig = {
+  audience: 'fcp-sfd-crm',
+  enableMocking: false
+}
+
 describe('generateCrmAuthToken', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    config.get.mockReturnValue({
-      clientId: 'fake-client',
-      clientSecret: 'fake-secret',
-      scope: 'fake-scope',
-      tokenEndpoint: 'https://login.microsoftonline.com/fake-tenant/oauth2/v2.0/token'
-    })
   })
 
-  const mockSuccessResponse = {
-    ok: true,
-    json: vi.fn().mockResolvedValue({
-      token_type: 'Bearer',
-      access_token: 'test-token',
-      expires_in: 3600
-    })
-  }
-
-  test('should use token endpoint value from config in fetch URL', async () => {
-    mockAuthHttpClient.mockResolvedValue(mockSuccessResponse)
-
-    await generateCrmAuthToken()
-
-    expect(mockAuthHttpClient).toHaveBeenCalledWith(
-      'https://login.microsoftonline.com/fake-tenant/oauth2/v2.0/token',
-      expect.objectContaining({
-        method: 'POST'
+  describe('federated credentials path', () => {
+    beforeEach(() => {
+      config.get.mockImplementation((key) => {
+        if (key === 'auth') return baseAuthConfig
+        if (key === 'auth.federatedCredentials') return baseFederatedConfig
       })
-    )
-  })
-
-  test('should throw error when response is not 200 OK', async () => {
-    const mockFailResponse = {
-      ok: false,
-      status: 401,
-      statusText: 'Unauthorized',
-      text: vi.fn().mockResolvedValue('Invalid credentials')
-    }
-    mockAuthHttpClient.mockResolvedValue(mockFailResponse)
-
-    await expect(generateCrmAuthToken()).rejects.toThrow(
-      'Auth failed: 401 Unauthorized - Invalid credentials'
-    )
-  })
-
-  test('should return object with token and expiresAt property', async () => {
-    mockAuthHttpClient.mockResolvedValue(mockSuccessResponse)
-
-    const result = await generateCrmAuthToken()
-
-    expect(result).toEqual({
-      token: 'Bearer test-token',
-      expiresAt: 3600
+      mockGetCredentials.mockResolvedValue('fake-web-identity-jwt')
+      mockGetToken.mockResolvedValue({
+        token: 'entra-access-token',
+        expiresOnTimestamp: Date.now() + 3_600_000
+      })
     })
-    expect(result).toHaveProperty('token')
-    expect(result).toHaveProperty('expiresAt')
-  })
 
-  test('should send correct form data with URL encoding', async () => {
-    mockAuthHttpClient.mockResolvedValue(mockSuccessResponse)
+    describe('when enableMocking is false', () => {
+      test('uses WebIdentityTokenProvider', async () => {
+        await generateCrmAuthToken()
 
-    await generateCrmAuthToken()
+        expect(WebIdentityTokenProvider).toHaveBeenCalledWith({ audience: 'fcp-sfd-crm' })
+        expect(MockProvider).not.toHaveBeenCalled()
+      })
 
-    const fetchCall = mockAuthHttpClient.mock.calls[0]
-    const requestOptions = fetchCall[1]
+      test('returns a Bearer token with expiresIn', async () => {
+        const result = await generateCrmAuthToken()
 
-    expect(requestOptions.method).toBe('POST')
-    expect(requestOptions.headers).toEqual({
-      'Content-Type': 'application/x-www-form-urlencoded'
+        expect(result.token).toBe('Bearer entra-access-token')
+        expect(result.expiresIn).toBeGreaterThan(0)
+      })
+
+      test('passes tenantId and clientId to ClientAssertionCredential', async () => {
+        await generateCrmAuthToken()
+
+        expect(ClientAssertionCredential).toHaveBeenCalledWith(
+          'fake-tenant',
+          'fake-client',
+          expect.any(Function)
+        )
+      })
+
+      test('calls getToken with the configured scope', async () => {
+        await generateCrmAuthToken()
+
+        expect(mockGetToken).toHaveBeenCalledWith('https://fake.crm/.default')
+      })
     })
-    expect(requestOptions.body).toContain('client_id=fake-client')
-    expect(requestOptions.body).toContain('client_secret=fake-secret')
-    expect(requestOptions.body).toContain('grant_type=client_credentials')
-    expect(requestOptions.body).toContain('scope=fake-scope')
+
+    describe('when enableMocking is true', () => {
+      test('uses MockProvider instead of WebIdentityTokenProvider', async () => {
+        config.get.mockImplementation((key) => {
+          if (key === 'auth') return baseAuthConfig
+          if (key === 'auth.federatedCredentials') return { ...baseFederatedConfig, enableMocking: true }
+        })
+
+        await generateCrmAuthToken()
+
+        expect(MockProvider).toHaveBeenCalled()
+        expect(WebIdentityTokenProvider).not.toHaveBeenCalled()
+      })
+    })
+
+    describe('error handling', () => {
+      test('throws when getToken rejects', async () => {
+        mockGetToken.mockRejectedValue(new Error('AADSTS500011: wrong audience'))
+
+        await expect(generateCrmAuthToken()).rejects.toThrow(
+          'Unable to obtain CRM access token: AADSTS500011: wrong audience'
+        )
+      })
+
+      test('throws when getToken returns null', async () => {
+        mockGetToken.mockResolvedValue(null)
+
+        await expect(generateCrmAuthToken()).rejects.toThrow(
+          'Auth failed: no access token returned from Entra ID'
+        )
+      })
+
+      test('throws when getToken returns object with no token field', async () => {
+        mockGetToken.mockResolvedValue({ expiresOnTimestamp: Date.now() + 3_600_000 })
+
+        await expect(generateCrmAuthToken()).rejects.toThrow(
+          'Auth failed: no access token returned from Entra ID'
+        )
+      })
+    })
   })
 
-  test('should throw error when token endpoint is down', async () => {
-    mockAuthHttpClient.mockRejectedValue(new Error('Network error'))
+  describe('client secret path', () => {
+    beforeEach(() => {
+      config.get.mockImplementation((key) => {
+        if (key === 'auth') return baseAuthConfig
+        if (key === 'auth.federatedCredentials') return { audience: null, enableMocking: false }
+      })
+    })
 
-    await expect(generateCrmAuthToken()).rejects.toThrow(
-      'Unable to reach token endpoint: Network error'
-    )
+    test('posts form-encoded credentials to the token endpoint', async () => {
+      authHttpClient.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          token_type: 'Bearer',
+          access_token: 'oauth-access-token',
+          expires_in: 3600
+        })
+      })
+
+      const result = await generateCrmAuthToken()
+
+      expect(authHttpClient).toHaveBeenCalledWith(
+        baseAuthConfig.tokenEndpoint,
+        expect.objectContaining({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        })
+      )
+      expect(result).toEqual({
+        token: 'Bearer oauth-access-token',
+        expiresIn: 3600
+      })
+    })
+
+    test('throws when the HTTP request fails', async () => {
+      authHttpClient.mockRejectedValue(new Error('ECONNREFUSED'))
+
+      await expect(generateCrmAuthToken()).rejects.toThrow(
+        'Unable to reach token endpoint: ECONNREFUSED'
+      )
+    })
+
+    test('throws when the response is not ok', async () => {
+      authHttpClient.mockResolvedValue({
+        ok: false,
+        status: 401,
+        statusText: 'Unauthorized',
+        text: async () => 'invalid_client'
+      })
+
+      await expect(generateCrmAuthToken()).rejects.toThrow(
+        'Auth failed: 401 Unauthorized - invalid_client'
+      )
+    })
   })
 })
