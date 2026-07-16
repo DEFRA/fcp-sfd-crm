@@ -15,7 +15,10 @@ services:
       CRM_AUTH_ENDPOINT: https://dummy-token-endpoint
       CRM_AUTH_CLIENT_ID: dummy-client-id
       CRM_AUTH_CLIENT_SECRET: dummy-client-secret
+      CRM_AUTH_TENANT_ID: dummy-tenant-id
       CRM_AUTH_SCOPE: dummy-scope
+      CRM_AUTH_FEDERATED_AUDIENCE: dummy-audience
+      CRM_AUTH_FEDERATED_MOCK: 'true'
       CRM_API_BASE_URL: https://dummy-crm-url
       HTTP_RETRY_MAX_ATTEMPTS: 3
       HTTP_RETRY_BASE_DELAY_MS: 500
