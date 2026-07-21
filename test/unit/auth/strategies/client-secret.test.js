@@ -64,15 +64,12 @@ describe('generateTokenViaClientSecret', () => {
   })
 
   test('throws when the response is not ok', async () => {
-    mockAuthHttpClient.mockResolvedValue({
-      ok: false,
-      status: 401,
-      statusText: 'Unauthorized',
-      text: async () => 'invalid_client'
-    })
+    const httpError = new Error('HTTP error: 401 Unauthorized')
+    httpError.response = { status: 401, statusText: 'Unauthorized' }
+    mockAuthHttpClient.mockRejectedValue(httpError)
 
     await expect(generateTokenViaClientSecret()).rejects.toThrow(
-      'Auth failed: 401 Unauthorized - invalid_client'
+      'Auth failed: 401 Unauthorized'
     )
   })
 })

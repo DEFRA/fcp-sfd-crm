@@ -2,9 +2,10 @@ import Boom from '@hapi/boom'
 import { createLogger } from '../logging/logger.js'
 import {
   createCaseWithOnlineSubmission,
+  getCaseIdByOnlineSubmissionId,
   getDocumentTypeMetadata
 } from '../repos/crm.js'
-import { assertRequiredParams, ensureContactAndAccount, fetchRpaOnlineSubmissionIdOrThrow } from './crm-helpers.js'
+import { assertRequiredParams, ensureContactAndAccount } from './crm-helpers.js'
 import { crmEvents } from '../constants/events.js'
 import { publishReceivedEvent } from '../messaging/outbound/received-event/publish-received-event.js'
 
@@ -45,7 +46,7 @@ async function resolveDocumentTypeOrThrow (authToken, caseType, correlationId) {
 }
 
 async function createCrmCaseOrThrow (authToken, contactId, accountId, caseData, onlineSubmissionActivity, documentTypeMetadata, correlationId) {
-  const { caseId, error: caseError } = await createCaseWithOnlineSubmission({
+  const { caseId, rpaOnlinesubmissionid, error: caseError } = await createCaseWithOnlineSubmission({
     authToken,
     case: { ...caseData, contactId, accountId, documentTypeMetadata },
     onlineSubmissionActivity
@@ -63,23 +64,21 @@ async function createCrmCaseOrThrow (authToken, contactId, accountId, caseData, 
     throw err
   }
 
-  return caseId
-}
+  if (!caseId) {
+    logger.warn({ correlationId, rpaOnlinesubmissionid }, 'CRM POST response missing incidentid, falling back to lookup by online submission')
+    const { caseId: fallbackCaseId, error: lookupError } = await getCaseIdByOnlineSubmissionId(authToken, rpaOnlinesubmissionid)
 
-async function retrieveOnlineSubmissionOrThrow (authToken, caseId, correlationId) {
-  try {
-    return await fetchRpaOnlineSubmissionIdOrThrow(authToken, caseId, { correlationId })
-  } catch (err) {
-    logger.error({ caseId, error: err }, 'Unable to retrieve online submission id')
-    if (err?.retryMetadata?.category === 'retryable') {
+    if (lookupError || !fallbackCaseId) {
+      logger.error({ correlationId, rpaOnlinesubmissionid, error: lookupError }, 'Fallback lookup for caseId failed')
+      const err = internal('CRM did not return a case ID and fallback lookup failed')
       err.retryable = true
       throw err
     }
-    const thrown = internal('Unable to retrieve online submission for created case')
-    thrown.retryable = false
-    thrown.retryMetadata = err?.retryMetadata ?? null
-    throw thrown
+
+    return { caseId: fallbackCaseId, rpaOnlinesubmissionid }
   }
+
+  return { caseId, rpaOnlinesubmissionid }
 }
 
 export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi, caseType, caseData, onlineSubmissionActivity, correlationId }) => {
@@ -87,8 +86,7 @@ export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi,
 
   const { contactId, accountId } = await ensureContactAndAccount(authToken, crn, sbi)
   const documentTypeMetadata = await resolveDocumentTypeOrThrow(authToken, caseType, correlationId)
-  const caseId = await createCrmCaseOrThrow(authToken, contactId, accountId, caseData, onlineSubmissionActivity, documentTypeMetadata, correlationId)
-  const rpaOnlinesubmissionid = await retrieveOnlineSubmissionOrThrow(authToken, caseId, correlationId)
+  const { caseId, rpaOnlinesubmissionid } = await createCrmCaseOrThrow(authToken, contactId, accountId, caseData, onlineSubmissionActivity, documentTypeMetadata, correlationId)
 
   const eventData = { correlationId, caseId, crn: Number(crn), sbi: Number(sbi) }
   try {

@@ -90,6 +90,8 @@ const createCaseWithOnlineSubmission = async (request) => {
       activityMetadataItem.rpa_filemimetype = mimeType
     }
 
+    const rpaOnlinesubmissionid = randomBytes(10).toString('hex')
+
     const payload = {
       title,
       description: caseDescription,
@@ -98,8 +100,8 @@ const createCaseWithOnlineSubmission = async (request) => {
       'customerid_contact@odata.bind': `/contacts(${contactId})`,
       'rpa_Contact@odata.bind': `/contacts(${contactId})`,
       'rpa_Organisation@odata.bind': `/accounts(${accountId})`,
-      _rpa_scheme_value: schemeValue,
-      _rpa_subject_value: subjectValue,
+      'rpa_Scheme@odata.bind': `/rpa_schemes(${schemeValue})`,
+      'subjectid@odata.bind': `/subjects(${subjectValue})`,
       rpa_isunknowncontact: false,
       rpa_isunknownorganisation: false,
       incident_rpa_onlinesubmissions: [
@@ -109,7 +111,7 @@ const createCaseWithOnlineSubmission = async (request) => {
           scheduledstart: scheduledStart,
           scheduledend: scheduledEnd,
           rpa_onlinesubmissiondate: new Date().toISOString(),
-          rpa_onlinesubmissionid: randomBytes(10).toString('hex'),
+          rpa_onlinesubmissionid: rpaOnlinesubmissionid,
           statecode: stateCode,
           statuscode: statusCode,
           rpa_onlinesubmission_rpa_activitymetadata: [activityMetadataItem]
@@ -130,6 +132,7 @@ const createCaseWithOnlineSubmission = async (request) => {
 
     return {
       caseId: data.incidentid,
+      rpaOnlinesubmissionid,
       error: null
     }
   } catch (err) {
@@ -316,11 +319,33 @@ const getDocumentTypeMetadata = async (authToken, caseType) => {
   }
 }
 
+const getCaseIdByOnlineSubmissionId = async (authToken, rpaOnlinesubmissionid) => {
+  try {
+    const query = `/rpa_onlinesubmissions?${buildQuery({
+      $select: '_regardingobjectid_value',
+      $filter: `rpa_onlinesubmissionid eq '${rpaOnlinesubmissionid}'`
+    })}`
+
+    const response = await httpClient(`${baseUrl}${query}`, {
+      method: 'GET',
+      headers: { Authorization: authToken, ...baseHeaders }
+    })
+
+    const data = await response.json()
+    const caseId = data?.value?.[0]?._regardingobjectid_value || null
+
+    return { caseId, error: null }
+  } catch (err) {
+    return { caseId: null, error: err }
+  }
+}
+
 export {
   getContactIdFromCrn,
   getAccountIdFromSbi,
   createCaseWithOnlineSubmission,
   getOnlineSubmissionId,
+  getCaseIdByOnlineSubmissionId,
   createMetadataForOnlineSubmission,
   createMetadataForExistingCase,
   getDocumentTypeMetadata
