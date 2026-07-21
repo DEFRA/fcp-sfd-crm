@@ -680,4 +680,49 @@ describe('CRM repository', () => {
       expect(body['rpa_DocumentTypeMetaId@odata.bind']).toBe('/rpa_documenttypeses(doc-999)')
     })
   })
+
+  describe('getCaseIdByOnlineSubmissionId', () => {
+    test('should return caseId from regardingobjectid lookup', async () => {
+      const mockResponse = {
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          value: [{ _regardingobjectid_value: 'case-found-123' }]
+        })
+      }
+      mockHttpClient.mockResolvedValue(mockResponse)
+
+      const { getCaseIdByOnlineSubmissionId } = await import('../../../src/repos/crm.js')
+      const result = await getCaseIdByOnlineSubmissionId('Bearer token', 'ols-abc123')
+
+      expect(mockHttpClient).toHaveBeenCalledWith(
+        "https://crm.example.com/api/rpa_onlinesubmissions?%24select=_regardingobjectid_value&%24filter=rpa_onlinesubmissionid%20eq%20'ols-abc123'",
+        {
+          method: 'GET',
+          headers: { Authorization: 'Bearer token', Prefer: 'return=representation', 'Content-Type': 'application/json' }
+        }
+      )
+      expect(result).toEqual({ caseId: 'case-found-123', error: null })
+    })
+
+    test('should return null caseId when no results found', async () => {
+      const mockResponse = { ok: true, json: vi.fn().mockResolvedValue({ value: [] }) }
+      mockHttpClient.mockResolvedValue(mockResponse)
+
+      const { getCaseIdByOnlineSubmissionId } = await import('../../../src/repos/crm.js')
+      const result = await getCaseIdByOnlineSubmissionId('Bearer token', 'ols-notfound')
+
+      expect(result).toEqual({ caseId: null, error: null })
+    })
+
+    test('should return error when fetch fails', async () => {
+      mockHttpClient.mockRejectedValue(new Error('Network error'))
+
+      const { getCaseIdByOnlineSubmissionId } = await import('../../../src/repos/crm.js')
+      const result = await getCaseIdByOnlineSubmissionId('Bearer token', 'ols-abc123')
+
+      expect(result.caseId).toBeNull()
+      expect(result.error).toBeInstanceOf(Error)
+      expect(result.error.message).toBe('Network error')
+    })
+  })
 })
