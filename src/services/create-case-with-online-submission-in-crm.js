@@ -2,6 +2,7 @@ import Boom from '@hapi/boom'
 import { createLogger } from '../logging/logger.js'
 import {
   createCaseWithOnlineSubmission,
+  getCaseIdByOnlineSubmissionId,
   getDocumentTypeMetadata
 } from '../repos/crm.js'
 import { assertRequiredParams, ensureContactAndAccount } from './crm-helpers.js'
@@ -61,6 +62,20 @@ async function createCrmCaseOrThrow (authToken, contactId, accountId, caseData, 
     err.retryable = false
     err.retryMetadata = caseError?.retryMetadata ?? null
     throw err
+  }
+
+  if (!caseId) {
+    logger.warn({ correlationId, rpaOnlinesubmissionid }, 'CRM POST response missing incidentid, falling back to lookup by online submission')
+    const { caseId: fallbackCaseId, error: lookupError } = await getCaseIdByOnlineSubmissionId(authToken, rpaOnlinesubmissionid)
+
+    if (lookupError || !fallbackCaseId) {
+      logger.error({ correlationId, rpaOnlinesubmissionid, error: lookupError }, 'Fallback lookup for caseId failed')
+      const err = internal('CRM did not return a case ID and fallback lookup failed')
+      err.retryable = true
+      throw err
+    }
+
+    return { caseId: fallbackCaseId, rpaOnlinesubmissionid }
   }
 
   return { caseId, rpaOnlinesubmissionid }
