@@ -39,7 +39,7 @@ describe('getCrmAuthToken', () => {
       getToken.mockResolvedValue(null)
       generateCrmAuthToken.mockResolvedValue({
         token: 'Bearer new-token-67890',
-        expiresAt: 3600
+        expiresIn: 3600
       })
 
       const result = await getCrmAuthToken()
