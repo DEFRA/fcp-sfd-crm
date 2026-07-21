@@ -63,7 +63,7 @@ describe('httpClient — successful requests', () => {
   test('returns 404 without retrying (non-retryable)', async () => {
     let calls = 0
     const fetchHandler = async () => { calls++; return new Response('not found', { status: 404 }) }
-    await httpClient(url, { fetchHandler })
+    await expect(httpClient(url, { fetchHandler })).rejects.toThrow('HTTP error: 404')
     expect(calls).toBe(1)
     expect(mockLogger.warn).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -87,14 +87,14 @@ describe('httpClient — retryable errors (5xx / 429)', () => {
   test('retries on 500 up to maxAttempts', async () => {
     let calls = 0
     const fetchHandler = async () => { calls++; return new Response('error', { status: 500 }) }
-    await httpClient(url, { fetchHandler })
+    await expect(httpClient(url, { fetchHandler })).rejects.toThrow('HTTP error: 500')
     expect(calls).toBe(3)
   })
 
   test('retries on 429 up to maxAttempts', async () => {
     let calls = 0
     const fetchHandler = async () => { calls++; return new Response('rate limited', { status: 429 }) }
-    await httpClient(url, { fetchHandler })
+    await expect(httpClient(url, { fetchHandler })).rejects.toThrow('HTTP error: 429')
     expect(calls).toBe(3)
   })
 
@@ -124,14 +124,14 @@ describe('httpClient — non-retryable errors (4xx)', () => {
   test('does not retry on 400', async () => {
     let calls = 0
     const fetchHandler = async () => { calls++; return new Response('bad request', { status: 400 }) }
-    await httpClient(url, { fetchHandler })
+    await expect(httpClient(url, { fetchHandler })).rejects.toThrow('HTTP error: 400')
     expect(calls).toBe(1)
   })
 
   test('does not retry on 403', async () => {
     let calls = 0
     const fetchHandler = async () => { calls++; return new Response('forbidden', { status: 403 }) }
-    await httpClient(url, { fetchHandler })
+    await expect(httpClient(url, { fetchHandler })).rejects.toThrow('HTTP error: 403')
     expect(calls).toBe(1)
   })
 })
@@ -367,14 +367,14 @@ describe('authHttpClient — distinct client with shorter timeout', () => {
   test('retries on 500 up to maxAttempts', async () => {
     let calls = 0
     const fetchHandler = async () => { calls++; return new Response('error', { status: 500 }) }
-    await authHttpClient(url, { fetchHandler })
+    await expect(authHttpClient(url, { fetchHandler })).rejects.toThrow('HTTP error: 500')
     expect(calls).toBe(3)
   })
 
   test('does not retry on 401 (non-retryable)', async () => {
     let calls = 0
     const fetchHandler = async () => { calls++; return new Response('unauthorized', { status: 401 }) }
-    await authHttpClient(url, { fetchHandler })
+    await expect(authHttpClient(url, { fetchHandler })).rejects.toThrow('HTTP error: 401')
     expect(calls).toBe(1)
   })
 })
@@ -421,7 +421,7 @@ describe('retryMetadata.status field', () => {
 
   test('status is numeric HTTP code for HTTP errors in retry recovered log', async () => {
     const fetchHandler = async () => new Response('error', { status: 503 })
-    await httpClient(url, { fetchHandler })
+    await expect(httpClient(url, { fetchHandler })).rejects.toThrow('HTTP error: 503')
     expect(mockLogger.info).toHaveBeenCalledWith(
       expect.objectContaining({
         retry: expect.objectContaining({

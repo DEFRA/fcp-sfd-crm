@@ -219,8 +219,8 @@ describe('CRM repository', () => {
         'customerid_contact@odata.bind': '/contacts(contact-123)',
         'rpa_Contact@odata.bind': '/contacts(contact-123)',
         'rpa_Organisation@odata.bind': '/accounts(account-456)',
-        _rpa_scheme_value: 'scheme-abc',
-        _rpa_subject_value: 'subject-def',
+        'rpa_Scheme@odata.bind': '/rpa_schemes(scheme-abc)',
+        'subjectid@odata.bind': '/subjects(subject-def)',
         rpa_isunknowncontact: false,
         rpa_isunknownorganisation: false
       })

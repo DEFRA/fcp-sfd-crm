@@ -100,8 +100,8 @@ const createCaseWithOnlineSubmission = async (request) => {
       'customerid_contact@odata.bind': `/contacts(${contactId})`,
       'rpa_Contact@odata.bind': `/contacts(${contactId})`,
       'rpa_Organisation@odata.bind': `/accounts(${accountId})`,
-      _rpa_scheme_value: schemeValue,
-      _rpa_subject_value: subjectValue,
+      'rpa_Scheme@odata.bind': `/rpa_schemes(${schemeValue})`,
+      'subjectid@odata.bind': `/subjects(${subjectValue})`,
       rpa_isunknowncontact: false,
       rpa_isunknownorganisation: false,
       incident_rpa_onlinesubmissions: [
