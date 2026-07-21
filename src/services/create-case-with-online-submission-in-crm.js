@@ -4,7 +4,7 @@ import {
   createCaseWithOnlineSubmission,
   getDocumentTypeMetadata
 } from '../repos/crm.js'
-import { assertRequiredParams, ensureContactAndAccount, fetchRpaOnlineSubmissionIdOrThrow } from './crm-helpers.js'
+import { assertRequiredParams, ensureContactAndAccount } from './crm-helpers.js'
 import { crmEvents } from '../constants/events.js'
 import { publishReceivedEvent } from '../messaging/outbound/received-event/publish-received-event.js'
 
@@ -45,7 +45,7 @@ async function resolveDocumentTypeOrThrow (authToken, caseType, correlationId) {
 }
 
 async function createCrmCaseOrThrow (authToken, contactId, accountId, caseData, onlineSubmissionActivity, documentTypeMetadata, correlationId) {
-  const { caseId, error: caseError } = await createCaseWithOnlineSubmission({
+  const { caseId, rpaOnlinesubmissionid, error: caseError } = await createCaseWithOnlineSubmission({
     authToken,
     case: { ...caseData, contactId, accountId, documentTypeMetadata },
     onlineSubmissionActivity
@@ -63,23 +63,7 @@ async function createCrmCaseOrThrow (authToken, contactId, accountId, caseData, 
     throw err
   }
 
-  return caseId
-}
-
-async function retrieveOnlineSubmissionOrThrow (authToken, caseId, correlationId) {
-  try {
-    return await fetchRpaOnlineSubmissionIdOrThrow(authToken, caseId, { correlationId })
-  } catch (err) {
-    logger.error({ caseId, error: err }, 'Unable to retrieve online submission id')
-    if (err?.retryMetadata?.category === 'retryable') {
-      err.retryable = true
-      throw err
-    }
-    const thrown = internal('Unable to retrieve online submission for created case')
-    thrown.retryable = false
-    thrown.retryMetadata = err?.retryMetadata ?? null
-    throw thrown
-  }
+  return { caseId, rpaOnlinesubmissionid }
 }
 
 export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi, caseType, caseData, onlineSubmissionActivity, correlationId }) => {
@@ -87,8 +71,7 @@ export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi,
 
   const { contactId, accountId } = await ensureContactAndAccount(authToken, crn, sbi)
   const documentTypeMetadata = await resolveDocumentTypeOrThrow(authToken, caseType, correlationId)
-  const caseId = await createCrmCaseOrThrow(authToken, contactId, accountId, caseData, onlineSubmissionActivity, documentTypeMetadata, correlationId)
-  const rpaOnlinesubmissionid = await retrieveOnlineSubmissionOrThrow(authToken, caseId, correlationId)
+  const { caseId, rpaOnlinesubmissionid } = await createCrmCaseOrThrow(authToken, contactId, accountId, caseData, onlineSubmissionActivity, documentTypeMetadata, correlationId)
 
   const eventData = { correlationId, caseId, crn: Number(crn), sbi: Number(sbi) }
   try {

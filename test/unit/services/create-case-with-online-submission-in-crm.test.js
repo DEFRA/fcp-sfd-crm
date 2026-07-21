@@ -11,8 +11,6 @@ vi.mock('../../../src/repos/crm.js', () => ({
   getContactIdFromCrn: vi.fn(),
   getAccountIdFromSbi: vi.fn(),
   createCaseWithOnlineSubmission: vi.fn(),
-  getOnlineSubmissionId: vi.fn(),
-  createMetadataForOnlineSubmission: vi.fn(),
   getDocumentTypeMetadata: vi.fn()
 }))
 
@@ -21,7 +19,7 @@ vi.mock('../../../src/messaging/outbound/received-event/publish-received-event.j
 }))
 
 const { createCaseWithOnlineSubmissionInCrm } = await import('../../../src/services/create-case-with-online-submission-in-crm.js')
-const { getContactIdFromCrn, getAccountIdFromSbi, createCaseWithOnlineSubmission, getOnlineSubmissionId, getDocumentTypeMetadata } = await import('../../../src/repos/crm.js')
+const { getContactIdFromCrn, getAccountIdFromSbi, createCaseWithOnlineSubmission, getDocumentTypeMetadata } = await import('../../../src/repos/crm.js')
 const { publishReceivedEvent } = await import('../../../src/messaging/outbound/received-event/publish-received-event.js')
 
 describe('createCaseWithOnlineSubmissionInCrm service', () => {
@@ -29,7 +27,7 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     vi.clearAllMocks()
   })
 
-  test('returns contactId, accountId, and caseId on success', async () => {
+  test('returns contactId, accountId, caseId, and rpaOnlinesubmissionid on success without separate GET', async () => {
     const mockDocTypeMetadata = {
       schemeValue: 'mock-scheme',
       subjectValue: 'mock-subject',
@@ -38,8 +36,7 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: 'mock-contact-id' })
     getAccountIdFromSbi.mockResolvedValue({ accountId: 'mock-account-id' })
     getDocumentTypeMetadata.mockResolvedValue({ documentTypeMetadata: mockDocTypeMetadata, error: null })
-    createCaseWithOnlineSubmission.mockResolvedValue({ caseId: 'mock-case-id', error: null })
-    getOnlineSubmissionId.mockResolvedValue({ rpaOnlinesubmissionid: 'mock-ols-id', error: null })
+    createCaseWithOnlineSubmission.mockResolvedValue({ caseId: 'mock-case-id', rpaOnlinesubmissionid: 'mock-ols-id', error: null })
 
     const request = {
       authToken: 'mock-bearer-token',
@@ -75,8 +72,7 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: 'mock-contact-id' })
     getAccountIdFromSbi.mockResolvedValue({ accountId: 'mock-account-id' })
     getDocumentTypeMetadata.mockResolvedValue({ documentTypeMetadata: { schemeValue: 's', subjectValue: 'sub', documentTypesId: 'd' }, error: null })
-    createCaseWithOnlineSubmission.mockResolvedValue({ caseId: 'mock-case-id', error: null })
-    getOnlineSubmissionId.mockResolvedValue({ rpaOnlinesubmissionid: 'mock-ols-id', error: null })
+    createCaseWithOnlineSubmission.mockResolvedValue({ caseId: 'mock-case-id', rpaOnlinesubmissionid: 'mock-ols-id', error: null })
 
     const request = {
       authToken: 'mock-bearer-token',
@@ -182,24 +178,6 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     )
   })
 
-  test('throws error if unable to retrieve online submission id', async () => {
-    getContactIdFromCrn.mockResolvedValue({ contactId: 'mock-contact-id' })
-    getAccountIdFromSbi.mockResolvedValue({ accountId: 'mock-account-id' })
-    getDocumentTypeMetadata.mockResolvedValue({ documentTypeMetadata: { schemeValue: 's', subjectValue: 'sub', documentTypesId: 'd' }, error: null })
-    createCaseWithOnlineSubmission.mockResolvedValue({ caseId: 'mock-case-id', error: null })
-    getOnlineSubmissionId.mockResolvedValue({ rpaOnlinesubmissionid: null, error: 'Not found' })
-
-    await expect(createCaseWithOnlineSubmissionInCrm({
-      authToken: 'mock-bearer-token',
-      correlationId: 'mock-correlation-id',
-      caseType: 'CS_Agreement_Evidence',
-      crn: 'mock-crn',
-      sbi: 'mock-sbi',
-      caseData: { title: 'Test Case', caseDescription: 'Test description' },
-      onlineSubmissionActivity: { subject: 'Test', description: 'Test submission' }
-    })).rejects.toThrow('Unable to retrieve online submission for created case')
-  })
-
   test('throws retryable error when document type lookup returns HTTP error', async () => {
     const lookupErr = new Error('CRM unavailable')
     lookupErr.retryMetadata = { category: 'retryable', status: 503 }
@@ -277,8 +255,7 @@ test('re-throws original retryable CRM error when createCaseWithOnlineSubmission
     getContactIdFromCrn: vi.fn().mockResolvedValue({ contactId: 'c1' }),
     getAccountIdFromSbi: vi.fn().mockResolvedValue({ accountId: 'a1' }),
     getDocumentTypeMetadata: vi.fn().mockResolvedValue({ documentTypeMetadata: { schemeValue: 's', subjectValue: 'sub', documentTypesId: 'd' }, error: null }),
-    createCaseWithOnlineSubmission: vi.fn().mockResolvedValue({ caseId: null, error: retryErr }),
-    getOnlineSubmissionId: vi.fn().mockResolvedValue({ rpaOnlinesubmissionid: 'ol-1', error: null })
+    createCaseWithOnlineSubmission: vi.fn().mockResolvedValue({ caseId: null, error: retryErr })
   }))
 
   vi.doMock('../../../src/messaging/outbound/received-event/publish-received-event.js', () => ({ publishReceivedEvent: vi.fn() }))
@@ -293,36 +270,3 @@ test('re-throws original retryable CRM error when createCaseWithOnlineSubmission
   expect(mockLogger.error).toHaveBeenCalledWith({ correlationId: 'cid', error: retryErr }, 'Error creating case with online submission activity')
 })
 
-test('re-throws retryable error from fetchRpaOnlineSubmissionIdOrThrow preserving retryable flag', async () => {
-  vi.resetModules()
-  const mockLogger = { error: vi.fn(), warn: vi.fn() }
-  vi.doMock('../../../src/logging/logger.js', () => ({ createLogger: () => mockLogger }))
-
-  const thrownErr = new Error('RPA transient')
-  thrownErr.retryMetadata = { category: 'retryable', status: 502 }
-
-  vi.doMock('../../../src/repos/crm.js', () => ({
-    getContactIdFromCrn: vi.fn().mockResolvedValue({ contactId: 'c1' }),
-    getAccountIdFromSbi: vi.fn().mockResolvedValue({ accountId: 'a1' }),
-    getDocumentTypeMetadata: vi.fn().mockResolvedValue({ documentTypeMetadata: { schemeValue: 's', subjectValue: 'sub', documentTypesId: 'd' }, error: null }),
-    createCaseWithOnlineSubmission: vi.fn().mockResolvedValue({ caseId: 'case-1', error: null }),
-    getOnlineSubmissionId: vi.fn().mockResolvedValue({ rpaOnlinesubmissionid: 'ol-1', error: null })
-  }))
-
-  // mock the helper that fetches RPA id to throw the retryable error
-  vi.doMock('../../../src/services/crm-helpers.js', () => ({
-    assertRequiredParams: vi.fn(),
-    ensureContactAndAccount: vi.fn().mockResolvedValue({ contactId: 'c1', accountId: 'a1' }),
-    fetchRpaOnlineSubmissionIdOrThrow: vi.fn().mockRejectedValue(thrownErr)
-  }))
-
-  vi.doMock('../../../src/messaging/outbound/received-event/publish-received-event.js', () => ({ publishReceivedEvent: vi.fn() }))
-
-  const { createCaseWithOnlineSubmissionInCrm } = await import('../../../src/services/create-case-with-online-submission-in-crm.js')
-
-  await expect(createCaseWithOnlineSubmissionInCrm({
-    authToken: 't', crn: '123', sbi: '456', caseType: 'SomeType', caseData: {}, onlineSubmissionActivity: {}, correlationId: 'cid'
-  })).rejects.toMatchObject({ message: 'RPA transient', retryable: true })
-
-  expect(mockLogger.error).toHaveBeenCalledWith({ caseId: 'case-1', error: thrownErr }, 'Unable to retrieve online submission id')
-})

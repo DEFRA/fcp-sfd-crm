@@ -10,8 +10,6 @@ vi.mock('../../../src/repos/crm.js', () => ({
   getContactIdFromCrn: vi.fn(),
   getAccountIdFromSbi: vi.fn(),
   createCaseWithOnlineSubmission: vi.fn(),
-  getOnlineSubmissionId: vi.fn(),
-  createMetadataForOnlineSubmission: vi.fn(),
   getDocumentTypeMetadata: vi.fn()
 }))
 
@@ -20,7 +18,7 @@ vi.mock('../../../src/messaging/outbound/received-event/publish-received-event.j
 }))
 
 const { createCaseWithOnlineSubmissionInCrm } = await import('../../../src/services/create-case-with-online-submission-in-crm.js')
-const { getContactIdFromCrn, getAccountIdFromSbi, createCaseWithOnlineSubmission, getOnlineSubmissionId, getDocumentTypeMetadata } = await import('../../../src/repos/crm.js')
+const { getContactIdFromCrn, getAccountIdFromSbi, createCaseWithOnlineSubmission, getDocumentTypeMetadata } = await import('../../../src/repos/crm.js')
 const { publishReceivedEvent } = await import('../../../src/messaging/outbound/received-event/publish-received-event.js')
 
 describe('createCaseWithOnlineSubmissionInCrm edge cases', () => {
@@ -88,8 +86,7 @@ describe('createCaseWithOnlineSubmissionInCrm edge cases', () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: 'id' })
     getAccountIdFromSbi.mockResolvedValue({ accountId: 'aid' })
     getDocumentTypeMetadata.mockResolvedValue({ documentTypeMetadata: { schemeValue: 's', subjectValue: 'sub', documentTypesId: 'd' }, error: null })
-    createCaseWithOnlineSubmission.mockResolvedValue({ caseId: 'cid', error: null })
-    getOnlineSubmissionId.mockResolvedValue({ rpaOnlinesubmissionid: 'ols-1', error: null })
+    createCaseWithOnlineSubmission.mockResolvedValue({ caseId: 'cid', rpaOnlinesubmissionid: 'ols-1', error: null })
     const result = await createCaseWithOnlineSubmissionInCrm({
       authToken: 't',
       crn: 'c',
@@ -106,8 +103,7 @@ describe('createCaseWithOnlineSubmissionInCrm edge cases', () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: 'id' })
     getAccountIdFromSbi.mockResolvedValue({ accountId: 'aid' })
     getDocumentTypeMetadata.mockResolvedValue({ documentTypeMetadata: { schemeValue: 's', subjectValue: 'sub', documentTypesId: 'd' }, error: null })
-    createCaseWithOnlineSubmission.mockResolvedValue({ caseId: 'cid', error: null })
-    getOnlineSubmissionId.mockResolvedValue({ rpaOnlinesubmissionid: 'ols-1', error: null })
+    createCaseWithOnlineSubmission.mockResolvedValue({ caseId: 'cid', rpaOnlinesubmissionid: 'ols-1', error: null })
     publishReceivedEvent.mockRejectedValue(new Error('SNS publish failed'))
     const result = await createCaseWithOnlineSubmissionInCrm({
       authToken: 't',

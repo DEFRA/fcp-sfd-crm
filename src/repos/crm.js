@@ -90,6 +90,8 @@ const createCaseWithOnlineSubmission = async (request) => {
       activityMetadataItem.rpa_filemimetype = mimeType
     }
 
+    const rpaOnlinesubmissionid = randomBytes(10).toString('hex')
+
     const payload = {
       title,
       description: caseDescription,
@@ -109,7 +111,7 @@ const createCaseWithOnlineSubmission = async (request) => {
           scheduledstart: scheduledStart,
           scheduledend: scheduledEnd,
           rpa_onlinesubmissiondate: new Date().toISOString(),
-          rpa_onlinesubmissionid: randomBytes(10).toString('hex'),
+          rpa_onlinesubmissionid: rpaOnlinesubmissionid,
           statecode: stateCode,
           statuscode: statusCode,
           rpa_onlinesubmission_rpa_activitymetadata: [activityMetadataItem]
@@ -130,6 +132,7 @@ const createCaseWithOnlineSubmission = async (request) => {
 
     return {
       caseId: data.incidentid,
+      rpaOnlinesubmissionid,
       error: null
     }
   } catch (err) {

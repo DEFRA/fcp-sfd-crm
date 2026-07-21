@@ -194,7 +194,7 @@ describe('CRM repository', () => {
         }
       }
 
-      const { caseId, error } = await createCaseWithOnlineSubmission(request)
+      const { caseId, rpaOnlinesubmissionid, error } = await createCaseWithOnlineSubmission(request)
 
       expect(mockHttpClient).toHaveBeenCalledWith(
         'https://crm.example.com/api/incidents',
@@ -249,6 +249,8 @@ describe('CRM repository', () => {
       })
 
       expect(caseId).toBe('8bb8b45b-aba2-f011-bbd2-7ced8d4645a2')
+      expect(rpaOnlinesubmissionid).toHaveLength(20)
+      expect(submission.rpa_onlinesubmissionid).toBe(rpaOnlinesubmissionid)
       expect(error).toBeNull()
     })
 
