@@ -20,12 +20,11 @@ const generateTokenViaClientSecret = async () => {
       body: form.toString()
     })
   } catch (err) {
+    const status = err.response?.status
+    if (status) {
+      throw new Error(`Auth failed: ${status} ${err.response.statusText}`)
+    }
     throw new Error(`Unable to reach token endpoint: ${err.message}`)
-  }
-
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`Auth failed: ${response.status} ${response.statusText} - ${errorText}`)
   }
 
   const payload = await response.json()

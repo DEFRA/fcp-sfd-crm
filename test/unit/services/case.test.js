@@ -11,7 +11,7 @@ vi.mock('../../../src/auth/get-crm-auth-token.js', () => ({
 }))
 
 vi.mock('../../../src/services/create-case-with-online-submission-in-crm.js', () => ({
-  createCaseWithOnlineSubmissionInCrm: vi.fn(async () => ({ caseId: 'mock-case-id', contactId: 'c1', accountId: 'a1' }))
+  createCaseWithOnlineSubmissionInCrm: vi.fn(async () => ({ caseId: 'mock-case-id', contactId: 'c1', accountId: 'a1', rpaOnlinesubmissionid: 'mock-ols-id' }))
 }))
 
 vi.mock('../../../src/repos/cases.js', () => ({
@@ -47,7 +47,7 @@ describe('case service', () => {
     upsertCase.mockResolvedValue({ isNew: true, isDuplicateFile: false, caseId: null, isCreator: true })
     updateCaseId.mockResolvedValue({ modifiedCount: 1 })
     markFileProcessed.mockResolvedValue({ modifiedCount: 1 })
-    createCaseWithOnlineSubmissionInCrm.mockResolvedValue({ caseId: 'mock-case-id', contactId: 'c1', accountId: 'a1' })
+    createCaseWithOnlineSubmissionInCrm.mockResolvedValue({ caseId: 'mock-case-id', contactId: 'c1', accountId: 'a1', rpaOnlinesubmissionid: 'mock-ols-id' })
     // mocks for additional-file flow
     getOnlineSubmissionId.mockResolvedValue({ rpaOnlinesubmissionid: 'ols-1', error: null })
     createMetadataForOnlineSubmission.mockResolvedValue({ metadataId: 'meta-1', error: null })
@@ -145,11 +145,18 @@ describe('case service', () => {
       )
     })
 
-    it('should log when a new case is created', async () => {
+    it('should log when a new case is created with ECS fields', async () => {
       await createCase(validPayload)
 
       expect(mockLogger.info).toHaveBeenCalledWith(
-        { correlationId: 'corr-1', caseId: 'mock-case-id' },
+        {
+          transaction: { id: 'corr-1' },
+          event: { action: 'case-created', outcome: 'success' },
+          caseId: 'mock-case-id',
+          rpaOnlinesubmissionid: 'mock-ols-id',
+          contactId: 'c1',
+          accountId: 'a1'
+        },
         'Case created'
       )
     })
@@ -194,6 +201,18 @@ describe('case service', () => {
         { correlationId: 'corr-1', fileId: 'file-1' },
         'Case creation in progress, will retry'
       )
+    })
+
+    it('should propagate retryable error when fallback lookup fails (race condition scenario)', async () => {
+      const retryableErr = new Error('CRM did not return a case ID and fallback lookup failed')
+      retryableErr.retryable = true
+      createCaseWithOnlineSubmissionInCrm.mockRejectedValue(retryableErr)
+
+      const thrown = await createCase(validPayload).catch(e => e)
+      expect(thrown.message).toBe('CRM did not return a case ID and fallback lookup failed')
+      expect(thrown.retryable).toBe(true)
+      expect(updateCaseId).not.toHaveBeenCalled()
+      expect(markFileProcessed).not.toHaveBeenCalled()
     })
 
     it('should propagate CRM API errors', async () => {

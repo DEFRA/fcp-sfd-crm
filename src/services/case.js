@@ -117,7 +117,14 @@ async function createNewCase ({ authToken, transformedPayload, correlationId, fi
   await updateCaseId(correlationId, response.caseId)
   await markFileProcessed(correlationId, fileId)
 
-  logger.info({ correlationId, caseId: response.caseId }, 'Case created')
+  logger.info({
+    transaction: { id: correlationId },
+    event: { action: 'case-created', outcome: 'success' },
+    caseId: response.caseId,
+    rpaOnlinesubmissionid: response.rpaOnlinesubmissionid,
+    contactId: response.contactId,
+    accountId: response.accountId
+  }, 'Case created')
   return response
 }
 

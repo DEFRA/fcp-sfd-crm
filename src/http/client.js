@@ -236,7 +236,7 @@ const makeClient = (timeout) => {
       config.get('retry.http.maxAttempts'),
       config.get('retry.http.unknownMaxAttempts')
     ) - 1,
-    throwOnHttpError: false,
+    throwOnHttpError: true,
     hooks: {
       before: (request) => beforeHook(request, retryStateByRequest),
       onComplete: (request, response, error) => onCompleteHook(request, response, error, retryStateByRequest)

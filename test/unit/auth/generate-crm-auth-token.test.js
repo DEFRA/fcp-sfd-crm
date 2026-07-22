@@ -188,15 +188,12 @@ describe('generateCrmAuthToken', () => {
     })
 
     test('throws when the response is not ok', async () => {
-      authHttpClient.mockResolvedValue({
-        ok: false,
-        status: 401,
-        statusText: 'Unauthorized',
-        text: async () => 'invalid_client'
-      })
+      const httpError = new Error('HTTP error: 401 Unauthorized')
+      httpError.response = { status: 401, statusText: 'Unauthorized' }
+      authHttpClient.mockRejectedValue(httpError)
 
       await expect(generateCrmAuthToken()).rejects.toThrow(
-        'Auth failed: 401 Unauthorized - invalid_client'
+        'Auth failed: 401 Unauthorized'
       )
     })
   })

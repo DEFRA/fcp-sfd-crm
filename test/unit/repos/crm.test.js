@@ -194,7 +194,7 @@ describe('CRM repository', () => {
         }
       }
 
-      const { caseId, error } = await createCaseWithOnlineSubmission(request)
+      const { caseId, rpaOnlinesubmissionid, error } = await createCaseWithOnlineSubmission(request)
 
       expect(mockHttpClient).toHaveBeenCalledWith(
         'https://crm.example.com/api/incidents',
@@ -219,8 +219,8 @@ describe('CRM repository', () => {
         'customerid_contact@odata.bind': '/contacts(contact-123)',
         'rpa_Contact@odata.bind': '/contacts(contact-123)',
         'rpa_Organisation@odata.bind': '/accounts(account-456)',
-        _rpa_scheme_value: 'scheme-abc',
-        _rpa_subject_value: 'subject-def',
+        'rpa_Scheme@odata.bind': '/rpa_schemes(scheme-abc)',
+        'subjectid@odata.bind': '/subjects(subject-def)',
         rpa_isunknowncontact: false,
         rpa_isunknownorganisation: false
       })
@@ -249,6 +249,8 @@ describe('CRM repository', () => {
       })
 
       expect(caseId).toBe('8bb8b45b-aba2-f011-bbd2-7ced8d4645a2')
+      expect(rpaOnlinesubmissionid).toHaveLength(20)
+      expect(submission.rpa_onlinesubmissionid).toBe(rpaOnlinesubmissionid)
       expect(error).toBeNull()
     })
 
@@ -676,6 +678,51 @@ describe('CRM repository', () => {
       const lastCall = mockHttpClient.mock.calls[0]
       const body = JSON.parse(lastCall[1].body)
       expect(body['rpa_DocumentTypeMetaId@odata.bind']).toBe('/rpa_documenttypeses(doc-999)')
+    })
+  })
+
+  describe('getCaseIdByOnlineSubmissionId', () => {
+    test('should return caseId from regardingobjectid lookup', async () => {
+      const mockResponse = {
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          value: [{ _regardingobjectid_value: 'case-found-123' }]
+        })
+      }
+      mockHttpClient.mockResolvedValue(mockResponse)
+
+      const { getCaseIdByOnlineSubmissionId } = await import('../../../src/repos/crm.js')
+      const result = await getCaseIdByOnlineSubmissionId('Bearer token', 'ols-abc123')
+
+      expect(mockHttpClient).toHaveBeenCalledWith(
+        "https://crm.example.com/api/rpa_onlinesubmissions?%24select=_regardingobjectid_value&%24filter=rpa_onlinesubmissionid%20eq%20'ols-abc123'",
+        {
+          method: 'GET',
+          headers: { Authorization: 'Bearer token', Prefer: 'return=representation', 'Content-Type': 'application/json' }
+        }
+      )
+      expect(result).toEqual({ caseId: 'case-found-123', error: null })
+    })
+
+    test('should return null caseId when no results found', async () => {
+      const mockResponse = { ok: true, json: vi.fn().mockResolvedValue({ value: [] }) }
+      mockHttpClient.mockResolvedValue(mockResponse)
+
+      const { getCaseIdByOnlineSubmissionId } = await import('../../../src/repos/crm.js')
+      const result = await getCaseIdByOnlineSubmissionId('Bearer token', 'ols-notfound')
+
+      expect(result).toEqual({ caseId: null, error: null })
+    })
+
+    test('should return error when fetch fails', async () => {
+      mockHttpClient.mockRejectedValue(new Error('Network error'))
+
+      const { getCaseIdByOnlineSubmissionId } = await import('../../../src/repos/crm.js')
+      const result = await getCaseIdByOnlineSubmissionId('Bearer token', 'ols-abc123')
+
+      expect(result.caseId).toBeNull()
+      expect(result.error).toBeInstanceOf(Error)
+      expect(result.error.message).toBe('Network error')
     })
   })
 })
