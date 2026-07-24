@@ -131,7 +131,7 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
       output: { statusCode: 422 }
     })
 
-    expect(mockLogger.error).toHaveBeenCalledWith('No contact found for CRN: mock-crn, error: Not found')
+    expect(mockLogger.error).toHaveBeenCalledWith('No contact found for CRN: ****-crn, error: Not found')
   })
 
   test('throws error if account not found', async () => {
