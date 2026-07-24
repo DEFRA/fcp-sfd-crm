@@ -11,6 +11,15 @@ import { messages } from '../constants/messages.js'
 const logger = createLogger()
 const { constants: httpConstants } = http2
 
+const MASK_VISIBLE_DIGITS = 4
+
+export function maskCrn (crn) {
+  if (crn === null || crn === undefined) { return '****' }
+  const str = String(crn)
+  if (str.length <= MASK_VISIBLE_DIGITS) { return str }
+  return '*'.repeat(str.length - MASK_VISIBLE_DIGITS) + str.slice(-MASK_VISIBLE_DIGITS)
+}
+
 const unprocessableEntity = (message) => {
   const error = new Error(message)
   return Boom.boomify(error, { statusCode: httpConstants.HTTP_STATUS_UNPROCESSABLE_ENTITY })
@@ -32,17 +41,17 @@ export async function ensureContactAndAccount (authToken, crn, sbi) {
 
   if (contactError) {
     if (contactError.retryMetadata?.category === 'retryable') {
-      const err = new Error(`Retryable error looking up contact for CRN: ${crn}`)
+      const err = new Error(`Retryable error looking up contact for CRN: ${maskCrn(crn)}`)
       err.retryable = true
       err.retryMetadata = contactError.retryMetadata
       throw err
     }
-    logger.error(`No contact found for CRN: ${crn}, error: ${contactError}`)
+    logger.error(`No contact found for CRN: ${maskCrn(crn)}, error: ${contactError}`)
     throw unprocessableEntity('Contact ID not found')
   }
 
   if (!contactId) {
-    logger.error(`No contact found for CRN: ${crn}`)
+    logger.error(`No contact found for CRN: ${maskCrn(crn)}`)
     throw unprocessableEntity('Contact ID not found')
   }
 

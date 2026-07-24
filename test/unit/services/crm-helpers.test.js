@@ -12,7 +12,7 @@ vi.mock('../../../src/repos/crm.js', () => ({
   getAccountIdFromSbi: vi.fn()
 }))
 
-const { ensureContactAndAccount, fetchRpaOnlineSubmissionIdOrThrow } = await import('../../../src/services/crm-helpers.js')
+const { ensureContactAndAccount, fetchRpaOnlineSubmissionIdOrThrow, maskCrn } = await import('../../../src/services/crm-helpers.js')
 const { getOnlineSubmissionId, getContactIdFromCrn, getAccountIdFromSbi } = await import('../../../src/repos/crm.js')
 
 const makeRetryableError = () => {
@@ -29,6 +29,32 @@ const makeNonRetryableError = () => {
 
 beforeEach(() => {
   vi.clearAllMocks()
+})
+
+describe('maskCrn', () => {
+  test('masks all but the last four digits of a 10-digit CRN', () => {
+    expect(maskCrn('1050000001')).toBe('******0001')
+  })
+
+  test('works when CRN is passed as a number', () => {
+    expect(maskCrn(1050000001)).toBe('******0001')
+  })
+
+  test('returns string as-is when length is exactly 4', () => {
+    expect(maskCrn('0001')).toBe('0001')
+  })
+
+  test('returns string as-is when length is less than 4', () => {
+    expect(maskCrn('abc')).toBe('abc')
+  })
+
+  test('returns **** for null', () => {
+    expect(maskCrn(null)).toBe('****')
+  })
+
+  test('returns **** for undefined', () => {
+    expect(maskCrn(undefined)).toBe('****')
+  })
 })
 
 describe('ensureContactAndAccount', () => {
