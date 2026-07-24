@@ -11,11 +11,13 @@ import { messages } from '../constants/messages.js'
 const logger = createLogger()
 const { constants: httpConstants } = http2
 
+const MASK_VISIBLE_DIGITS = 4
+
 export function maskCrn (crn) {
-  if (crn === null || crn === undefined) return '****'
+  if (crn === null || crn === undefined) { return '****' }
   const str = String(crn)
-  if (str.length <= 4) return str
-  return '*'.repeat(str.length - 4) + str.slice(-4)
+  if (str.length <= MASK_VISIBLE_DIGITS) { return str }
+  return '*'.repeat(str.length - MASK_VISIBLE_DIGITS) + str.slice(-MASK_VISIBLE_DIGITS)
 }
 
 const unprocessableEntity = (message) => {
