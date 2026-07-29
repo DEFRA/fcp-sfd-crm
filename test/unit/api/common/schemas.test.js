@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, test, expect } from 'vitest'
 import {
   createCasePayloadSchema,
   inboundCloudEventSchema,
@@ -7,7 +7,7 @@ import {
 } from '../../../../src/api/schemas/index.js'
 
 describe('api/common/schemas', () => {
-  it('createCasePayloadSchema accepts valid payload', () => {
+  test('createCasePayloadSchema accepts valid payload', () => {
     const valid = {
       caseType: 'some-type',
       crn: 'CRN123',
@@ -36,7 +36,7 @@ describe('api/common/schemas', () => {
     expect(value).toBeTruthy()
   })
 
-  it('createCasePayloadSchema rejects missing required fields', () => {
+  test('createCasePayloadSchema rejects missing required fields', () => {
     const invalid = {
       crn: 'CRN',
       sbi: 'SBI'
@@ -48,7 +48,7 @@ describe('api/common/schemas', () => {
     expect(error.details.some(d => d.message.includes('caseType'))).toBeTruthy()
   })
 
-  it('inboundCloudEventSchema accepts valid cloud event wrapper', () => {
+  test('inboundCloudEventSchema accepts valid cloud event wrapper', () => {
     const validEvent = {
       id: '1',
       source: '/source',
@@ -75,7 +75,7 @@ describe('api/common/schemas', () => {
     expect(error).toBeUndefined()
   })
 
-  it('inboundCloudEventSchema rejects invalid data types', () => {
+  test('inboundCloudEventSchema rejects invalid data types', () => {
     const invalidEvent = {
       ...{
         id: '1',
@@ -104,7 +104,7 @@ describe('api/common/schemas', () => {
     expect(error.details.some(d => d.message.includes('time'))).toBeTruthy()
   })
 
-  it('receivedEventSchema accepts minimal valid received event', () => {
+  test('receivedEventSchema accepts minimal valid received event', () => {
     const evt = {
       id: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
       source: 'fcp-sfd-crm',
@@ -124,7 +124,7 @@ describe('api/common/schemas', () => {
     expect(error).toBeUndefined()
   })
 
-  it('receivedEventSchema accepts event with caseType and onlineSubmissionActivities', () => {
+  test('receivedEventSchema accepts event with caseType and onlineSubmissionActivities', () => {
     const evt = {
       id: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
       source: 'fcp-sfd-crm',
@@ -150,7 +150,7 @@ describe('api/common/schemas', () => {
     expect(error).toBeUndefined()
   })
 
-  it('receivedEventSchema rejects non-UUID id', () => {
+  test('receivedEventSchema rejects non-UUID id', () => {
     const evt = {
       id: 'not-a-uuid',
       source: 'fcp-sfd-crm',
@@ -171,7 +171,7 @@ describe('api/common/schemas', () => {
     expect(error.details.some(d => d.message.includes('"id"'))).toBeTruthy()
   })
 
-  it('receivedEventSchema rejects invalid specversion', () => {
+  test('receivedEventSchema rejects invalid specversion', () => {
     const evt = {
       id: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
       source: 'fcp-sfd-crm',
@@ -192,7 +192,7 @@ describe('api/common/schemas', () => {
     expect(error.details.some(d => d.message.includes('specversion'))).toBeTruthy()
   })
 
-  it('receivedEventSchema rejects invalid event type', () => {
+  test('receivedEventSchema rejects invalid event type', () => {
     const evt = {
       id: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
       source: 'fcp-sfd-crm',
@@ -213,7 +213,7 @@ describe('api/common/schemas', () => {
     expect(error.details.some(d => d.message.includes('type'))).toBeTruthy()
   })
 
-  it('receivedEventSchema rejects unknown properties on root', () => {
+  test('receivedEventSchema rejects unknown properties on root', () => {
     const evt = {
       id: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
       source: 'fcp-sfd-crm',
@@ -235,7 +235,7 @@ describe('api/common/schemas', () => {
     expect(error.details.some(d => d.message.includes('unexpected'))).toBeTruthy()
   })
 
-  it('receivedEventSchema rejects unknown properties on data', () => {
+  test('receivedEventSchema rejects unknown properties on data', () => {
     const evt = {
       id: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
       source: 'fcp-sfd-crm',
@@ -257,7 +257,7 @@ describe('api/common/schemas', () => {
     expect(error.details.some(d => d.message.includes('extraField'))).toBeTruthy()
   })
 
-  it('receivedEventSchema rejects missing data.correlationId', () => {
+  test('receivedEventSchema rejects missing data.correlationId', () => {
     const evt = {
       id: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
       source: 'fcp-sfd-crm',

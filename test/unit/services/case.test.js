@@ -1,4 +1,4 @@
-import { describe, it, test, expect, vi, beforeEach } from 'vitest'
+import { describe, test, expect, vi, beforeEach } from 'vitest'
 
 const mockLogger = { info: vi.fn(), error: vi.fn() }
 
@@ -54,7 +54,7 @@ describe('case service', () => {
   })
 
   describe('transformPayload', () => {
-    it('should transform a valid CloudEvents payload', () => {
+    test('should transform a valid CloudEvents payload', () => {
       const result = transformPayload(validPayload)
       expect(result.crn).toBe('crn1')
       expect(result.sbi).toBe('sbi1')
@@ -64,11 +64,11 @@ describe('case service', () => {
       expect(result.correlationId).toBe('corr-1')
     })
 
-    it('should throw if data is missing', () => {
+    test('should throw if data is missing', () => {
       expect(() => transformPayload({})).toThrow('Missing data property in CloudEvents payload')
     })
 
-    it('should use fallback values when crm and file are missing or minimal', () => {
+    test('should use fallback values when crm and file are missing or minimal', () => {
       const minimalPayload = {
         data: {
           crn: 'crn1',
@@ -86,7 +86,7 @@ describe('case service', () => {
       expect(result.onlineSubmissionActivity.metadata.blobFileId).toBeNull()
     })
 
-    it('should include mimeType when contentType is provided on file', () => {
+    test('should include mimeType when contentType is provided on file', () => {
       const payloadWithMime = {
         data: {
           crn: 'crn1',
@@ -101,7 +101,7 @@ describe('case service', () => {
       expect(result.onlineSubmissionActivity.metadata.mimeType).toBe('application/pdf')
     })
 
-    it('should not include mimeType when file has no contentType', () => {
+    test('should not include mimeType when file has no contentType', () => {
       const payloadWithoutMime = {
         data: {
           crn: 'crn1',
@@ -118,7 +118,7 @@ describe('case service', () => {
   })
 
   describe('createCase', () => {
-    it('should create a new case in CRM when isNew is true (first message)', async () => {
+    test('should create a new case in CRM when isNew is true (first message)', async () => {
       const response = await createCase(validPayload)
 
       expect(upsertCase).toHaveBeenCalledWith('corr-1', 'file-1')
@@ -145,7 +145,7 @@ describe('case service', () => {
       )
     })
 
-    it('should log when a new case is created with ECS fields', async () => {
+    test('should log when a new case is created with ECS fields', async () => {
       await createCase(validPayload)
 
       expect(mockLogger.info).toHaveBeenCalledWith(
@@ -161,7 +161,7 @@ describe('case service', () => {
       )
     })
 
-    it('should retry case creation when creator retries after failure (isCreator, caseId null)', async () => {
+    test('should retry case creation when creator retries after failure (isCreator, caseId null)', async () => {
       upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: null, isCreator: true })
 
       const response = await createCase(validPayload)
@@ -173,7 +173,7 @@ describe('case service', () => {
       expect(response.caseId).toBe('mock-case-id')
     })
 
-    it('should skip processing when message is an exact duplicate (same correlationId + fileId)', async () => {
+    test('should skip processing when message is an exact duplicate (same correlationId + fileId)', async () => {
       upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: true, caseId: 'existing-case-id', isCreator: true })
 
       const response = await createCase(validPayload)
@@ -187,7 +187,7 @@ describe('case service', () => {
       )
     })
 
-    it('should throw retryable error when case creation is in progress by another message', async () => {
+    test('should throw retryable error when case creation is in progress by another message', async () => {
       upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: null, isCreator: false })
 
       await expect(createCase(validPayload)).rejects.toThrow('Case creation in progress for this correlationId')
@@ -203,7 +203,7 @@ describe('case service', () => {
       )
     })
 
-    it('should propagate retryable error when fallback lookup fails (race condition scenario)', async () => {
+    test('should propagate retryable error when fallback lookup fails (race condition scenario)', async () => {
       const retryableErr = new Error('CRM did not return a case ID and fallback lookup failed')
       retryableErr.retryable = true
       createCaseWithOnlineSubmissionInCrm.mockRejectedValue(retryableErr)
@@ -215,21 +215,21 @@ describe('case service', () => {
       expect(markFileProcessed).not.toHaveBeenCalled()
     })
 
-    it('should propagate CRM API errors', async () => {
+    test('should propagate CRM API errors', async () => {
       const error = new Error('CRM unavailable')
       createCaseWithOnlineSubmissionInCrm.mockRejectedValue(error)
 
       await expect(createCase(validPayload)).rejects.toThrow('CRM unavailable')
     })
 
-    it('should propagate MongoDB errors from upsertCase', async () => {
+    test('should propagate MongoDB errors from upsertCase', async () => {
       const dbError = new Error('Connection lost')
       upsertCase.mockRejectedValue(dbError)
 
       await expect(createCase(validPayload)).rejects.toThrow('Connection lost')
     })
 
-    it('should not mark file processed if CRM case creation fails', async () => {
+    test('should not mark file processed if CRM case creation fails', async () => {
       createCaseWithOnlineSubmissionInCrm.mockRejectedValue(new Error('CRM down'))
 
       await expect(createCase(validPayload)).rejects.toThrow('CRM down')
@@ -237,7 +237,7 @@ describe('case service', () => {
       expect(markFileProcessed).not.toHaveBeenCalled()
     })
 
-    it('should mark file processed', async () => {
+    test('should mark file processed', async () => {
       upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: 'existing-case-id', isCreator: false })
 
       await expect(createCase(validPayload)).resolves.toEqual({ caseId: 'existing-case-id' })
@@ -248,7 +248,7 @@ describe('case service', () => {
       )
     })
 
-    it('should throw if unable to retrieve online submission id', async () => {
+    test('should throw if unable to retrieve online submission id', async () => {
       upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: 'existing-case-id', isCreator: false })
       getOnlineSubmissionId.mockResolvedValue({ rpaOnlinesubmissionid: null, error: 'Not found' })
 
@@ -257,7 +257,7 @@ describe('case service', () => {
       expect(markFileProcessed).not.toHaveBeenCalled()
     })
 
-    it('should throw if creating metadata fails and not mark file processed', async () => {
+    test('should throw if creating metadata fails and not mark file processed', async () => {
       upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: 'existing-case-id', isCreator: false })
       getOnlineSubmissionId.mockResolvedValue({ rpaOnlinesubmissionid: 'ols-1', error: null })
       createMetadataForOnlineSubmission.mockResolvedValue({ metadataId: null, error: 'CRM failure' })
@@ -296,7 +296,7 @@ describe('case service', () => {
       expect(markFileProcessed).not.toHaveBeenCalled()
     })
 
-    it('should use fallback values for metadata name and fileUrl when file properties missing', async () => {
+    test('should use fallback values for metadata name and fileUrl when file properties missing', async () => {
       upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: 'existing-case-id', isCreator: false })
       getOnlineSubmissionId.mockResolvedValue({ rpaOnlinesubmissionid: 'ols-1', error: null })
       createMetadataForOnlineSubmission.mockResolvedValue({ metadataId: 'meta-2', error: null })

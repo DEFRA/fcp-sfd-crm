@@ -1,8 +1,8 @@
-import { describe, it, expect } from 'vitest'
+import { describe, test, expect } from 'vitest'
 import { inboundCloudEventSchema, validationOptions } from '../../../../src/api/schemas/inbound.js'
 
 describe('Inbound CloudEvent schema validation', () => {
-  it('accepts a valid CloudEvent payload', () => {
+  test('accepts a valid CloudEvent payload', () => {
     const valid = {
       id: '1',
       source: '/test',
@@ -24,7 +24,7 @@ describe('Inbound CloudEvent schema validation', () => {
     expect(error).toBeUndefined()
   })
 
-  it('rejects invalid CloudEvent payloads', () => {
+  test('rejects invalid CloudEvent payloads', () => {
     const invalid = { foo: 'bar' }
     const { error } = inboundCloudEventSchema.validate(invalid, validationOptions)
     expect(error).toBeDefined()

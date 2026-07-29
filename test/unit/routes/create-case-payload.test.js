@@ -1,4 +1,4 @@
-import { describe, it, beforeEach, afterEach, vi, expect } from 'vitest'
+import { describe, test, beforeEach, afterEach, vi, expect } from 'vitest'
 
 vi.mock('../../../src/config/index.js', () => ({
   config: {
@@ -57,7 +57,7 @@ describe('Create case payload validation', () => {
     if (server && server.stop) await server.stop()
   })
 
-  it('returns 400 for invalid payload', async () => {
+  test('returns 400 for invalid payload', async () => {
     const invalidPayload = { foo: 'bar' }
 
     const res = await server.inject({

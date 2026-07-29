@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, test, expect, vi, beforeEach } from 'vitest'
 import { logInboundValidationFailure, logOutboundValidationFailure } from '../../../src/utils/validation-logger.js'
 
 describe('logInboundValidationFailure', () => {
@@ -8,7 +8,7 @@ describe('logInboundValidationFailure', () => {
     vi.clearAllMocks()
   })
 
-  it('should log an Error object with validation details', () => {
+  test('should log an Error object with validation details', () => {
     const joiError = {
       details: [
         { path: ['data', 'sourceSystem'], type: 'any.required', context: { value: undefined }, message: '"data.sourceSystem" is required' },
@@ -37,7 +37,7 @@ describe('logInboundValidationFailure', () => {
     expect(message).toBe('Inbound message failed validation')
   })
 
-  it('should truncate long values in validation errors', () => {
+  test('should truncate long values in validation errors', () => {
     const longValue = 'x'.repeat(200)
     const joiError = {
       details: [
@@ -53,7 +53,7 @@ describe('logInboundValidationFailure', () => {
     expect(err.validationErrors[0].value).toHaveLength(100)
   })
 
-  it('should handle missing payload fields gracefully', () => {
+  test('should handle missing payload fields gracefully', () => {
     const joiError = {
       details: [
         { path: ['id'], type: 'any.required', context: { value: undefined }, message: '"id" is required' }
@@ -68,7 +68,7 @@ describe('logInboundValidationFailure', () => {
     expect(err.eventId).toBeUndefined()
   })
 
-  it('should handle null payload gracefully', () => {
+  test('should handle null payload gracefully', () => {
     const joiError = {
       details: [
         { path: ['id'], type: 'any.required', context: { value: undefined }, message: '"id" is required' }
@@ -89,7 +89,7 @@ describe('logOutboundValidationFailure', () => {
     vi.clearAllMocks()
   })
 
-  it('should log with outbound label in Error message', () => {
+  test('should log with outbound label in Error message', () => {
     const joiError = {
       details: [
         { path: ['data', 'caseId'], type: 'any.required', context: { value: undefined }, message: '"data.caseId" is required' }

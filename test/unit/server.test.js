@@ -1,4 +1,4 @@
-import { describe, it, beforeEach, afterEach, afterAll, vi, expect } from 'vitest'
+import { describe, test, beforeEach, afterEach, afterAll, vi, expect } from 'vitest'
 
 vi.mock('../../src/config/index.js', () => ({
   config: {
@@ -65,7 +65,7 @@ describe('POST methods for creating cases in CRM', () => {
       }
     })
 
-    it('returns 401 if API key is missing on /create-case-with-online-submission', async () => {
+    test('returns 401 if API key is missing on /create-case-with-online-submission', async () => {
       const res = await server.inject({
         method: 'POST',
         url: '/create-case-with-online-submission',
@@ -76,7 +76,7 @@ describe('POST methods for creating cases in CRM', () => {
       expect(JSON.parse(res.payload)).toEqual({ error: 'Missing or invalid QA-specific x-api-key header' })
     })
 
-    it('returns 401 if API key is invalid on /create-case-with-online-submission', async () => {
+    test('returns 401 if API key is invalid on /create-case-with-online-submission', async () => {
       const res = await server.inject({
         method: 'POST',
         url: '/create-case-with-online-submission',
@@ -88,7 +88,7 @@ describe('POST methods for creating cases in CRM', () => {
       expect(JSON.parse(res.payload)).toEqual({ error: 'Missing or invalid QA-specific x-api-key header' })
     })
 
-    it('calls createCaseWithOnlineSubmissionInCrm if API key is valid', async () => {
+    test('calls createCaseWithOnlineSubmissionInCrm if API key is valid', async () => {
       const payload = {
         caseType: 'DOCUMENT_UPLOAD',
         crn: '123456',
@@ -178,7 +178,7 @@ describe('POST methods for creating cases in CRM', () => {
       }
     })
 
-    it('returns 404 if route does not exist in prod on /create-case-with-online-submission', async () => {
+    test('returns 404 if route does not exist in prod on /create-case-with-online-submission', async () => {
       const res = await server.inject({
         method: 'POST',
         url: '/create-case-with-online-submission',
