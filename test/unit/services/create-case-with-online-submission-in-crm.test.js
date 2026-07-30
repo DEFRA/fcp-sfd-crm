@@ -1,7 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
 import { crmEvents } from '../../../src/constants/events.js'
 
-const mockLogger = { error: vi.fn(), warn: vi.fn() }
+const mockLogger = { error: vi.fn(), warn: vi.fn(), debug: vi.fn(), info: vi.fn() }
 
 vi.mock('../../../src/logging/logger.js', () => ({
   createLogger: () => mockLogger
@@ -295,7 +295,7 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
 
 test('re-throws original retryable CRM error when createCaseWithOnlineSubmission reports retryable', async () => {
   vi.resetModules()
-  const mockLogger = { error: vi.fn(), warn: vi.fn() }
+  const mockLogger = { error: vi.fn(), warn: vi.fn(), debug: vi.fn(), info: vi.fn() }
   vi.doMock('../../../src/logging/logger.js', () => ({ createLogger: () => mockLogger }))
 
   const retryErr = new Error('CRM transient')

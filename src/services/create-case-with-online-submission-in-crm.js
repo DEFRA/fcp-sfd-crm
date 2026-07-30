@@ -42,6 +42,8 @@ async function resolveDocumentTypeOrThrow (authToken, caseType, correlationId) {
     throw err
   }
 
+  logger.debug({ transaction:  { id: correlationId }, event: { category: caseType, reason: JSON.stringify(documentTypeMetadata, null, 4) } }, 'Document type metadata resolved successfully');
+
   return documentTypeMetadata
 }
 
