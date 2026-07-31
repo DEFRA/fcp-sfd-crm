@@ -1,8 +1,8 @@
-import { describe, it, expect } from 'vitest'
+import { describe, test, expect } from 'vitest'
 import { receivedEventSchema, validationOptions } from '../../../../src/api/schemas/outbound.js'
 
 describe('Outbound received event schema validation', () => {
-  it('accepts a valid received event payload', () => {
+  test('accepts a valid received event payload', () => {
     const valid = {
       id: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
       source: 'fcp-sfd-crm',
@@ -22,14 +22,14 @@ describe('Outbound received event schema validation', () => {
     expect(error).toBeUndefined()
   })
 
-  it('rejects invalid received event payloads', () => {
+  test('rejects invalid received event payloads', () => {
     const invalid = { not: 'valid' }
     const { error } = receivedEventSchema.validate(invalid, validationOptions)
     expect(error).toBeDefined()
     expect(Array.isArray(error.details)).toBe(true)
   })
 
-  it('rejects unknown properties', () => {
+  test('rejects unknown properties', () => {
     const withUnknown = {
       id: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
       source: 'fcp-sfd-crm',

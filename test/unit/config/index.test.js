@@ -1,4 +1,4 @@
-import { describe, it, beforeEach, afterEach, expect, vi } from 'vitest'
+import { describe, test, beforeEach, afterEach, expect, vi } from 'vitest'
 
 const addFormats = vi.fn()
 const validate = vi.fn()
@@ -23,7 +23,7 @@ describe('src/config/index.js', () => {
     delete process.env.NODE_ENV
   })
 
-  it('calls addFormats and validate when not in test env', async () => {
+  test('calls addFormats and validate when not in test env', async () => {
     const { config } = await import('../../../src/config/index.js')
 
     expect(addFormats).toHaveBeenCalled()
@@ -31,7 +31,7 @@ describe('src/config/index.js', () => {
     expect(config).toBeDefined()
   })
 
-  it('skips validate when VITEST env is set', async () => {
+  test('skips validate when VITEST env is set', async () => {
     process.env.VITEST = '1'
     const { config } = await import('../../../src/config/index.js')
 

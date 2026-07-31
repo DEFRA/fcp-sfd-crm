@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, test, expect, vi, beforeEach } from 'vitest'
 
 const mockLogger = { error: vi.fn(), warn: vi.fn() }
 
@@ -27,7 +27,7 @@ describe('createCaseWithOnlineSubmissionInCrm edge cases', () => {
     vi.clearAllMocks()
   })
 
-  it('should throw Boom badRequest for each missing required param', async () => {
+  test('should throw Boom badRequest for each missing required param', async () => {
     const base = {
       authToken: 't', crn: 'c', sbi: 's', caseType: 'SomeType', caseData: {}, onlineSubmissionActivity: {}
     }
@@ -40,7 +40,7 @@ describe('createCaseWithOnlineSubmissionInCrm edge cases', () => {
     }
   })
 
-  it('should throw Boom unprocessableEntity if contact/account not found', async () => {
+  test('should throw Boom unprocessableEntity if contact/account not found', async () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: null, error: 'err' })
     await expect(createCaseWithOnlineSubmissionInCrm({
       authToken: 't',
@@ -66,7 +66,7 @@ describe('createCaseWithOnlineSubmissionInCrm edge cases', () => {
       .rejects.toMatchObject({ isBoom: true, message: expect.stringContaining('Account ID not found') })
   })
 
-  it('should throw Boom internal if createCaseWithOnlineSubmission returns error', async () => {
+  test('should throw Boom internal if createCaseWithOnlineSubmission returns error', async () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: 'id' })
     getAccountIdFromSbi.mockResolvedValue({ accountId: 'aid' })
     getDocumentTypeMetadata.mockResolvedValue({ documentTypeMetadata: { schemeValue: 's', subjectValue: 'sub', documentTypesId: 'd' }, error: null })
@@ -83,7 +83,7 @@ describe('createCaseWithOnlineSubmissionInCrm edge cases', () => {
       .rejects.toMatchObject({ isBoom: true, message: expect.stringContaining('Unable to create case with online submission activity in CRM') })
   })
 
-  it('should return all ids on success', async () => {
+  test('should return all ids on success', async () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: 'id' })
     getAccountIdFromSbi.mockResolvedValue({ accountId: 'aid' })
     getDocumentTypeMetadata.mockResolvedValue({ documentTypeMetadata: { schemeValue: 's', subjectValue: 'sub', documentTypesId: 'd' }, error: null })
@@ -100,7 +100,7 @@ describe('createCaseWithOnlineSubmissionInCrm edge cases', () => {
     expect(result).toEqual({ contactId: 'id', accountId: 'aid', caseId: 'cid', rpaOnlinesubmissionid: 'ols-1' })
   })
 
-  it('should return ids and not throw when publishReceivedEvent fails', async () => {
+  test('should return ids and not throw when publishReceivedEvent fails', async () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: 'id' })
     getAccountIdFromSbi.mockResolvedValue({ accountId: 'aid' })
     getDocumentTypeMetadata.mockResolvedValue({ documentTypeMetadata: { schemeValue: 's', subjectValue: 'sub', documentTypesId: 'd' }, error: null })
