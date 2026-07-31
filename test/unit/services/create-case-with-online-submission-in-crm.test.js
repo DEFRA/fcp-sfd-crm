@@ -320,4 +320,3 @@ test('re-throws original retryable CRM error when createCaseWithOnlineSubmission
   // logger should have been called with the original case error
   expect(mockLogger.error).toHaveBeenCalledWith({ correlationId: 'cid', error: retryErr }, 'Error creating case with online submission activity')
 })
-
