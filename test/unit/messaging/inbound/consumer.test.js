@@ -209,7 +209,7 @@ describe('CRM request sqs consumer', () => {
           type: 'test.type',
           datacontenttype: 'application/json',
           time: new Date().toISOString(),
-          data: { crn: '123', sbi: '321', file: { fileId: '9fcaabe5-77ec-44db-8356-3a6e8dc51b13', fileName: 'file.pdf', url: 'https://example.com/api/v1/blobs/9fcaabe5-77ec-44db-8356-3a6e8dc51b13' }, correlationId: '550e8400-e29b-41d4-a716-446655440000', sourceSystem: 'fcp-sfd-frontend', submissionId: 'sub-1' }
+          data: { crn: '123', sbi: '321', file: { fileId: '9fcaabe5-77ec-44db-8356-3a6e8dc51b13', fileName: 'file.pdf', url: 'https://example.com/api/v1/blob/9fcaabe5-77ec-44db-8356-3a6e8dc51b13' }, correlationId: '550e8400-e29b-41d4-a716-446655440000', sourceSystem: 'fcp-sfd-frontend', submissionId: 'sub-1' }
         })
       }
 
@@ -313,7 +313,7 @@ describe('CRM request sqs consumer', () => {
           type: 'test.type',
           datacontenttype: 'application/json',
           time: new Date().toISOString(),
-          data: { crn: '123', sbi: '321', file: { fileId: '3fa85f64-5717-4562-b3fc-2c963f66afa6', fileName: 'file.pdf', url: 'https://example.com/api/v1/blobs/f1' }, correlationId: '550e8400-e29b-41d4-a716-446655440000', sourceSystem: 'fcp-sfd-frontend', submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6' }
+          data: { crn: '123', sbi: '321', file: { fileId: '3fa85f64-5717-4562-b3fc-2c963f66afa6', fileName: 'file.pdf', url: 'https://example.com/api/v1/blob/f1' }, correlationId: '550e8400-e29b-41d4-a716-446655440000', sourceSystem: 'fcp-sfd-frontend', submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6' }
         })
       }
 
@@ -347,7 +347,7 @@ describe('CRM request sqs consumer', () => {
           type: 'test.type',
           datacontenttype: 'application/json',
           time: new Date().toISOString(),
-          data: { crn: '123', sbi: '321', file: { fileId: '4fa85f64-5717-4562-b3fc-2c963f66afa6', fileName: 'file.pdf', url: 'https://example.com/api/v1/blobs/f2' }, correlationId: '550e8400-e29b-41d4-a716-446655440000', sourceSystem: 'fcp-sfd-frontend', submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6' }
+          data: { crn: '123', sbi: '321', file: { fileId: '4fa85f64-5717-4562-b3fc-2c963f66afa6', fileName: 'file.pdf', url: 'https://example.com/api/v1/blob/f2' }, correlationId: '550e8400-e29b-41d4-a716-446655440000', sourceSystem: 'fcp-sfd-frontend', submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6' }
         })
       }
 
@@ -379,7 +379,7 @@ describe('CRM request sqs consumer', () => {
           type: 'test.type',
           datacontenttype: 'application/json',
           time: new Date().toISOString(),
-          data: { crn: '123', sbi: '321', file: { fileId: '5fa85f64-5717-4562-b3fc-2c963f66afa6', fileName: 'file.pdf', url: 'https://example.com/api/v1/blobs/f3' }, correlationId: '550e8400-e29b-41d4-a716-446655440000', sourceSystem: 'fcp-sfd-frontend', submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6' }
+          data: { crn: '123', sbi: '321', file: { fileId: '5fa85f64-5717-4562-b3fc-2c963f66afa6', fileName: 'file.pdf', url: 'https://example.com/api/v1/blob/f3' }, correlationId: '550e8400-e29b-41d4-a716-446655440000', sourceSystem: 'fcp-sfd-frontend', submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6' }
         })
       }
 
@@ -411,7 +411,7 @@ describe('CRM request sqs consumer', () => {
           type: 'test.type',
           datacontenttype: 'application/json',
           time: new Date().toISOString(),
-          data: { crn: '123', sbi: '321', file: { fileId: '6fa85f64-5717-4562-b3fc-2c963f66afa6', fileName: 'file.pdf', url: 'https://example.com/api/v1/blobs/f4' }, correlationId: '550e8400-e29b-41d4-a716-446655440000', sourceSystem: 'fcp-sfd-frontend', submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6' }
+          data: { crn: '123', sbi: '321', file: { fileId: '6fa85f64-5717-4562-b3fc-2c963f66afa6', fileName: 'file.pdf', url: 'https://example.com/api/v1/blob/f4' }, correlationId: '550e8400-e29b-41d4-a716-446655440000', sourceSystem: 'fcp-sfd-frontend', submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6' }
         })
       }
 
@@ -450,7 +450,7 @@ describe('CRM request sqs consumer', () => {
         createCase.mockRejectedValueOnce(err)
         const message = {
           MessageId: 'msg-dlq-1',
-          Body: JSON.stringify({ id: 'evt-dlq-1', source: '/test', specversion: '1.0', type: 'test.type', datacontenttype: 'application/json', time: new Date().toISOString(), data: { crn: '123', sbi: '321', file: { fileId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479', fileName: 'doc.pdf', url: 'https://example.com/api/v1/blobs/f47ac10b-58cc-4372-a567-0e02b2c3d479' }, correlationId: '550e8400-e29b-41d4-a716-446655440000', sourceSystem: 'fcp-sfd-frontend', submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6' } })
+          Body: JSON.stringify({ id: 'evt-dlq-1', source: '/test', specversion: '1.0', type: 'test.type', datacontenttype: 'application/json', time: new Date().toISOString(), data: { crn: '123', sbi: '321', file: { fileId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479', fileName: 'doc.pdf', url: 'https://example.com/api/v1/blob/f47ac10b-58cc-4372-a567-0e02b2c3d479' }, correlationId: '550e8400-e29b-41d4-a716-446655440000', sourceSystem: 'fcp-sfd-frontend', submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6' } })
         }
 
         const result = await capturedHandleMessage(message)
@@ -476,7 +476,7 @@ describe('CRM request sqs consumer', () => {
         createCase.mockRejectedValueOnce(err)
         const message = {
           MessageId: 'msg-dlq-fail',
-          Body: JSON.stringify({ id: 'evt-dlq-fail', source: '/test', specversion: '1.0', type: 'test.type', datacontenttype: 'application/json', time: new Date().toISOString(), data: { crn: '123', sbi: '321', file: { fileId: '550e8400-e29b-41d4-a716-446655440001', fileName: 'doc.pdf', url: 'https://example.com/api/v1/blobs/550e8400-e29b-41d4-a716-446655440001' }, correlationId: '550e8400-e29b-41d4-a716-446655440000', sourceSystem: 'fcp-sfd-frontend', submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6' } })
+          Body: JSON.stringify({ id: 'evt-dlq-fail', source: '/test', specversion: '1.0', type: 'test.type', datacontenttype: 'application/json', time: new Date().toISOString(), data: { crn: '123', sbi: '321', file: { fileId: '550e8400-e29b-41d4-a716-446655440001', fileName: 'doc.pdf', url: 'https://example.com/api/v1/blob/550e8400-e29b-41d4-a716-446655440001' }, correlationId: '550e8400-e29b-41d4-a716-446655440000', sourceSystem: 'fcp-sfd-frontend', submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6' } })
         }
 
         const result = await capturedHandleMessage(message)
@@ -525,7 +525,7 @@ describe('CRM request sqs consumer', () => {
         createCase.mockRejectedValueOnce(err)
         const message = {
           MessageId: 'msg-retry',
-          Body: JSON.stringify({ id: 'evt-r', source: '/test', specversion: '1.0', type: 'test.type', datacontenttype: 'application/json', time: new Date().toISOString(), data: { crn: '123', sbi: '321', file: { fileId: '550e8400-e29b-41d4-a716-446655440002', fileName: 'doc.pdf', url: 'https://example.com/api/v1/blobs/550e8400-e29b-41d4-a716-446655440002' }, correlationId: '550e8400-e29b-41d4-a716-446655440000', sourceSystem: 'fcp-sfd-frontend', submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6' } })
+          Body: JSON.stringify({ id: 'evt-r', source: '/test', specversion: '1.0', type: 'test.type', datacontenttype: 'application/json', time: new Date().toISOString(), data: { crn: '123', sbi: '321', file: { fileId: '550e8400-e29b-41d4-a716-446655440002', fileName: 'doc.pdf', url: 'https://example.com/api/v1/blob/550e8400-e29b-41d4-a716-446655440002' }, correlationId: '550e8400-e29b-41d4-a716-446655440000', sourceSystem: 'fcp-sfd-frontend', submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6' } })
         }
 
         const result = await capturedHandleMessage(message)
@@ -541,7 +541,7 @@ describe('CRM request sqs consumer', () => {
         const message = {
           MessageId: 'msg-replayed-1',
           MessageAttributes: { replayed_from: { StringValue: 'DLQ', DataType: 'String' } },
-          Body: JSON.stringify({ id: 'evt-replay', source: '/test', specversion: '1.0', type: 'test.type', datacontenttype: 'application/json', time: new Date().toISOString(), data: { crn: '123', sbi: '321', file: { fileId: '550e8400-e29b-41d4-a716-446655440003', fileName: 'doc.pdf', url: 'https://example.com/api/v1/blobs/550e8400-e29b-41d4-a716-446655440003' }, correlationId: '550e8400-e29b-41d4-a716-446655440000', sourceSystem: 'fcp-sfd-frontend', submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6' } })
+          Body: JSON.stringify({ id: 'evt-replay', source: '/test', specversion: '1.0', type: 'test.type', datacontenttype: 'application/json', time: new Date().toISOString(), data: { crn: '123', sbi: '321', file: { fileId: '550e8400-e29b-41d4-a716-446655440003', fileName: 'doc.pdf', url: 'https://example.com/api/v1/blob/550e8400-e29b-41d4-a716-446655440003' }, correlationId: '550e8400-e29b-41d4-a716-446655440000', sourceSystem: 'fcp-sfd-frontend', submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6' } })
         }
 
         await capturedHandleMessage(message)
@@ -582,7 +582,7 @@ describe('CRM request sqs consumer', () => {
           type: 'test.type',
           datacontenttype: 'application/json',
           time: new Date().toISOString(),
-          data: { crn: '123', sbi: '321', file: { fileId: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d', fileName: 'file2.pdf', url: 'https://example.com/api/v1/blobs/a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d' }, correlationId: '550e8400-e29b-41d4-a716-446655440000', sourceSystem: 'fcp-sfd-frontend', submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6' }
+          data: { crn: '123', sbi: '321', file: { fileId: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d', fileName: 'file2.pdf', url: 'https://example.com/api/v1/blob/a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d' }, correlationId: '550e8400-e29b-41d4-a716-446655440000', sourceSystem: 'fcp-sfd-frontend', submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6' }
         })
       }
 
@@ -617,7 +617,7 @@ describe('CRM request sqs consumer', () => {
           type: 'test.type',
           datacontenttype: 'application/json',
           time: new Date().toISOString(),
-          data: { crn: '123', sbi: '321', file: { fileId: 'b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e', fileName: 'file3.pdf', url: 'https://example.com/api/v1/blobs/b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e' }, correlationId: '550e8400-e29b-41d4-a716-446655440000', sourceSystem: 'fcp-sfd-frontend', submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6' }
+          data: { crn: '123', sbi: '321', file: { fileId: 'b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e', fileName: 'file3.pdf', url: 'https://example.com/api/v1/blob/b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e' }, correlationId: '550e8400-e29b-41d4-a716-446655440000', sourceSystem: 'fcp-sfd-frontend', submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6' }
         })
       }
 
