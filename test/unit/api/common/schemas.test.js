@@ -63,7 +63,7 @@ describe('api/common/schemas', () => {
         file: {
           fileId: '9fcaabe5-77ec-44db-8356-3a6e8dc51b13',
           fileName: 'f.pdf',
-          url: 'https://example.com/api/v1/blobs/9fcaabe5-77ec-44db-8356-3a6e8dc51b13'
+          url: 'https://example.com/api/v1/blob/9fcaabe5-77ec-44db-8356-3a6e8dc51b13'
         },
         correlationId: '550e8400-e29b-41d4-a716-446655440000',
         sourceSystem: 'fcp-sfd-frontend',
@@ -90,7 +90,7 @@ describe('api/common/schemas', () => {
           file: {
             fileId: '9fcaabe5-77ec-44db-8356-3a6e8dc51b13',
             fileName: 'f.pdf',
-            url: 'https://example.com/api/v1/blobs/9fcaabe5-77ec-44db-8356-3a6e8dc51b13'
+            url: 'https://example.com/api/v1/blob/9fcaabe5-77ec-44db-8356-3a6e8dc51b13'
           },
           correlationId: '550e8400-e29b-41d4-a716-446655440000',
           sourceSystem: 'fcp-sfd-frontend',
