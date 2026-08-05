@@ -239,7 +239,8 @@ describe('CRM repository', () => {
         scheduledend: '2026-01-01T11:00:00Z',
         rpa_onlinesubmissionid: expect.any(String),
         statecode: 0,
-        statuscode: 1
+        statuscode: 1,
+        'rpa_SubmissionType_rpa_onlinesubmission@odata.bind': '/rpa_documenttypeses(doctype-789)'
       })
 
       expect(submission.rpa_onlinesubmissionid).toHaveLength(20)
@@ -336,6 +337,74 @@ describe('CRM repository', () => {
       expect(caseId).toBeNull()
       expect(error).toBeInstanceOf(Error)
       expect(error.message).toBe('Network error')
+    })
+
+    test('should attach CRM error body when thrown error carries a response cause', async () => {
+      const httpError = new Error('HTTP error: 400 Bad Request')
+      httpError.cause = {
+        text: vi.fn().mockResolvedValue('{"error":{"code":"0x80040265","message":"Cannot find record to be updated"}}')
+      }
+      mockHttpClient.mockRejectedValue(httpError)
+
+      const { caseId, error } = await createCaseWithOnlineSubmission({
+        authToken: '******',
+        case: {
+          title: 'Test',
+          caseDescription: 'Test',
+          contactId: 'contact-123',
+          accountId: 'account-456',
+          documentTypeMetadata: {
+            schemeValue: 'scheme-abc',
+            subjectValue: 'subject-def',
+            documentTypesId: 'doctype-789'
+          }
+        },
+        onlineSubmissionActivity: {
+          subject: 'Subject',
+          description: 'Description',
+          scheduledStart: '2026-01-01T10:00:00Z',
+          scheduledEnd: '2026-01-01T11:00:00Z',
+          stateCode: 0,
+          statusCode: 1,
+          metadata: { name: 'file.pdf', documentType: 'doc-type', blobFileId: 'blob-1' }
+        }
+      })
+
+      expect(caseId).toBeNull()
+      expect(error.crmError).toBe('{"error":{"code":"0x80040265","message":"Cannot find record to be updated"}}')
+    })
+
+    test('should swallow body read failures when attaching CRM error body', async () => {
+      const httpError = new Error('HTTP error: 400 Bad Request')
+      httpError.cause = { text: vi.fn().mockRejectedValue(new Error('already consumed')) }
+      mockHttpClient.mockRejectedValue(httpError)
+
+      const { caseId, error } = await createCaseWithOnlineSubmission({
+        authToken: '******',
+        case: {
+          title: 'Test',
+          caseDescription: 'Test',
+          contactId: 'contact-123',
+          accountId: 'account-456',
+          documentTypeMetadata: {
+            schemeValue: 'scheme-abc',
+            subjectValue: 'subject-def',
+            documentTypesId: 'doctype-789'
+          }
+        },
+        onlineSubmissionActivity: {
+          subject: 'Subject',
+          description: 'Description',
+          scheduledStart: '2026-01-01T10:00:00Z',
+          scheduledEnd: '2026-01-01T11:00:00Z',
+          stateCode: 0,
+          statusCode: 1,
+          metadata: { name: 'file.pdf', documentType: 'doc-type', blobFileId: 'blob-1' }
+        }
+      })
+
+      expect(caseId).toBeNull()
+      expect(error.crmError).toBeUndefined()
     })
 
     test('should return error when response json parsing fails', async () => {

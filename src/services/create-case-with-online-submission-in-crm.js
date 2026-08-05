@@ -55,7 +55,14 @@ async function createCrmCaseOrThrow (authToken, contactId, accountId, caseData, 
   })
 
   if (caseError) {
-    logger.error({ correlationId, error: caseError }, 'Error creating case with online submission activity')
+    logger.error({
+      transaction: { id: correlationId },
+      error: caseError,
+      event: {
+        category: 'crm_case_create_failed',
+        reason: caseError?.crmError ?? caseError?.message
+      }
+    }, 'Error creating case with online submission activity')
     if (caseError?.retryMetadata?.category === 'retryable') {
       caseError.retryable = true
       throw caseError

@@ -161,7 +161,9 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: 'mock-contact-id' })
     getAccountIdFromSbi.mockResolvedValue({ accountId: 'mock-account-id' })
     getDocumentTypeMetadata.mockResolvedValue({ documentTypeMetadata: { schemeValue: 's', subjectValue: 'sub', documentTypesId: 'd' }, error: null })
-    createCaseWithOnlineSubmission.mockResolvedValue({ caseId: null, error: 'CRM service failed' })
+    const caseErr = new Error('CRM service failed')
+    caseErr.crmError = '{"error":{"code":"0x80040265","message":"Cannot find record to be updated"}}'
+    createCaseWithOnlineSubmission.mockResolvedValue({ caseId: null, error: caseErr })
 
     await expect(createCaseWithOnlineSubmissionInCrm({
       authToken: 'mock-bearer-token',
@@ -174,7 +176,14 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     })).rejects.toThrow('Unable to create case with online submission activity in CRM')
 
     expect(mockLogger.error).toHaveBeenCalledWith(
-      { correlationId: 'mock-correlation-id', error: 'CRM service failed' },
+      {
+        transaction: { id: 'mock-correlation-id' },
+        error: caseErr,
+        event: {
+          category: 'crm_case_create_failed',
+          reason: '{"error":{"code":"0x80040265","message":"Cannot find record to be updated"}}'
+        }
+      },
       'Error creating case with online submission activity'
     )
   })
@@ -300,6 +309,7 @@ test('re-throws original retryable CRM error when createCaseWithOnlineSubmission
 
   const retryErr = new Error('CRM transient')
   retryErr.retryMetadata = { category: 'retryable', status: 503 }
+  retryErr.crmError = '{"error":{"code":"0x80060891"}}'
 
   vi.doMock('../../../src/repos/crm.js', () => ({
     getContactIdFromCrn: vi.fn().mockResolvedValue({ contactId: 'c1' }),
@@ -318,5 +328,9 @@ test('re-throws original retryable CRM error when createCaseWithOnlineSubmission
   })).rejects.toMatchObject({ message: 'CRM transient', retryable: true })
 
   // logger should have been called with the original case error
-  expect(mockLogger.error).toHaveBeenCalledWith({ correlationId: 'cid', error: retryErr }, 'Error creating case with online submission activity')
+  expect(mockLogger.error).toHaveBeenCalledWith({
+    transaction: { id: 'cid' },
+    error: retryErr,
+    event: { category: 'crm_case_create_failed', reason: '{"error":{"code":"0x80060891"}}' }
+  }, 'Error creating case with online submission activity')
 })
