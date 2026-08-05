@@ -17,14 +17,14 @@ async function resolveDocumentTypeOrThrow (authToken, caseType, correlationId) {
 
   if (docTypeError) {
     if (docTypeError.message?.startsWith('Invalid caseType:')) {
-      logger.warn({ correlationId, caseType, error: docTypeError }, 'Invalid caseType for document type lookup')
+      logger.warn({ transaction: { id: correlationId }, caseType, error: docTypeError }, 'Invalid caseType for document type lookup')
       const badRequestError = Boom.badRequest(docTypeError.message)
       badRequestError.retryable = false
       badRequestError.retryMetadata = { category: 'non-retryable', status: 400 }
       throw badRequestError
     }
 
-    logger.error({ correlationId, caseType, error: docTypeError }, 'Error looking up document type metadata')
+    logger.error({ transaction: { id: correlationId }, caseType, error: docTypeError }, 'Error looking up document type metadata')
     if (docTypeError?.retryMetadata?.category === 'retryable') {
       docTypeError.retryable = true
       throw docTypeError
@@ -36,7 +36,7 @@ async function resolveDocumentTypeOrThrow (authToken, caseType, correlationId) {
   }
 
   if (!documentTypeMetadata) {
-    logger.warn({ correlationId, caseType }, 'Document type metadata not found for caseType')
+    logger.warn({ transaction: { id: correlationId }, caseType }, 'Document type metadata not found for caseType')
     const err = internal(`No document type metadata found for caseType: ${caseType}`)
     err.retryable = true
     throw err
@@ -74,11 +74,11 @@ async function createCrmCaseOrThrow (authToken, contactId, accountId, caseData, 
   }
 
   if (!caseId) {
-    logger.warn({ correlationId, rpaOnlinesubmissionid }, 'CRM POST response missing incidentid, falling back to lookup by online submission')
+    logger.warn({ transaction: { id: correlationId }, rpaOnlinesubmissionid }, 'CRM POST response missing incidentid, falling back to lookup by online submission')
     const { caseId: fallbackCaseId, error: lookupError } = await getCaseIdByOnlineSubmissionId(authToken, rpaOnlinesubmissionid)
 
     if (lookupError || !fallbackCaseId) {
-      logger.error({ correlationId, rpaOnlinesubmissionid, error: lookupError }, 'Fallback lookup for caseId failed')
+      logger.error({ transaction: { id: correlationId }, rpaOnlinesubmissionid, error: lookupError }, 'Fallback lookup for caseId failed')
       const err = internal('CRM did not return a case ID and fallback lookup failed')
       err.retryable = true
       throw err
@@ -101,7 +101,7 @@ export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi,
   try {
     await publishReceivedEvent({ type: crmEvents.CASE_CREATED, data: eventData })
   } catch (err) {
-    logger.error({ err, caseId, correlationId }, 'publishReceivedEvent threw unexpectedly — case creation still succeeded')
+    logger.error({ err, transaction: { id: correlationId }, event: { reference: caseId } }, 'publishReceivedEvent threw unexpectedly — case creation still succeeded')
   }
 
   return { contactId, accountId, caseId, rpaOnlinesubmissionid }

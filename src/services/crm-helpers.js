@@ -88,14 +88,14 @@ export async function fetchRpaOnlineSubmissionIdOrThrow (authToken, caseId, cont
       retryableErr.retryMetadata = error.retryMetadata
       throw retryableErr
     }
-    logger.error({ correlationId, caseId, error }, messages.SUBMISSION_ID_FAILURE)
+    logger.error({ transaction: { id: correlationId }, event: { reference: caseId }, error }, messages.SUBMISSION_ID_FAILURE)
     const err = new Error(messages.SUBMISSION_ID_FAILURE)
     err.retryable = false
     throw err
   }
 
   if (!rpaOnlinesubmissionid) {
-    logger.error({ correlationId, caseId }, 'Online submission id not found')
+    logger.error({ transaction: { id: correlationId }, event: { reference: caseId } }, 'Online submission id not found')
     const err = new Error(messages.SUBMISSION_ID_FAILURE)
     err.retryable = false
     throw err
