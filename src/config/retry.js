@@ -34,7 +34,7 @@ export const retryConfig = {
       timeoutMs: {
         doc: 'Default timeout in milliseconds for CRM API HTTP requests',
         format: Number,
-        default: 10000,
+        default: 30000,
         env: 'CRM_HTTP_TIMEOUT_MS'
       },
       authTimeoutMs: {
