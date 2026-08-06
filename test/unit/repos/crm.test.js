@@ -11,6 +11,7 @@ vi.mock('../../../src/config/index.js', () => ({
   config: {
     get: vi.fn((key) => {
       if (key === 'crm.baseUrl') return 'https://crm.example.com/api'
+      if (key === 'crm.caseOriginCode') return 3
       return null
     })
   }
@@ -214,7 +215,7 @@ describe('CRM repository', () => {
       expect(payload).toMatchObject({
         title: 'Test case title',
         description: 'Test case description',
-        caseorigincode: 100000002,
+        caseorigincode: 3,
         prioritycode: 2,
         'customerid_contact@odata.bind': '/contacts(contact-123)',
         'rpa_Contact@odata.bind': '/contacts(contact-123)',
@@ -500,6 +501,7 @@ describe('CRM repository', () => {
           value: [{
             _rpa_scheme_value: 'd7655ccd-4c2d-ef11-840a-000d3ab4c5e3',
             _rpa_subject_value: '4e1910c7-b0d7-ee11-904d-0022489fd23c',
+            _rpa_teamrouting_value: 'a1b2c3d4-1234-5678-90ab-cdef12345678',
             rpa_documenttypesid: 'fe2785b9-f06e-f111-ab0c-7c1e5235c19d'
           }]
         })
@@ -509,7 +511,7 @@ describe('CRM repository', () => {
       const result = await getDocumentTypeMetadata('Bearer token', 'CS_Agreement_Evidence')
 
       expect(mockHttpClient).toHaveBeenCalledWith(
-        "https://crm.example.com/api/rpa_documenttypeses?%24select=_rpa_scheme_value,_rpa_subject_value,rpa_documenttypesid&%24filter=rpa_documenttype%20eq%20'CS_Agreement_Evidence'",
+        "https://crm.example.com/api/rpa_documenttypeses?%24select=_rpa_scheme_value,_rpa_subject_value,_rpa_teamrouting_value,rpa_documenttypesid&%24filter=rpa_documenttype%20eq%20'CS_Agreement_Evidence'",
         {
           method: 'GET',
           headers: { Authorization: 'Bearer token', Prefer: 'return=representation', 'Content-Type': 'application/json' }
@@ -519,6 +521,7 @@ describe('CRM repository', () => {
         documentTypeMetadata: {
           schemeValue: 'd7655ccd-4c2d-ef11-840a-000d3ab4c5e3',
           subjectValue: '4e1910c7-b0d7-ee11-904d-0022489fd23c',
+          teamRoutingValue: 'a1b2c3d4-1234-5678-90ab-cdef12345678',
           documentTypesId: 'fe2785b9-f06e-f111-ab0c-7c1e5235c19d'
         },
         error: null
