@@ -79,7 +79,7 @@ const createCaseWithOnlineSubmission = async (request) => {
     const { subject, description, scheduledStart, scheduledEnd, stateCode, statusCode, metadata } = onlineSubmissionActivity
     const { name, blobFileId, mimeType } = metadata
 
-    const { schemeValue, subjectValue, documentTypesId } = documentTypeMetadata
+    const { schemeValue, subjectValue, teamRoutingValue, documentTypesId } = documentTypeMetadata
 
     const activityMetadataItem = {
       rpa_name: name,
@@ -115,9 +115,14 @@ const createCaseWithOnlineSubmission = async (request) => {
           rpa_onlinesubmissionid: rpaOnlinesubmissionid,
           statecode: stateCode,
           statuscode: statusCode,
+          'rpa_SubmissionType_rpa_onlinesubmission@odata.bind': `/rpa_documenttypeses(${documentTypesId})`,
           rpa_onlinesubmission_rpa_activitymetadata: [activityMetadataItem]
         }
       ]
+    }
+
+    if (teamRoutingValue) {
+      payload['ownerid@odata.bind'] = `/teams(${teamRoutingValue})`
     }
 
     const response = await httpClient(`${baseUrl}/incidents`, {

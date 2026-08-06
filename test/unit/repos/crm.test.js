@@ -176,6 +176,7 @@ describe('CRM repository', () => {
           documentTypeMetadata: {
             schemeValue: 'scheme-abc',
             subjectValue: 'subject-def',
+            teamRoutingValue: 'team-ghi',
             documentTypesId: 'doctype-789'
           }
         },
@@ -222,6 +223,7 @@ describe('CRM repository', () => {
         'rpa_Organisation@odata.bind': '/accounts(account-456)',
         'rpa_Scheme@odata.bind': '/rpa_schemes(scheme-abc)',
         'subjectid@odata.bind': '/subjects(subject-def)',
+        'ownerid@odata.bind': '/teams(team-ghi)',
         rpa_isunknowncontact: false,
         rpa_isunknownorganisation: false
       })
@@ -237,7 +239,8 @@ describe('CRM repository', () => {
         scheduledend: '2026-01-01T11:00:00Z',
         rpa_onlinesubmissionid: expect.any(String),
         statecode: 0,
-        statuscode: 1
+        statuscode: 1,
+        'rpa_SubmissionType_rpa_onlinesubmission@odata.bind': '/rpa_documenttypeses(doctype-789)'
       })
 
       expect(submission.rpa_onlinesubmissionid).toHaveLength(20)
@@ -297,6 +300,7 @@ describe('CRM repository', () => {
       const submission = payload.incident_rpa_onlinesubmissions[0]
       const meta = submission.rpa_onlinesubmission_rpa_activitymetadata[0]
       expect(meta.rpa_filemimetype).toBeUndefined()
+      expect(payload['ownerid@odata.bind']).toBeUndefined()
     })
 
     test('should return error when fetch throws', async () => {
@@ -586,11 +590,13 @@ describe('CRM repository', () => {
             {
               _rpa_scheme_value: 'first-scheme',
               _rpa_subject_value: 'first-subject',
+              _rpa_teamrouting_value: 'first-team',
               rpa_documenttypesid: 'first-id'
             },
             {
               _rpa_scheme_value: 'second-scheme',
               _rpa_subject_value: 'second-subject',
+              _rpa_teamrouting_value: 'second-team',
               rpa_documenttypesid: 'second-id'
             }
           ]
@@ -603,6 +609,7 @@ describe('CRM repository', () => {
       expect(result.documentTypeMetadata).toEqual({
         schemeValue: 'first-scheme',
         subjectValue: 'first-subject',
+        teamRoutingValue: 'first-team',
         documentTypesId: 'first-id'
       })
     })
