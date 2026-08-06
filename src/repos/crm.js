@@ -3,6 +3,7 @@ import { config } from '../config/index.js'
 import { httpClient } from '../http/client.js'
 
 const baseUrl = config.get('crm.baseUrl')
+const caseOriginCode = config.get('crm.caseOriginCode')
 const DEFAULT_DOCUMENT_TYPE_ID = '4e88916b-aae2-ee11-904c-000d3adc1ec9'
 
 const baseHeaders = {
@@ -95,7 +96,7 @@ const createCaseWithOnlineSubmission = async (request) => {
     const payload = {
       title,
       description: caseDescription,
-      caseorigincode: 100000002,
+      caseorigincode: caseOriginCode,
       prioritycode: 2,
       'customerid_contact@odata.bind': `/contacts(${contactId})`,
       'rpa_Contact@odata.bind': `/contacts(${contactId})`,
@@ -289,7 +290,7 @@ const getDocumentTypeMetadata = async (authToken, caseType) => {
 
   const escapedCaseType = caseType.replaceAll("'", "''")
   const query = `/rpa_documenttypeses?${buildQuery({
-  $select: '_rpa_scheme_value,_rpa_subject_value,rpa_documenttypesid',
+  $select: '_rpa_scheme_value,_rpa_subject_value,_rpa_teamrouting_value,rpa_documenttypesid',
   $filter: `rpa_documenttype eq '${escapedCaseType}'`
 })}`
 
@@ -310,6 +311,7 @@ const getDocumentTypeMetadata = async (authToken, caseType) => {
       documentTypeMetadata: {
         schemeValue: record._rpa_scheme_value,
         subjectValue: record._rpa_subject_value,
+        teamRoutingValue: record._rpa_teamrouting_value,
         documentTypesId: record.rpa_documenttypesid
       },
       error: null
