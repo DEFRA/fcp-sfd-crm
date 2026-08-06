@@ -76,7 +76,7 @@ export async function createCase (payload) {
   const prep = await prepareCase({ correlationId, fileId })
 
   if (prep.action === 'skip') {
-    logger.info({ correlationId, fileId }, 'Skipped: duplicate message')
+    logger.info({ transaction: { id: correlationId }, fileId }, 'Skipped: duplicate message')
     return { skipped: true, caseId: prep.caseId }
   }
 
@@ -98,7 +98,7 @@ async function prepareCase ({ correlationId, fileId }) {
   }
 
   if (!caseId && !isNew && !isCreator) {
-    logger.info({ correlationId, fileId }, 'Case creation in progress, will retry')
+    logger.info({ transaction: { id: correlationId }, fileId }, 'Case creation in progress, will retry')
     const error = new Error('Case creation in progress for this correlationId')
     error.retryable = true
     throw error
@@ -119,8 +119,7 @@ async function createNewCase ({ authToken, transformedPayload, correlationId, fi
 
   logger.info({
     transaction: { id: correlationId },
-    event: { action: 'case-created', outcome: 'success' },
-    caseId: response.caseId,
+    event: { action: 'case-created', outcome: 'success', reference: response.caseId },
     rpaOnlinesubmissionid: response.rpaOnlinesubmissionid,
     contactId: response.contactId,
     accountId: response.accountId
@@ -151,7 +150,7 @@ async function addMetadataToExistingCase ({ authToken, caseId, correlationId, fi
       retryableErr.retryMetadata = metadataError.retryMetadata
       throw retryableErr
     }
-    logger.error({ correlationId, caseId, fileId, error: metadataError }, messages.METADATA_FAILURE)
+    logger.error({ transaction: { id: correlationId }, event: { reference: caseId }, fileId, error: metadataError }, messages.METADATA_FAILURE)
     const error = new Error(messages.METADATA_FAILURE)
     error.retryable = false
     throw error
@@ -159,6 +158,6 @@ async function addMetadataToExistingCase ({ authToken, caseId, correlationId, fi
 
   await markFileProcessed(correlationId, fileId)
 
-  logger.info({ correlationId, caseId, fileId, metadataId }, 'Metadata added to existing case')
+  logger.info({ transaction: { id: correlationId }, event: { reference: caseId }, fileId, metadataId }, 'Metadata added to existing case')
   return { caseId }
 }

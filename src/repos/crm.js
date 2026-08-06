@@ -11,6 +11,18 @@ const baseHeaders = {
   Prefer: 'return=representation'
 }
 
+const attachCrmErrorBody = async (err) => {
+  const response = err?.cause
+  if (!response || typeof response.text !== 'function') {
+    return
+  }
+  try {
+    err.crmError = await response.text()
+  } catch {
+    // Body already consumed or unreadable — leave the original error untouched
+  }
+}
+
 const buildQuery = (params) =>
   Object.entries(params)
     .map(([k, v]) => {
@@ -142,6 +154,7 @@ const createCaseWithOnlineSubmission = async (request) => {
       error: null
     }
   } catch (err) {
+    await attachCrmErrorBody(err)
     return {
       caseId: null,
       error: err

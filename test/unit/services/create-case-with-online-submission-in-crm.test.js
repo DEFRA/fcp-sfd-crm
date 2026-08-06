@@ -1,7 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
 import { crmEvents } from '../../../src/constants/events.js'
 
-const mockLogger = { error: vi.fn(), warn: vi.fn() }
+const mockLogger = { error: vi.fn(), warn: vi.fn(), debug: vi.fn(), info: vi.fn() }
 
 vi.mock('../../../src/logging/logger.js', () => ({
   createLogger: () => mockLogger
@@ -161,7 +161,9 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: 'mock-contact-id' })
     getAccountIdFromSbi.mockResolvedValue({ accountId: 'mock-account-id' })
     getDocumentTypeMetadata.mockResolvedValue({ documentTypeMetadata: { schemeValue: 's', subjectValue: 'sub', documentTypesId: 'd' }, error: null })
-    createCaseWithOnlineSubmission.mockResolvedValue({ caseId: null, error: 'CRM service failed' })
+    const caseErr = new Error('CRM service failed')
+    caseErr.crmError = '{"error":{"code":"0x80040265","message":"Cannot find record to be updated"}}'
+    createCaseWithOnlineSubmission.mockResolvedValue({ caseId: null, error: caseErr })
 
     await expect(createCaseWithOnlineSubmissionInCrm({
       authToken: 'mock-bearer-token',
@@ -174,7 +176,14 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     })).rejects.toThrow('Unable to create case with online submission activity in CRM')
 
     expect(mockLogger.error).toHaveBeenCalledWith(
-      { correlationId: 'mock-correlation-id', error: 'CRM service failed' },
+      {
+        transaction: { id: 'mock-correlation-id' },
+        error: caseErr,
+        event: {
+          category: 'crm_case_create_failed',
+          reason: '{"error":{"code":"0x80040265","message":"Cannot find record to be updated"}}'
+        }
+      },
       'Error creating case with online submission activity'
     )
   })
@@ -200,7 +209,7 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     expect(result.caseId).toBe('fallback-case-id')
     expect(result.rpaOnlinesubmissionid).toBe('mock-ols-id')
     expect(mockLogger.warn).toHaveBeenCalledWith(
-      { correlationId: 'mock-correlation-id', rpaOnlinesubmissionid: 'mock-ols-id' },
+      { transaction: { id: 'mock-correlation-id' }, rpaOnlinesubmissionid: 'mock-ols-id' },
       'CRM POST response missing incidentid, falling back to lookup by online submission'
     )
   })
@@ -223,7 +232,7 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     })).rejects.toMatchObject({ message: 'CRM did not return a case ID and fallback lookup failed', retryable: true })
 
     expect(mockLogger.error).toHaveBeenCalledWith(
-      { correlationId: 'mock-correlation-id', rpaOnlinesubmissionid: 'mock-ols-id', error: expect.any(Error) },
+      { transaction: { id: 'mock-correlation-id' }, rpaOnlinesubmissionid: 'mock-ols-id', error: expect.any(Error) },
       'Fallback lookup for caseId failed'
     )
   })
@@ -246,7 +255,7 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     })).rejects.toMatchObject({ message: 'CRM unavailable', retryable: true })
 
     expect(mockLogger.error).toHaveBeenCalledWith(
-      { correlationId: 'mock-correlation-id', caseType: 'CS_Agreement_Evidence', error: lookupErr },
+      { transaction: { id: 'mock-correlation-id' }, caseType: 'CS_Agreement_Evidence', error: lookupErr },
       'Error looking up document type metadata'
     )
   })
@@ -287,19 +296,47 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     })).rejects.toMatchObject({ retryable: true })
 
     expect(mockLogger.warn).toHaveBeenCalledWith(
-      { correlationId: 'mock-correlation-id', caseType: 'NonExistent_Type' },
+      { transaction: { id: 'mock-correlation-id' }, caseType: 'NonExistent_Type' },
       'Document type metadata not found for caseType'
+    )
+  })
+
+  test('throws non-retryable bad request when caseType is invalid', async () => {
+    const lookupErr = new Error('Invalid caseType: NonExistent_Type')
+    getContactIdFromCrn.mockResolvedValue({ contactId: 'mock-contact-id' })
+    getAccountIdFromSbi.mockResolvedValue({ accountId: 'mock-account-id' })
+    getDocumentTypeMetadata.mockResolvedValue({ documentTypeMetadata: null, error: lookupErr })
+
+    await expect(createCaseWithOnlineSubmissionInCrm({
+      authToken: 'mock-bearer-token',
+      correlationId: 'mock-correlation-id',
+      caseType: 'NonExistent_Type',
+      crn: 'mock-crn',
+      sbi: 'mock-sbi',
+      caseData: {},
+      onlineSubmissionActivity: {}
+    })).rejects.toMatchObject({
+      isBoom: true,
+      output: { statusCode: 400 },
+      retryable: false,
+      retryMetadata: { category: 'non-retryable', status: 400 }
+    })
+
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      { transaction: { id: 'mock-correlation-id' }, caseType: 'NonExistent_Type', error: lookupErr },
+      'Invalid caseType for document type lookup'
     )
   })
 })
 
 test('re-throws original retryable CRM error when createCaseWithOnlineSubmission reports retryable', async () => {
   vi.resetModules()
-  const mockLogger = { error: vi.fn(), warn: vi.fn() }
+  const mockLogger = { error: vi.fn(), warn: vi.fn(), debug: vi.fn(), info: vi.fn() }
   vi.doMock('../../../src/logging/logger.js', () => ({ createLogger: () => mockLogger }))
 
   const retryErr = new Error('CRM transient')
   retryErr.retryMetadata = { category: 'retryable', status: 503 }
+  retryErr.crmError = '{"error":{"code":"0x80060891"}}'
 
   vi.doMock('../../../src/repos/crm.js', () => ({
     getContactIdFromCrn: vi.fn().mockResolvedValue({ contactId: 'c1' }),
@@ -318,5 +355,9 @@ test('re-throws original retryable CRM error when createCaseWithOnlineSubmission
   })).rejects.toMatchObject({ message: 'CRM transient', retryable: true })
 
   // logger should have been called with the original case error
-  expect(mockLogger.error).toHaveBeenCalledWith({ correlationId: 'cid', error: retryErr }, 'Error creating case with online submission activity')
+  expect(mockLogger.error).toHaveBeenCalledWith({
+    transaction: { id: 'cid' },
+    error: retryErr,
+    event: { category: 'crm_case_create_failed', reason: '{"error":{"code":"0x80060891"}}' }
+  }, 'Error creating case with online submission activity')
 })

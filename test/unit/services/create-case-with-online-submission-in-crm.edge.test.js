@@ -1,6 +1,6 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
 
-const mockLogger = { error: vi.fn(), warn: vi.fn() }
+const mockLogger = { error: vi.fn(), warn: vi.fn(), debug: vi.fn(), info: vi.fn() }
 
 vi.mock('../../../src/logging/logger.js', () => ({
   createLogger: () => mockLogger
