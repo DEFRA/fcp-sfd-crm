@@ -12,7 +12,7 @@ const buildAuthProvider = () => {
 
   return enableMocking
     ? new MockProvider({})
-    : new WebIdentityTokenProvider({ audience })
+    : new WebIdentityTokenProvider({ audience: [ audience ] })
 }
 
 const generateTokenViaFederatedCredentials = async () => {
