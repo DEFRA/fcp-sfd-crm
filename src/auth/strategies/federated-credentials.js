@@ -1,7 +1,8 @@
 import { ClientAssertionCredential } from '@azure/identity'
-import { WebIdentityTokenProvider, MockProvider } from '@defra/hapi-auth-oidc'
+import { MockProvider } from '@defra/hapi-auth-oidc'
 import { config } from '../../config/index.js'
 import { createLogger } from '../../logging/logger.js'
+import { LoggingWebIdentityTokenProvider } from './logging-web-identity-token-provider.js'
 
 const logger = createLogger()
 
@@ -12,7 +13,7 @@ const buildAuthProvider = () => {
 
   return enableMocking
     ? new MockProvider({})
-    : new WebIdentityTokenProvider({ audience: [ audience ] })
+    : new LoggingWebIdentityTokenProvider({ audience: [audience] })
 }
 
 const generateTokenViaFederatedCredentials = async () => {
