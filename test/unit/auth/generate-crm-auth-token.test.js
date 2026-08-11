@@ -77,7 +77,7 @@ describe('generateCrmAuthToken', () => {
       test('uses WebIdentityTokenProvider', async () => {
         await generateCrmAuthToken()
 
-        expect(WebIdentityTokenProvider).toHaveBeenCalledWith({ audience: 'fcp-sfd-crm' })
+        expect(WebIdentityTokenProvider).toHaveBeenCalledWith({ audience: [ 'fcp-sfd-crm' ] })
         expect(MockProvider).not.toHaveBeenCalled()
       })
 

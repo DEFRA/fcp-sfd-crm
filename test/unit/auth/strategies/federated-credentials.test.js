@@ -66,7 +66,7 @@ describe('generateTokenViaFederatedCredentials', () => {
     test('uses WebIdentityTokenProvider', async () => {
       await generateTokenViaFederatedCredentials()
 
-      expect(WebIdentityTokenProvider).toHaveBeenCalledWith({ audience: 'fcp-sfd-crm' })
+      expect(WebIdentityTokenProvider).toHaveBeenCalledWith({ audience: [ 'fcp-sfd-crm' ] })
       expect(MockProvider).not.toHaveBeenCalled()
     })
 
