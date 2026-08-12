@@ -93,7 +93,7 @@ async function createCrmCaseOrThrow (authToken, contactId, accountId, caseData, 
 export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi, caseType, caseData, onlineSubmissionActivity, correlationId }) => {
   assertRequiredParams({ authToken, crn, sbi, caseType, caseData, onlineSubmissionActivity, correlationId })
 
-  const { contactId, accountId } = await ensureContactAndAccount(authToken, crn, sbi)
+  const { contactId, accountId } = await ensureContactAndAccount(authToken, crn, sbi, { correlationId })
   const documentTypeMetadata = await resolveDocumentTypeOrThrow(authToken, caseType, correlationId)
   const { caseId, rpaOnlinesubmissionid } = await createCrmCaseOrThrow(authToken, contactId, accountId, caseData, onlineSubmissionActivity, documentTypeMetadata, correlationId)
 
