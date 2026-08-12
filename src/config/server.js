@@ -85,7 +85,7 @@ export const serverConfig = {
       doc: 'Log paths to redact',
       format: Array,
       default: isProduction
-        ? ['req.headers.authorization', 'req.headers.cookie', 'res.headers']
+        ? ['req.headers.authorization', 'req.headers["x-api-key"]', 'req.headers.cookie', 'res.headers']
         : ['req', 'res', 'responseTime']
     }
   },
