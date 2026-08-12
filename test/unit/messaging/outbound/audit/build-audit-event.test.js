@@ -10,6 +10,8 @@ import {
 // publishAuditEvent (the real transport) applies these defaults before
 // validation and dispatch. Mirror that here so builder output can be
 // validated in isolation, matching how the events will look on the wire.
+// correlationid mirrors the publisher's generateCorrelationId default: it is
+// only used when the builder itself did not supply one.
 const withPublishDefaults = (event) => ({
   datetime: new Date().toISOString(),
   environment: 'test',
@@ -17,6 +19,7 @@ const withPublishDefaults = (event) => ({
   application: 'fcp-sfd-crm',
   component: 'fcp-sfd-crm',
   ip: '0.0.0.0',
+  correlationid: 'generated-correlation-id',
   ...event
 })
 
@@ -61,6 +64,18 @@ describe('buildDocumentCreatedEvent', () => {
     })
 
     expect(event.audit.details).toEqual({ fileId: 'file-1' })
+    assertValid(event)
+  })
+
+  test('omits the correlationid key entirely when no correlationId is supplied, so the publisher default applies', () => {
+    const event = buildDocumentCreatedEvent({
+      entityId: 'case-999'
+    })
+
+    expect(event).not.toHaveProperty('correlationid')
+    // Proves the publisher's own generateCorrelationId default can fill the
+    // gap: if the key were present as `undefined`, this would fail schema
+    // validation with "correlationid is required".
     assertValid(event)
   })
 })
@@ -133,6 +148,16 @@ describe('buildCredentialFailureEvent', () => {
     expect(event.security).toBeDefined()
     expect(event.audit).toBeDefined()
     expect(event.audit.status).toBe('failure')
+    expect(event.audit.entities).toEqual([{ entity: 'service', action: 'authenticate', entityid: '' }])
+    assertValid(event)
+  })
+
+  test('omits the correlationid key entirely when no correlationId is supplied, so the publisher default applies', () => {
+    const event = buildCredentialFailureEvent({
+      reason: 'Invalid or missing credentials'
+    })
+
+    expect(event).not.toHaveProperty('correlationid')
     assertValid(event)
   })
 })

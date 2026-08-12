@@ -1,7 +1,8 @@
 import {
   auditEntities,
   auditActions,
-  auditStatuses
+  auditStatuses,
+  securityPmcCodes
 } from '../../../constants/audit.js'
 
 /**
@@ -29,8 +30,13 @@ const buildAccounts = ({ crn, sbi }) => {
   return accounts
 }
 
+// publishAuditEvent merges as `{ ...defaults, ...event }`, so an explicit
+// `correlationid: undefined` would overwrite the publisher's own
+// `generateCorrelationId` default and fail schema validation
+// (`"correlationid" is required`). Omit the key entirely when no
+// correlationId was supplied so the publisher's default can apply.
 const buildAuditEnvelope = ({ correlationId, entity, action, entityId, crn, sbi, status, details }) => ({
-  correlationid: correlationId,
+  ...(correlationId !== undefined && correlationId !== null && { correlationid: correlationId }),
   audit: {
     entities: [{ entity, action, entityid: toEntityId(entityId) }],
     accounts: buildAccounts({ crn, sbi }),
@@ -91,9 +97,6 @@ export const buildBusinessReadEvent = ({ correlationId, accountId, sbi, status =
     details
   })
 
-// Placeholder pmccode for the security event, pending agreement with the fcp-audit team (see FLS1-50 decision 4).
-const CREDENTIAL_FAILURE_PMCCODE = 'AUTH'
-
 /**
  * Event 7 (invalid or missing credentials) from the spike table. Carries
  * both `security` and `audit` objects so SOC can query it in MongoDB.
@@ -101,15 +104,15 @@ const CREDENTIAL_FAILURE_PMCCODE = 'AUTH'
  * @returns {object} audit event payload for publishAuditEvent
  */
 export const buildCredentialFailureEvent = ({ correlationId, reason }) => ({
-  correlationid: correlationId,
+  ...(correlationId !== undefined && correlationId !== null && { correlationid: correlationId }),
   security: {
-    pmccode: CREDENTIAL_FAILURE_PMCCODE,
+    pmccode: securityPmcCodes.CREDENTIAL_FAILURE,
     details: {
       message: reason
     }
   },
   audit: {
-    entities: [{ entity: 'service', action: 'authenticate', entityid: '' }],
+    entities: [{ entity: auditEntities.SERVICE, action: auditActions.AUTHENTICATE, entityid: '' }],
     accounts: {},
     status: auditStatuses.FAILURE,
     details: { reason }

@@ -1,12 +1,18 @@
 export const auditEntities = {
   PERSON: 'person',
   BUSINESS: 'business',
-  DOCUMENT: 'document'
+  DOCUMENT: 'document',
+  // Used only by the row 7 security event. Not part of the spike's
+  // canonical entity list — pending confirmation with the fcp-audit team
+  // (see FLS1-50 decision log).
+  SERVICE: 'service'
 }
 
 export const auditActions = {
   READ: 'read',
-  CREATED: 'created'
+  CREATED: 'created',
+  // Used only by the row 7 security event, pending fcp-audit confirmation.
+  AUTHENTICATE: 'authenticate'
 }
 
 export const auditStatuses = {
@@ -19,10 +25,21 @@ export const auditFailureReasons = {
   SBI_NOT_FOUND: 'SBI not found'
 }
 
+// Security event pmccodes. AUTH is a placeholder pending agreement with the
+// fcp-audit team (see FLS1-50 decision log) - confirm before relying on it
+// for SOC queries.
+export const securityPmcCodes = {
+  CREDENTIAL_FAILURE: 'AUTH'
+}
+
 // Structured log constants for audit publish failures (never for audit payload content)
 export const auditLogEventType = 'audit_publish_failed'
 
 export const auditLogReasons = {
   SCHEMA_VALIDATION: 'schema_validation',
-  TRANSPORT: 'transport'
+  TRANSPORT: 'transport',
+  // Raised only by the emitAuditEvent backstop wrapper, when sendAuditEvent
+  // itself throws unexpectedly (e.g. it is mocked directly in a test and
+  // bypasses its own internal catch).
+  UNEXPECTED: 'unexpected'
 }
