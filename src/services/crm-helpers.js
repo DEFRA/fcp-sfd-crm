@@ -7,7 +7,7 @@ import {
   getAccountIdFromSbi
 } from '../repos/crm.js'
 import { messages } from '../constants/messages.js'
-import { sendAuditEvent } from '../messaging/outbound/audit/send-audit-event.js'
+import { emitAuditEvent } from '../messaging/outbound/audit/send-audit-event.js'
 import { buildPersonReadEvent, buildBusinessReadEvent } from '../messaging/outbound/audit/build-audit-event.js'
 import { auditStatuses, auditFailureReasons } from '../constants/audit.js'
 
@@ -16,6 +16,8 @@ const { constants: httpConstants } = http2
 
 const MASK_VISIBLE_DIGITS = 4
 
+// Generic identifier masker: safe for CRN, SBI or any other numeric/text
+// identifier where only the last few digits should be logged.
 export function maskCrn (crn) {
   if (crn === null || crn === undefined) { return '****' }
   const str = String(crn)
@@ -26,17 +28,6 @@ export function maskCrn (crn) {
 const unprocessableEntity = (message) => {
   const error = new Error(message)
   return Boom.boomify(error, { statusCode: httpConstants.HTTP_STATUS_UNPROCESSABLE_ENTITY })
-}
-
-// sendAuditEvent already catches its own errors, but every emission point is
-// wrapped again here as a defensive backstop: audit emission must never be
-// able to prevent a business error being thrown or a case being created.
-const emitAuditEvent = async (event) => {
-  try {
-    await sendAuditEvent(event)
-  } catch (err) {
-    logger.error(`Unexpected error emitting audit event: ${err.message}`)
-  }
 }
 
 export function assertRequiredParams (requiredParams) {
@@ -63,8 +54,14 @@ export function assertRequiredParams (requiredParams) {
  * @param {{ correlationId?: string }} [context] - inbound CloudEvents correlationId, for audit traceability
  * @returns {Promise<{ contactId: string, accountId: string }>}
  */
-export async function ensureContactAndAccount (authToken, crn, sbi, context = {}) {
-  const { correlationId } = context
+export async function ensureContactAndAccount (authToken, crn, sbi, { correlationId } = {}) {
+  if (!correlationId) {
+    // Not fatal - lookups still proceed - but every event emitted for this
+    // call will fail correlationid schema validation and be dropped, so
+    // this is surfaced loudly rather than silently defaulting.
+    logger.warn('ensureContactAndAccount called without a correlationId: person/read and business/read audit events for this call will fail schema validation')
+  }
+
   const { contactId, error: contactError } = await getContactIdFromCrn(authToken, crn)
 
   if (contactError) {
