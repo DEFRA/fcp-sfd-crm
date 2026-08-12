@@ -150,7 +150,6 @@ describe('case service', () => {
 
       expect(mockLogger.info).toHaveBeenCalledWith(
         {
-          transaction: { id: 'corr-1' },
           event: { action: 'case-created', outcome: 'success', reference: 'mock-case-id' },
           rpaOnlinesubmissionid: 'mock-ols-id',
           contactId: 'c1',
@@ -181,7 +180,7 @@ describe('case service', () => {
       expect(getCrmAuthToken).not.toHaveBeenCalled()
       expect(createCaseWithOnlineSubmissionInCrm).not.toHaveBeenCalled()
       expect(mockLogger.info).toHaveBeenCalledWith(
-        { transaction: { id: 'corr-1' }, fileId: 'file-1' },
+        { fileId: 'file-1' },
         'Skipped: duplicate message'
       )
     })
@@ -197,7 +196,7 @@ describe('case service', () => {
       expect(getCrmAuthToken).not.toHaveBeenCalled()
       expect(createCaseWithOnlineSubmissionInCrm).not.toHaveBeenCalled()
       expect(mockLogger.info).toHaveBeenCalledWith(
-        { transaction: { id: 'corr-1' }, fileId: 'file-1' },
+        { fileId: 'file-1' },
         'Case creation in progress, will retry'
       )
     })

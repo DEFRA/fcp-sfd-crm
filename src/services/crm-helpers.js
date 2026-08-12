@@ -76,9 +76,7 @@ export async function ensureContactAndAccount (authToken, crn, sbi) {
   return { contactId, accountId }
 }
 
-export async function fetchRpaOnlineSubmissionIdOrThrow (authToken, caseId, context = {}) {
-  const { correlationId } = context
-
+export async function fetchRpaOnlineSubmissionIdOrThrow (authToken, caseId) {
   const { rpaOnlinesubmissionid, error } = await getOnlineSubmissionId(authToken, caseId)
 
   if (error) {
@@ -88,14 +86,14 @@ export async function fetchRpaOnlineSubmissionIdOrThrow (authToken, caseId, cont
       retryableErr.retryMetadata = error.retryMetadata
       throw retryableErr
     }
-    logger.error({ transaction: { id: correlationId }, event: { reference: caseId }, error }, messages.SUBMISSION_ID_FAILURE)
+    logger.error({ event: { reference: caseId }, error }, messages.SUBMISSION_ID_FAILURE)
     const err = new Error(messages.SUBMISSION_ID_FAILURE)
     err.retryable = false
     throw err
   }
 
   if (!rpaOnlinesubmissionid) {
-    logger.error({ transaction: { id: correlationId }, event: { reference: caseId } }, 'Online submission id not found')
+    logger.error({ event: { reference: caseId } }, 'Online submission id not found')
     const err = new Error(messages.SUBMISSION_ID_FAILURE)
     err.retryable = false
     throw err

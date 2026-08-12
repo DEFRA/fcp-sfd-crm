@@ -89,7 +89,7 @@ describe('publishWithDurability', () => {
     await publishWithDurability(mockSnsClient, topicArn, payload, context)
 
     expect(mockLogger.info).toHaveBeenCalledWith(
-      expect.objectContaining({ event: { reference: 'case-1' }, transaction: { id: 'corr-1' } }),
+      expect.objectContaining({ event: { reference: 'case-1' } }),
       'Failed SNS publish routed to DLQ'
     )
   })
@@ -101,7 +101,7 @@ describe('publishWithDurability', () => {
     await expect(publishWithDurability(mockSnsClient, topicArn, payload, context)).resolves.toBeUndefined()
 
     expect(mockLogger.error).toHaveBeenCalledWith(
-      expect.objectContaining({ event: { reference: 'case-1' }, transaction: { id: 'corr-1' } }),
+      expect.objectContaining({ event: { reference: 'case-1' } }),
       expect.stringContaining('CRITICAL')
     )
   })

@@ -4,6 +4,7 @@ import { getCrmAuthToken } from '../auth/get-crm-auth-token.js'
 import { validateApiKeyHeader } from '../api/common/helpers/validate-api-key-header.js'
 import { createCaseWithOnlineSubmissionInCrm } from '../services/create-case-with-online-submission-in-crm.js'
 import { createCasePayloadSchema, validationOptions } from '../api/schemas/index.js'
+import { runWithCorrelationId } from '../logging/correlation-id-store.js'
 
 export const postCreateCaseWithOnlineSubmission = () => ({
   method: 'POST',
@@ -32,17 +33,18 @@ export const postCreateCaseWithOnlineSubmission = () => ({
       }
     },
     handler: async (request) => {
-      const authToken = await getCrmAuthToken()
-      const { caseType, ...crmPayload } = request.payload
-      const correlationId = request.info.id
-      const caseResult = await createCaseWithOnlineSubmissionInCrm({
-        authToken,
-        correlationId,
-        caseType,
-        ...crmPayload
-      })
+      const { caseType, correlationId, ...crmPayload } = request.payload
+      return runWithCorrelationId(correlationId, async () => {
+        const authToken = await getCrmAuthToken()
+        const caseResult = await createCaseWithOnlineSubmissionInCrm({
+          authToken,
+          correlationId,
+          caseType,
+          ...crmPayload
+        })
 
-      return { caseResult }
+        return { caseResult }
+      })
     }
   }
 })

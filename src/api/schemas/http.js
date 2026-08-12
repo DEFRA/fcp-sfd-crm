@@ -5,6 +5,7 @@ const CASE_TYPE_MAX_LENGTH = 200
 export const createCasePayloadSchema = Joi.object({
   // eslint-disable-next-line no-control-regex
   caseType: Joi.string().min(1).max(CASE_TYPE_MAX_LENGTH).pattern(/^[^\u0000-\u001F\u007F]*$/).required(),
+  correlationId: Joi.string().guid({ version: ['uuidv4'] }).required(),
   crn: Joi.string().required(),
   sbi: Joi.string().required(),
   caseData: Joi.object({
