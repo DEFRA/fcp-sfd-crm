@@ -1,6 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
 
 const mockLogger = { info: vi.fn(), error: vi.fn() }
+const mockSendAuditEvent = vi.fn().mockResolvedValue(undefined)
 
 vi.mock('../../../src/logging/logger.js', () => ({
   createLogger: () => mockLogger
@@ -10,6 +11,10 @@ vi.mock('../../../src/repos/crm.js', () => ({
   getOnlineSubmissionId: vi.fn(),
   getContactIdFromCrn: vi.fn(),
   getAccountIdFromSbi: vi.fn()
+}))
+
+vi.mock('../../../src/messaging/outbound/audit/send-audit-event.js', () => ({
+  sendAuditEvent: mockSendAuditEvent
 }))
 
 const { ensureContactAndAccount, fetchRpaOnlineSubmissionIdOrThrow, maskCrn } = await import('../../../src/services/crm-helpers.js')
@@ -62,9 +67,41 @@ describe('ensureContactAndAccount', () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: 'c1' })
     getAccountIdFromSbi.mockResolvedValue({ accountId: 'a1' })
 
-    const result = await ensureContactAndAccount('token', 'crn1', 'sbi1')
+    const result = await ensureContactAndAccount('token', 'crn1', 'sbi1', { correlationId: 'corr-1' })
 
     expect(result).toEqual({ contactId: 'c1', accountId: 'a1' })
+  })
+
+  test('emits a person/read success audit event with contactId and CRN', async () => {
+    getContactIdFromCrn.mockResolvedValue({ contactId: 'c1' })
+    getAccountIdFromSbi.mockResolvedValue({ accountId: 'a1' })
+
+    await ensureContactAndAccount('token', 'crn1', 'sbi1', { correlationId: 'corr-1' })
+
+    expect(mockSendAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
+      correlationid: 'corr-1',
+      audit: expect.objectContaining({
+        entities: [{ entity: 'person', action: 'read', entityid: 'c1' }],
+        accounts: { crn: 'crn1' },
+        status: 'success'
+      })
+    }))
+  })
+
+  test('emits a business/read success audit event with accountId and SBI', async () => {
+    getContactIdFromCrn.mockResolvedValue({ contactId: 'c1' })
+    getAccountIdFromSbi.mockResolvedValue({ accountId: 'a1' })
+
+    await ensureContactAndAccount('token', 'crn1', 'sbi1', { correlationId: 'corr-1' })
+
+    expect(mockSendAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
+      correlationid: 'corr-1',
+      audit: expect.objectContaining({
+        entities: [{ entity: 'business', action: 'read', entityid: 'a1' }],
+        accounts: { sbi: 'sbi1' },
+        status: 'success'
+      })
+    }))
   })
 
   test('throws with retryable=true when contact lookup gets a retryable HTTP error', async () => {
@@ -76,9 +113,10 @@ describe('ensureContactAndAccount', () => {
     expect(thrown.retryable).toBe(true)
     expect(thrown.retryMetadata).toEqual(err.retryMetadata)
     expect(thrown.message).toContain('Retryable error looking up contact')
+    expect(mockSendAuditEvent).not.toHaveBeenCalled()
   })
 
-  test('throws 422 when contact lookup gets a non-retryable HTTP error', async () => {
+  test('throws 422 when contact lookup gets a non-retryable HTTP error, without emitting a not-found event', async () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: null, error: makeNonRetryableError() })
 
     const thrown = await ensureContactAndAccount('token', 'crn1', 'sbi1').catch(e => e)
@@ -86,12 +124,32 @@ describe('ensureContactAndAccount', () => {
     expect(thrown.isBoom).toBe(true)
     expect(thrown.output.statusCode).toBe(422)
     expect(thrown.retryable).toBeUndefined()
+    expect(mockSendAuditEvent).not.toHaveBeenCalled()
   })
 
-  test('throws 422 on genuine not-found (no error, no contactId)', async () => {
+  test('throws 422 on genuine not-found (no error, no contactId) and emits a person/read failure event', async () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: null })
 
-    const thrown = await ensureContactAndAccount('token', 'crn1', 'sbi1').catch(e => e)
+    const thrown = await ensureContactAndAccount('token', 'crn1', 'sbi1', { correlationId: 'corr-1' }).catch(e => e)
+
+    expect(thrown.isBoom).toBe(true)
+    expect(thrown.output.statusCode).toBe(422)
+    expect(mockSendAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
+      correlationid: 'corr-1',
+      audit: expect.objectContaining({
+        entities: [{ entity: 'person', action: 'read', entityid: '' }],
+        accounts: { crn: 'crn1' },
+        status: 'failure',
+        details: { reason: 'CRN not found' }
+      })
+    }))
+  })
+
+  test('still throws 422 on CRN not-found when audit emission itself fails', async () => {
+    getContactIdFromCrn.mockResolvedValue({ contactId: null })
+    mockSendAuditEvent.mockRejectedValueOnce(new Error('SNS unavailable'))
+
+    const thrown = await ensureContactAndAccount('token', 'crn1', 'sbi1', { correlationId: 'corr-1' }).catch(e => e)
 
     expect(thrown.isBoom).toBe(true)
     expect(thrown.output.statusCode).toBe(422)
@@ -109,7 +167,7 @@ describe('ensureContactAndAccount', () => {
     expect(thrown.message).toContain('Retryable error looking up account')
   })
 
-  test('throws 422 when account lookup gets a non-retryable HTTP error', async () => {
+  test('throws 422 when account lookup gets a non-retryable HTTP error, without emitting a not-found event', async () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: 'c1' })
     getAccountIdFromSbi.mockResolvedValue({ accountId: null, error: makeNonRetryableError() })
 
@@ -117,13 +175,34 @@ describe('ensureContactAndAccount', () => {
 
     expect(thrown.isBoom).toBe(true)
     expect(thrown.output.statusCode).toBe(422)
+    expect(mockSendAuditEvent).toHaveBeenCalledTimes(1) // only the person/read success event
   })
 
-  test('throws 422 on genuine not-found for account (no error, no accountId)', async () => {
+  test('throws 422 on genuine not-found for account (no error, no accountId) and emits a business/read failure event', async () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: 'c1' })
     getAccountIdFromSbi.mockResolvedValue({ accountId: null })
 
-    const thrown = await ensureContactAndAccount('token', 'crn1', 'sbi1').catch(e => e)
+    const thrown = await ensureContactAndAccount('token', 'crn1', 'sbi1', { correlationId: 'corr-1' }).catch(e => e)
+
+    expect(thrown.isBoom).toBe(true)
+    expect(thrown.output.statusCode).toBe(422)
+    expect(mockSendAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
+      correlationid: 'corr-1',
+      audit: expect.objectContaining({
+        entities: [{ entity: 'business', action: 'read', entityid: '' }],
+        accounts: { sbi: 'sbi1' },
+        status: 'failure',
+        details: { reason: 'SBI not found' }
+      })
+    }))
+  })
+
+  test('still throws 422 on SBI not-found when audit emission itself fails', async () => {
+    getContactIdFromCrn.mockResolvedValue({ contactId: 'c1' })
+    getAccountIdFromSbi.mockResolvedValue({ accountId: null })
+    mockSendAuditEvent.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('SNS unavailable'))
+
+    const thrown = await ensureContactAndAccount('token', 'crn1', 'sbi1', { correlationId: 'corr-1' }).catch(e => e)
 
     expect(thrown.isBoom).toBe(true)
     expect(thrown.output.statusCode).toBe(422)
