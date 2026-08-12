@@ -9,10 +9,24 @@ import { messages } from '../constants/messages.js'
 import { metricsCounter } from '../api/common/helpers/metrics.js'
 import { caseCreationMetrics, caseActions } from '../constants/case-creation-metrics.js'
 import { isTerminalFailure } from '../utils/is-terminal-failure.js'
+import { sendAuditEvent } from '../messaging/outbound/audit/send-audit-event.js'
+import { buildDocumentCreatedEvent } from '../messaging/outbound/audit/build-audit-event.js'
 
 const logger = createLogger()
 
 const ONE_HOUR_MS = 60 * 60 * 1000
+
+// sendAuditEvent already catches its own errors, but every emission point is
+// wrapped again here as a defensive backstop: audit emission must never be
+// able to affect message processing outcome (acknowledgement, redelivery or
+// DLQ routing).
+const emitAuditEvent = async (event) => {
+  try {
+    await sendAuditEvent(event)
+  } catch (err) {
+    logger.error(`Unexpected error emitting audit event: ${err.message}`)
+  }
+}
 
 function buildCaseData (crm, file) {
   return {
@@ -75,7 +89,7 @@ export function transformPayload (cloudEventPayload) {
  * @param {object} payload - parsed CloudEvents message payload
  */
 export async function createCase (payload) {
-  const { correlationId, file } = payload.data
+  const { correlationId, file, crn, sbi } = payload.data
   const fileId = file?.fileId
 
   const prep = await prepareCase({ correlationId, fileId })
@@ -98,7 +112,9 @@ export async function createCase (payload) {
     correlationId,
     file,
     fileId,
-    caseType: transformedPayload.caseType
+    caseType: transformedPayload.caseType,
+     crn,
+     sbi
   })
 }
 
@@ -207,11 +223,20 @@ async function createNewCase ({ authToken, transformedPayload, correlationId, fi
       })
     }
   }, 'Case created')
+
+  // Event 1 from the FLS1-21 spike table: a case was opened for the farmer.
+  await emitAuditEvent(buildDocumentCreatedEvent({
+    correlationId,
+    entityId: response.caseId,
+    crn: transformedPayload.crn,
+    sbi: transformedPayload.sbi
+  }))
+
   return response
 }
 
-async function addMetadataToExistingCase ({ authToken, caseId, correlationId, file, fileId, caseType }) {
-  const onlineSubmissionActivityId = await fetchOnlineSubmissionActivityIdOrThrow(authToken, caseId, { fileId })
+async function addMetadataToExistingCase ({ authToken, caseId, correlationId, file, fileId, caseType, crn, sbi }) {
+  const onlineSubmissionActivityId = await fetchOnlineSubmissionActivityIdOrThrow(authToken, caseId, { fileId, correlationId })
 
   // Additional files must be labelled with the same document type as the first
   // file in the submission, which is resolved from the case type at creation.
@@ -264,5 +289,12 @@ async function addMetadataToExistingCase ({ authToken, caseId, correlationId, fi
     event: { reference: metadataId },
     tenant: { message: toTenantMessage({ fileId, caseId }) }
   }, 'Metadata added to existing case')
+
+  await emitAuditEvent(buildDocumentCreatedEvent({
+    correlationId,
+    entityId: metadataId,
+    crn,
+    sbi
+  }))
   return { caseId }
 }

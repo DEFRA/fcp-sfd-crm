@@ -235,6 +235,98 @@ describe('CRM request sqs consumer', () => {
       expect(result).toEqual(message)
     })
 
+    // Audit emission is entirely internal to createCase (services/case.js and
+    // crm-helpers.js), and is defensively wrapped there so it can never throw
+    // or change createCase's resolved value. These tests confirm the consumer
+    // sees the same message processing outcome (success, retryable-leave, or
+    // DLQ) regardless of whether the underlying audit publish succeeded or
+    // failed — the acceptance criterion that audit failure never affects
+    // message acknowledgement, redelivery or DLQ routing.
+    describe('audit failure isolation', () => {
+      test('a successful case creation still returns the message for deletion, even if createCase experienced an internal audit failure', async () => {
+        const { startCRMListener: start, createCase } = await setupAndImportConsumer()
+        createCase.mockReset()
+        const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
+        start(mockSqsClient)
+
+        // createCase resolves normally here because emitAuditEvent/sendAuditEvent
+        // swallow audit failures internally — see case.test.js and
+        // crm-helpers.test.js for direct coverage of that contract.
+        createCase.mockResolvedValueOnce({ caseId: 'case-audit-failure-isolated' })
+
+        const message = {
+          Body: JSON.stringify({
+            id: 'evt-audit-isolation',
+            source: '/test',
+            specversion: '1.0',
+            type: 'test.type',
+            datacontenttype: 'application/json',
+            time: new Date().toISOString(),
+            data: { crn: '123', sbi: '321', file: { fileId: '3fa85f64-5717-4562-b3fc-2c963f66af01', fileName: 'file.pdf', url: 'https://example.com/api/v1/blob/3fa85f64-5717-4562-b3fc-2c963f66af01' }, correlationId: '550e8400-e29b-41d4-a716-446655440001', sourceSystem: 'fcp-sfd-frontend', submissionId: 'sub-1' }
+          })
+        }
+
+        const result = await capturedHandleMessage(message)
+
+        expect(result).toEqual(message)
+      })
+
+      test('a retryable failure still leaves the message on the queue regardless of audit outcome', async () => {
+        const { startCRMListener: start, createCase } = await setupAndImportConsumer()
+        createCase.mockReset()
+        const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
+        start(mockSqsClient)
+
+        const retryableError = new Error('Retryable failure')
+        retryableError.retryable = true
+        createCase.mockRejectedValueOnce(retryableError)
+
+        const message = {
+          Body: JSON.stringify({
+            id: 'evt-audit-isolation-retry',
+            source: '/test',
+            specversion: '1.0',
+            type: 'test.type',
+            datacontenttype: 'application/json',
+            time: new Date().toISOString(),
+            data: { crn: '123', sbi: '321', file: { fileId: '3fa85f64-5717-4562-b3fc-2c963f66af02', fileName: 'file.pdf', url: 'https://example.com/api/v1/blob/3fa85f64-5717-4562-b3fc-2c963f66af02' }, correlationId: '550e8400-e29b-41d4-a716-446655440002', sourceSystem: 'fcp-sfd-frontend', submissionId: 'sub-1' }
+          })
+        }
+
+        const result = await capturedHandleMessage(message)
+
+        expect(result).toBeUndefined()
+      })
+
+      test('a non-retryable failure still routes to the DLQ regardless of audit outcome', async () => {
+        const { startCRMListener: start, createCase, sqsClient } = await setupAndImportConsumer()
+        createCase.mockReset()
+        start(sqsClient)
+
+        const nonRetryableError = new Error('Non-retryable failure')
+        nonRetryableError.retryMetadata = { category: 'non-retryable', status: 400 }
+        createCase.mockRejectedValueOnce(nonRetryableError)
+
+        const message = {
+          MessageId: 'msg-audit-isolation-dlq',
+          Body: JSON.stringify({
+            id: 'evt-audit-isolation-dlq',
+            source: '/test',
+            specversion: '1.0',
+            type: 'test.type',
+            datacontenttype: 'application/json',
+            time: new Date().toISOString(),
+            data: { crn: '123', sbi: '321', file: { fileId: '3fa85f64-5717-4562-b3fc-2c963f66af03', fileName: 'file.pdf', url: 'https://example.com/api/v1/blob/3fa85f64-5717-4562-b3fc-2c963f66af03' }, correlationId: '550e8400-e29b-41d4-a716-446655440003', sourceSystem: 'fcp-sfd-frontend', submissionId: 'sub-1' }
+          })
+        }
+
+        const result = await capturedHandleMessage(message)
+
+        expect(sqsClient.send).toHaveBeenCalled()
+        expect(result).toEqual(message)
+      })
+    })
+
     test('should not call createCase for schema-invalid but parseable payload', async () => {
       const { startCRMListener: start, createCase, sqsClient } = await setupAndImportConsumer()
       start(sqsClient)

@@ -2,6 +2,7 @@ import { describe, test, expect, vi, beforeEach } from 'vitest'
 import Boom from '@hapi/boom'
 
 const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+const mockSendAuditEvent = vi.fn().mockResolvedValue(undefined)
 
 vi.mock('../../../src/logging/logger.js', () => ({
   createLogger: () => mockLogger
@@ -33,6 +34,10 @@ vi.mock('../../../src/api/common/helpers/metrics.js', () => ({
   metricsCounter: vi.fn()
 }))
 
+vi.mock('../../../src/messaging/outbound/audit/send-audit-event.js', () => ({
+  sendAuditEvent: mockSendAuditEvent
+}))
+
 const { createCase, transformPayload } = await import('../../../src/services/case.js')
 const { getCrmAuthToken } = await import('../../../src/auth/get-crm-auth-token.js')
 const { createCaseWithOnlineSubmissionInCrm, resolveDocumentTypeOrThrow } = await import('../../../src/services/create-case-with-online-submission-in-crm.js')
@@ -55,6 +60,7 @@ const validPayload = {
 describe('case service', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockSendAuditEvent.mockResolvedValue(undefined)
     upsertCase.mockResolvedValue({ isNew: true, isDuplicateFile: false, caseId: null, isCreator: true })
     updateCaseId.mockResolvedValue({ modifiedCount: 1 })
     markFileProcessed.mockResolvedValue({ modifiedCount: 1 })
@@ -182,6 +188,27 @@ describe('case service', () => {
         },
         'Case created'
       )
+    })
+
+    test('should emit a document/created audit event with caseId after case creation (event 1)', async () => {
+      await createCase(validPayload)
+
+      expect(mockSendAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
+        correlationid: 'corr-1',
+        audit: expect.objectContaining({
+          entities: [{ entity: 'document', action: 'created', entityid: 'mock-case-id' }],
+          accounts: { crn: 'crn1', sbi: 'sbi1' },
+          status: 'success'
+        })
+      }))
+    })
+
+    test('should still return the created case when audit emission fails', async () => {
+      mockSendAuditEvent.mockRejectedValueOnce(new Error('SNS unavailable'))
+
+      const response = await createCase(validPayload)
+
+      expect(response.caseId).toBe('mock-case-id')
     })
 
     test('should retry case creation when creator retries after failure (isCreator, caseId null)', async () => {
@@ -456,6 +483,30 @@ describe('case service', () => {
         'corr-1',
         'file-1'
       )
+    })
+
+    test('should emit a document/created audit event with metadataId after metadata attachment (event 2)', async () => {
+      upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: 'existing-case-id', isCreator: false })
+
+      await createCase(validPayload)
+
+      expect(mockSendAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
+        correlationid: 'corr-1',
+        audit: expect.objectContaining({
+          entities: [{ entity: 'document', action: 'created', entityid: 'meta-1' }],
+          accounts: { crn: 'crn1', sbi: 'sbi1' },
+          status: 'success'
+        })
+      }))
+    })
+
+    test('should still return the caseId when audit emission fails on metadata attachment', async () => {
+      upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: 'existing-case-id', isCreator: false })
+      mockSendAuditEvent.mockRejectedValueOnce(new Error('SNS unavailable'))
+
+      const response = await createCase(validPayload)
+
+      expect(response).toEqual({ caseId: 'existing-case-id' })
     })
 
     test('should throw if unable to retrieve online submission id', async () => {
