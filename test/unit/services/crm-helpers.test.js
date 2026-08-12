@@ -17,7 +17,7 @@ vi.mock('../../../src/messaging/outbound/audit/send-audit-event.js', () => ({
   emitAuditEvent: mockEmitAuditEvent
 }))
 
-const { ensureContactAndAccount, fetchOnlineSubmissionActivityIdOrThrow, maskCrn } = await import('../../../src/services/crm-helpers.js')
+const { ensureContactAndAccount, fetchOnlineSubmissionActivityIdOrThrow, maskIdentifier } = await import('../../../src/services/crm-helpers.js')
 const { getOnlineSubmissionActivityId, getContactIdFromCrn, getAccountIdFromSbi } = await import('../../../src/repos/crm.js')
 
 const makeRetryableError = () => {
@@ -36,29 +36,29 @@ beforeEach(() => {
   vi.clearAllMocks()
 })
 
-describe('maskCrn', () => {
+describe('maskIdentifier', () => {
   test('masks all but the last four digits of a 10-digit CRN', () => {
-    expect(maskCrn('1050000001')).toBe('******0001')
+    expect(maskIdentifier('1050000001')).toBe('******0001')
   })
 
   test('works when CRN is passed as a number', () => {
-    expect(maskCrn(1050000001)).toBe('******0001')
+    expect(maskIdentifier(1050000001)).toBe('******0001')
   })
 
   test('returns string as-is when length is exactly 4', () => {
-    expect(maskCrn('0001')).toBe('0001')
+    expect(maskIdentifier('0001')).toBe('0001')
   })
 
   test('returns string as-is when length is less than 4', () => {
-    expect(maskCrn('abc')).toBe('abc')
+    expect(maskIdentifier('abc')).toBe('abc')
   })
 
   test('returns **** for null', () => {
-    expect(maskCrn(null)).toBe('****')
+    expect(maskIdentifier(null)).toBe('****')
   })
 
   test('returns **** for undefined', () => {
-    expect(maskCrn(undefined)).toBe('****')
+    expect(maskIdentifier(undefined)).toBe('****')
   })
 })
 
@@ -78,7 +78,18 @@ describe('ensureContactAndAccount', () => {
 
     await ensureContactAndAccount('token', 'crn1', 'sbi1')
 
-    expect(mockLogger.warn).toHaveBeenCalledWith(expect.stringContaining('correlationId'))
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      {
+        event: {
+          type: 'error',
+          action: 'audit_correlation_id_missing',
+          category: 'process',
+          outcome: 'failure',
+          reason: 'missing_correlation_id'
+        }
+      },
+      expect.stringContaining('correlationId')
+    )
   })
 
   test('does not warn when a correlationId is supplied', async () => {
@@ -163,11 +174,38 @@ describe('ensureContactAndAccount', () => {
     }))
   })
 
-  // emitAuditEvent (the shared wrapper in send-audit-event.js) never rejects
-  // by contract - that guarantee is proven directly in
-  // send-audit-event.test.js. Forcing the mock here to reject would only
-  // test a contract violation that cannot occur through the real
-  // implementation, so it is not asserted at this call site.
+  // emitAuditEvent never rejects by contract. That contract is proven against
+  // the real implementation in send-audit-event.test.js, and the end-to-end
+  // consequence - that a failing SNS publish does not suppress the business
+  // error thrown here - is proven against the real publisher and a rejecting
+  // SNS client in test/integration/narrow/audit/audit-failure-isolation.test.js.
+
+  test('masks the CRN when logging a not-found', async () => {
+    getContactIdFromCrn.mockResolvedValue({ contactId: null })
+
+    await ensureContactAndAccount('token', '1050000001', 'sbi1', { correlationId: 'corr-1' }).catch(() => {})
+
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      { transaction: { id: 'corr-1' } },
+      'No contact found for CRN: ******0001'
+    )
+  })
+
+  test('logs only the error classification, never the repo error, when the contact lookup fails', async () => {
+    const err = makeNonRetryableError()
+    err.responseBody = { name: 'A Farmer', crn: '1050000001' }
+    getContactIdFromCrn.mockResolvedValue({ contactId: null, error: err })
+
+    await ensureContactAndAccount('token', '1050000001', 'sbi1', { correlationId: 'corr-1' }).catch(() => {})
+
+    const [logged, message] = mockLogger.error.mock.calls[0]
+    expect(logged).toEqual({
+      transaction: { id: 'corr-1' },
+      error: { type: 'Error', status: 400 }
+    })
+    expect(message).toBe('No contact found for CRN: ******0001')
+    expect(JSON.stringify(logged)).not.toContain('A Farmer')
+  })
 
   test('throws with retryable=true when account lookup gets a retryable HTTP error', async () => {
     const err = makeRetryableError()
@@ -211,9 +249,43 @@ describe('ensureContactAndAccount', () => {
     }))
   })
 
-  // See note above: emitAuditEvent's non-rejecting contract is proven in
-  // send-audit-event.test.js, so a "still throws when audit fails" test is
-  // not repeated here.
+  test('masks the SBI when logging a not-found, on the same terms as the CRN', async () => {
+    getContactIdFromCrn.mockResolvedValue({ contactId: 'c1' })
+    getAccountIdFromSbi.mockResolvedValue({ accountId: null })
+
+    await ensureContactAndAccount('token', 'crn1', '106000001', { correlationId: 'corr-1' }).catch(() => {})
+
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      { transaction: { id: 'corr-1' } },
+      'No account found for SBI: *****0001'
+    )
+  })
+
+  test('masks the SBI in the retryable account lookup error message', async () => {
+    getContactIdFromCrn.mockResolvedValue({ contactId: 'c1' })
+    getAccountIdFromSbi.mockResolvedValue({ accountId: null, error: makeRetryableError() })
+
+    const thrown = await ensureContactAndAccount('token', 'crn1', '106000001').catch(e => e)
+
+    expect(thrown.message).toBe('Retryable error looking up account for SBI: *****0001')
+    expect(thrown.message).not.toContain('106000001')
+  })
+
+  test('logs only the error classification, never the repo error, when the account lookup fails', async () => {
+    const err = makeNonRetryableError()
+    err.responseBody = { businessName: 'A Farm Ltd', sbi: '106000001' }
+    getContactIdFromCrn.mockResolvedValue({ contactId: 'c1' })
+    getAccountIdFromSbi.mockResolvedValue({ accountId: null, error: err })
+
+    await ensureContactAndAccount('token', 'crn1', '106000001', { correlationId: 'corr-1' }).catch(() => {})
+
+    const [logged] = mockLogger.error.mock.calls[0]
+    expect(logged).toEqual({
+      transaction: { id: 'corr-1' },
+      error: { type: 'Error', status: 400 }
+    })
+    expect(JSON.stringify(logged)).not.toContain('A Farm Ltd')
+  })
 })
 
 describe('fetchOnlineSubmissionActivityIdOrThrow', () => {

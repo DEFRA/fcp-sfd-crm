@@ -17,10 +17,12 @@ const { constants: httpConstants } = http2
 const MASK_VISIBLE_DIGITS = 4
 
 // Generic identifier masker: safe for CRN, SBI or any other numeric/text
-// identifier where only the last few digits should be logged.
-export function maskCrn (crn) {
-  if (crn === null || crn === undefined) { return '****' }
-  const str = String(crn)
+// identifier where only the last few digits should be logged. For a sole
+// trader the SBI is effectively a personal identifier, so it is masked on
+// the same terms as the CRN.
+export function maskIdentifier (identifier) {
+  if (identifier === null || identifier === undefined) { return '****' }
+  const str = String(identifier)
   if (str.length <= MASK_VISIBLE_DIGITS) { return str }
   return '*'.repeat(str.length - MASK_VISIBLE_DIGITS) + str.slice(-MASK_VISIBLE_DIGITS)
 }
@@ -41,6 +43,59 @@ export function assertRequiredParams (requiredParams) {
   }
 }
 
+const CONTACT_NOT_FOUND = 'Contact ID not found'
+const ACCOUNT_NOT_FOUND = 'Account ID not found'
+
+/**
+ * Handle a failed CRM identity lookup. A retryable CRM failure is rethrown as
+ * retryable so the message stays on the queue; anything else is terminal and
+ * becomes a 422. Shared by the contact and account lookups, which differ only
+ * in the nouns they use.
+ * @param {object} params
+ * @param {object} params.error - error returned by the repo
+ * @param {string} params.correlationId
+ * @param {string} params.subject - "contact" or "account"
+ * @param {string} params.identifierLabel - "CRN" or "SBI"
+ * @param {string} params.masked - the masked identifier, safe to log
+ * @param {string} params.notFoundMessage - message for the 422
+ * @throws always
+ */
+const throwLookupFailure = ({ error, correlationId, subject, identifierLabel, masked, notFoundMessage }) => {
+  if (error.retryMetadata?.category === 'retryable') {
+    const retryableErr = new Error(`Retryable error looking up ${subject} for ${identifierLabel}: ${masked}`)
+    retryableErr.retryable = true
+    retryableErr.retryMetadata = error.retryMetadata
+    throw retryableErr
+  }
+
+  // Only the error classification is logged. The raw repo error can carry a
+  // CRM API response body containing PII.
+  logger.error({
+    transaction: { id: correlationId },
+    error: { type: error.name ?? 'CrmLookupError', status: error.retryMetadata?.status ?? null }
+  }, `No ${subject} found for ${identifierLabel}: ${masked}`)
+
+  throw unprocessableEntity(notFoundMessage)
+}
+
+/**
+ * Record a lookup that found no match: the not-found audit event is emitted
+ * before the business error is thrown, and emission can never prevent it.
+ * @param {object} params
+ * @param {object} params.event - built audit event
+ * @param {string} params.correlationId
+ * @param {string} params.subject - "contact" or "account"
+ * @param {string} params.identifierLabel - "CRN" or "SBI"
+ * @param {string} params.masked - the masked identifier, safe to log
+ * @param {string} params.notFoundMessage - message for the 422
+ * @throws always
+ */
+const throwNotFound = async ({ event, correlationId, subject, identifierLabel, masked, notFoundMessage }) => {
+  logger.error({ transaction: { id: correlationId } }, `No ${subject} found for ${identifierLabel}: ${masked}`)
+  await emitAuditEvent(event)
+  throw unprocessableEntity(notFoundMessage)
+}
+
 /**
  * Resolve the CRM contact and account for a farmer, looking up by CRN and
  * SBI respectively. Emits person/read and business/read audit events per
@@ -59,57 +114,59 @@ export async function ensureContactAndAccount (authToken, crn, sbi, { correlatio
     // Not fatal - lookups still proceed - but every event emitted for this
     // call will fail correlationid schema validation and be dropped, so
     // this is surfaced loudly rather than silently defaulting.
-    logger.warn('ensureContactAndAccount called without a correlationId: person/read and business/read audit events for this call will fail schema validation')
+    logger.warn({
+      event: {
+        type: 'error',
+        action: 'audit_correlation_id_missing',
+        category: 'process',
+        outcome: 'failure',
+        reason: 'missing_correlation_id'
+      }
+    }, 'ensureContactAndAccount called without a correlationId: person/read and business/read audit events for this call will fail schema validation')
   }
 
   const { contactId, error: contactError } = await getContactIdFromCrn(authToken, crn)
 
+  const contact = { subject: 'contact', identifierLabel: 'CRN', masked: maskIdentifier(crn), notFoundMessage: CONTACT_NOT_FOUND }
+
   if (contactError) {
-    if (contactError.retryMetadata?.category === 'retryable') {
-      const err = new Error(`Retryable error looking up contact for CRN: ${maskCrn(crn)}`)
-      err.retryable = true
-      err.retryMetadata = contactError.retryMetadata
-      throw err
-    }
-    logger.error(`No contact found for CRN: ${maskCrn(crn)}, error: ${contactError}`)
-    throw unprocessableEntity('Contact ID not found')
+    throwLookupFailure({ error: contactError, correlationId, ...contact })
   }
 
   if (!contactId) {
-    logger.error(`No contact found for CRN: ${maskCrn(crn)}`)
-    await emitAuditEvent(buildPersonReadEvent({
+    await throwNotFound({
+      event: buildPersonReadEvent({
+        correlationId,
+        crn,
+        status: auditStatuses.FAILURE,
+        details: { reason: auditFailureReasons.CRN_NOT_FOUND }
+      }),
       correlationId,
-      crn,
-      status: auditStatuses.FAILURE,
-      details: { reason: auditFailureReasons.CRN_NOT_FOUND }
-    }))
-    throw unprocessableEntity('Contact ID not found')
+      ...contact
+    })
   }
 
   await emitAuditEvent(buildPersonReadEvent({ correlationId, contactId, crn }))
 
   const { accountId, error: accountError } = await getAccountIdFromSbi(authToken, sbi)
 
+  const account = { subject: 'account', identifierLabel: 'SBI', masked: maskIdentifier(sbi), notFoundMessage: ACCOUNT_NOT_FOUND }
+
   if (accountError) {
-    if (accountError.retryMetadata?.category === 'retryable') {
-      const err = new Error(`Retryable error looking up account for SBI: ${sbi}`)
-      err.retryable = true
-      err.retryMetadata = accountError.retryMetadata
-      throw err
-    }
-    logger.error(`No account found for SBI: ${sbi}, error: ${accountError}`)
-    throw unprocessableEntity('Account ID not found')
+    throwLookupFailure({ error: accountError, correlationId, ...account })
   }
 
   if (!accountId) {
-    logger.error(`No account found for SBI: ${sbi}`)
-    await emitAuditEvent(buildBusinessReadEvent({
+    await throwNotFound({
+      event: buildBusinessReadEvent({
+        correlationId,
+        sbi,
+        status: auditStatuses.FAILURE,
+        details: { reason: auditFailureReasons.SBI_NOT_FOUND }
+      }),
       correlationId,
-      sbi,
-      status: auditStatuses.FAILURE,
-      details: { reason: auditFailureReasons.SBI_NOT_FOUND }
-    }))
-    throw unprocessableEntity('Account ID not found')
+      ...account
+    })
   }
 
   await emitAuditEvent(buildBusinessReadEvent({ correlationId, accountId, sbi }))

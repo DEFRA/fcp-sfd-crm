@@ -35,12 +35,23 @@ const mergeWithPublishDefaults = (event) => ({
   datetime: new Date().toISOString(),
   version: auditPublishConfig.version,
   ...(auditPublishConfig.generateCorrelationId && { correlationid: crypto.randomUUID() }),
-  application: auditPublishConfig.application,
-  component: auditPublishConfig.component,
-  environment: auditPublishConfig.environment,
-  ip: auditPublishConfig.ip,
+  ...(auditPublishConfig.application && { application: auditPublishConfig.application }),
+  ...(auditPublishConfig.component && { component: auditPublishConfig.component }),
+  ...(auditPublishConfig.environment && { environment: auditPublishConfig.environment }),
+  ...(auditPublishConfig.ip && { ip: auditPublishConfig.ip }),
   ...event
 })
+
+// validateAuditEvent returns joi message strings. Some joi rules interpolate
+// the offending value into the message (string.pattern.base, for one), so a
+// future schema revision could start echoing a CRN or SBI into the logs with
+// no change here. Only the field label is retained, which classifies the
+// failure without any chance of a value reaching the log.
+const FIELD_LABEL_PATTERN = /^"([^"]+)"/
+
+const validationFields = (errors = []) => [
+  ...new Set(errors.map(message => FIELD_LABEL_PATTERN.exec(String(message))?.[1] ?? 'unknown'))
+]
 
 const logPublishFailure = (reason, correlationid, extra = {}) => {
   logger.error(
@@ -77,31 +88,49 @@ export const sendAuditEvent = async (event) => {
   const { valid, errors } = validateAuditEvent(mergeWithPublishDefaults(event))
 
   if (!valid) {
-    logPublishFailure(auditLogReasons.SCHEMA_VALIDATION, event?.correlationid, { errors })
+    logPublishFailure(auditLogReasons.SCHEMA_VALIDATION, event?.correlationid, {
+      audit: { validation: { fields: validationFields(errors) } }
+    })
     return
   }
 
   try {
     await publishAuditEvent(event, auditPublishConfig)
-  } catch {
-    logPublishFailure(auditLogReasons.TRANSPORT, event?.correlationid)
+  } catch (err) {
+    // Only the error class is logged. err.message here would contain the
+    // topic ARN on a config failure, and could carry CRM or payload
+    // fragments on others.
+    logPublishFailure(auditLogReasons.TRANSPORT, event?.correlationid, {
+      error: { type: err?.name ?? 'UnknownError' }
+    })
   }
 }
 
 /**
  * Defensive wrapper around sendAuditEvent for use at call sites.
- * sendAuditEvent already catches its own errors, but unit tests across the
- * codebase mock sendAuditEvent directly (bypassing its internal catch), so
- * this second layer guarantees a failure to audit can never propagate to a
- * caller regardless of how sendAuditEvent is invoked. This is the single
- * shared implementation — do not re-implement this wrapper at call sites.
+ *
+ * sendAuditEvent catches failures of the publish itself, but not everything
+ * outside that try block can be assumed safe: validateAuditEvent is
+ * third-party code called before it, and logger.error is called inside its
+ * own catch. A throw from either would otherwise propagate into createCase
+ * and change the message processing outcome. This wrapper is what guarantees
+ * it cannot. It is the single shared implementation — do not re-implement it
+ * at call sites.
  * @param {object} event - audit event payload, see build-audit-event.js
  * @returns {Promise<void>}
  */
 export const emitAuditEvent = async (event) => {
   try {
     await sendAuditEvent(event)
-  } catch {
-    logPublishFailure(auditLogReasons.UNEXPECTED, event?.correlationid)
+  } catch (err) {
+    try {
+      logPublishFailure(auditLogReasons.UNEXPECTED, event?.correlationid, {
+        error: { type: err?.name ?? 'UnknownError' }
+      })
+    } catch {
+      // A throwing logger is the one failure that cannot be reported. It must
+      // still not reach the caller, or a failure to audit would change the
+      // message processing outcome.
+    }
   }
 }
