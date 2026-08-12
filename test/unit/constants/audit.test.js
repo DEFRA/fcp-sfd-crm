@@ -4,6 +4,7 @@ import {
   auditActions,
   auditStatuses,
   auditFailureReasons,
+  securityPmcCodes,
   auditLogEventType,
   auditLogReasons
 } from '../../../src/constants/audit.js'
@@ -13,14 +14,16 @@ describe('src/constants/audit.js', () => {
     expect(auditEntities).toEqual({
       PERSON: 'person',
       BUSINESS: 'business',
-      DOCUMENT: 'document'
+      DOCUMENT: 'document',
+      SERVICE: 'service'
     })
   })
 
   test('exposes the canonical action literals', () => {
     expect(auditActions).toEqual({
       READ: 'read',
-      CREATED: 'created'
+      CREATED: 'created',
+      AUTHENTICATE: 'authenticate'
     })
   })
 
@@ -38,6 +41,12 @@ describe('src/constants/audit.js', () => {
     })
   })
 
+  test('exposes the security event pmccodes', () => {
+    expect(securityPmcCodes).toEqual({
+      CREDENTIAL_FAILURE: 'AUTH'
+    })
+  })
+
   test('exposes the audit publish failure log type', () => {
     expect(auditLogEventType).toBe('audit_publish_failed')
   })
@@ -45,7 +54,8 @@ describe('src/constants/audit.js', () => {
   test('exposes the audit publish failure reason classifications', () => {
     expect(auditLogReasons).toEqual({
       SCHEMA_VALIDATION: 'schema_validation',
-      TRANSPORT: 'transport'
+      TRANSPORT: 'transport',
+      UNEXPECTED: 'unexpected'
     })
   })
 })
