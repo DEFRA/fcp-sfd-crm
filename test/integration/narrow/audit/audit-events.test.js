@@ -3,7 +3,7 @@ import { validateAuditEvent } from '@defra/fcp-audit-publisher'
 
 // Boundary mocks only: CRM API, case persistence and SNS transport. Every
 // audit event still passes through the real builder functions, the real
-// sendAuditEvent wrapper and the real publishAuditEvent/validateAuditEvent
+// emitAuditEvent wrapper and the real publishAuditEvent/validateAuditEvent
 // from @defra/fcp-audit-publisher, so this test proves that every event this
 // service can emit is schema-valid end to end.
 vi.mock('../../../../src/messaging/sns/client.js', () => ({
@@ -41,7 +41,7 @@ const { getContactIdFromCrn, getAccountIdFromSbi, createCaseWithOnlineSubmission
 const { upsertCase } = await import('../../../../src/repos/cases.js')
 const { ensureContactAndAccount } = await import('../../../../src/services/crm-helpers.js')
 const { createCase } = await import('../../../../src/services/case.js')
-const { sendAuditEvent } = await import('../../../../src/messaging/outbound/audit/send-audit-event.js')
+const { emitAuditEvent } = await import('../../../../src/messaging/outbound/audit/send-audit-event.js')
 const { buildCredentialFailureEvent } = await import('../../../../src/messaging/outbound/audit/build-audit-event.js')
 
 const CORRELATION_ID = 'audit-integration-correlation-id'
@@ -219,7 +219,7 @@ describe('Integration - audit events conform to the fcp-audit-publisher schema',
   })
 
   test('row 7: security event for invalid or missing credentials carries both security and audit objects', async () => {
-    await sendAuditEvent(buildCredentialFailureEvent({
+    await emitAuditEvent(buildCredentialFailureEvent({
       correlationId: CORRELATION_ID,
       reason: 'Missing or invalid QA-specific x-api-key header'
     }))

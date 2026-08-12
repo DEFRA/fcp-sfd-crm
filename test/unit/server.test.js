@@ -6,6 +6,7 @@ vi.mock('../../src/config/index.js', () => ({
       if (key === 'apiKeyForTestingCaseCreation') return 'test-api-key'
       if (key === 'port') return 0
       if (key === 'root') return process.cwd()
+      if (key === 'tracing.header') return 'x-cdp-request-id'
       if (key === 'log') {
         return {
           isEnabled: true,
@@ -27,13 +28,13 @@ vi.mock('../../src/services/create-case-with-online-submission-in-crm.js', () =>
 }))
 
 vi.mock('../../src/messaging/outbound/audit/send-audit-event.js', () => ({
-  sendAuditEvent: vi.fn().mockResolvedValue(undefined)
+  emitAuditEvent: vi.fn().mockResolvedValue(undefined)
 }))
 
 const { config } = await import('../../src/config/index.js')
 const { getCrmAuthToken } = await import('../../src/auth/get-crm-auth-token.js')
 const { createCaseWithOnlineSubmissionInCrm } = await import('../../src/services/create-case-with-online-submission-in-crm.js')
-const { sendAuditEvent } = await import('../../src/messaging/outbound/audit/send-audit-event.js')
+const { emitAuditEvent } = await import('../../src/messaging/outbound/audit/send-audit-event.js')
 const { createServer } = await import('../../src/server.js')
 
 describe('POST methods for creating cases in CRM', () => {
@@ -46,6 +47,7 @@ describe('POST methods for creating cases in CRM', () => {
         if (key === 'apiKeyForTestingCaseCreation') return 'test-api-key'
         if (key === 'port') return 0
         if (key === 'root') return process.cwd()
+        if (key === 'tracing.header') return 'x-cdp-request-id'
         if (key === 'log') {
           return {
             isEnabled: true,
@@ -88,13 +90,42 @@ describe('POST methods for creating cases in CRM', () => {
         payload: { foo: 'bar' }
       })
 
-      expect(sendAuditEvent).toHaveBeenCalledWith(
+      expect(emitAuditEvent).toHaveBeenCalledWith(
         expect.objectContaining({
           correlationid: expect.any(String),
           security: expect.objectContaining({ pmccode: expect.any(String) }),
           audit: expect.objectContaining({ status: 'failure' })
         })
       )
+    })
+
+    // Regression test: request.info.id (the route's previous correlationId
+    // source) is built by Hapi as `${received}:${hostname}:${pid}:${counter}`
+    // and regularly exceeds the audit schema's 50-character correlationid
+    // cap on a real pod hostname, silently discarding the row 7 event.
+    // expect.any(String) above cannot catch that - only a length assertion
+    // against the real schema constraint can.
+    test('emits a correlationid that fits the audit schema length limit (max 50 characters)', async () => {
+      await server.inject({
+        method: 'POST',
+        url: '/create-case-with-online-submission',
+        payload: { foo: 'bar' }
+      })
+
+      const [event] = emitAuditEvent.mock.calls[0]
+      expect(event.correlationid.length).toBeLessThanOrEqual(50)
+    })
+
+    test('uses the inbound x-cdp-request-id header as the correlationid when present', async () => {
+      await server.inject({
+        method: 'POST',
+        url: '/create-case-with-online-submission',
+        headers: { 'x-cdp-request-id': 'trace-id-from-caller' },
+        payload: { foo: 'bar' }
+      })
+
+      const [event] = emitAuditEvent.mock.calls[0]
+      expect(event.correlationid).toBe('trace-id-from-caller')
     })
 
     test('returns 401 if API key is invalid on /create-case-with-online-submission', async () => {
@@ -117,7 +148,7 @@ describe('POST methods for creating cases in CRM', () => {
         payload: { foo: 'bar' }
       })
 
-      expect(sendAuditEvent).toHaveBeenCalledWith(
+      expect(emitAuditEvent).toHaveBeenCalledWith(
         expect.objectContaining({
           correlationid: expect.any(String),
           security: expect.objectContaining({ pmccode: expect.any(String) }),
@@ -152,7 +183,7 @@ describe('POST methods for creating cases in CRM', () => {
         }
       })
 
-      expect(sendAuditEvent).not.toHaveBeenCalled()
+      expect(emitAuditEvent).not.toHaveBeenCalled()
     })
 
     test('calls createCaseWithOnlineSubmissionInCrm if API key is valid', async () => {
@@ -221,6 +252,7 @@ describe('POST methods for creating cases in CRM', () => {
         if (key === 'apiKeyForTestingCaseCreation') return 'test-api-key'
         if (key === 'port') return 0
         if (key === 'root') return process.cwd()
+        if (key === 'tracing.header') return 'x-cdp-request-id'
         if (key === 'log') {
           return {
             isEnabled: true,
