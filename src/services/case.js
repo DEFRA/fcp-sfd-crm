@@ -5,10 +5,24 @@ import { upsertCase, updateCaseId, markFileProcessed } from '../repos/cases.js'
 import { createMetadataForOnlineSubmission } from '../repos/crm.js'
 import { fetchRpaOnlineSubmissionIdOrThrow } from './crm-helpers.js'
 import { messages } from '../constants/messages.js'
+import { sendAuditEvent } from '../messaging/outbound/audit/send-audit-event.js'
+import { buildDocumentCreatedEvent } from '../messaging/outbound/audit/build-audit-event.js'
 
 const logger = createLogger()
 
 const ONE_HOUR_MS = 60 * 60 * 1000
+
+// sendAuditEvent already catches its own errors, but every emission point is
+// wrapped again here as a defensive backstop: audit emission must never be
+// able to affect message processing outcome (acknowledgement, redelivery or
+// DLQ routing).
+const emitAuditEvent = async (event) => {
+  try {
+    await sendAuditEvent(event)
+  } catch (err) {
+    logger.error(`Unexpected error emitting audit event: ${err.message}`)
+  }
+}
 
 function buildCaseData (crm, file) {
   return {
@@ -70,7 +84,7 @@ export function transformPayload (cloudEventPayload) {
  * @param {object} payload - parsed CloudEvents message payload
  */
 export async function createCase (payload) {
-  const { correlationId, file } = payload.data
+  const { correlationId, file, crn, sbi } = payload.data
   const fileId = file?.fileId
 
   const prep = await prepareCase({ correlationId, fileId })
@@ -87,7 +101,7 @@ export async function createCase (payload) {
     return createNewCase({ authToken, transformedPayload, correlationId, fileId })
   }
 
-  return addMetadataToExistingCase({ authToken, caseId: prep.caseId, correlationId, file, fileId })
+  return addMetadataToExistingCase({ authToken, caseId: prep.caseId, correlationId, file, fileId, crn, sbi })
 }
 
 async function prepareCase ({ correlationId, fileId }) {
@@ -124,10 +138,19 @@ async function createNewCase ({ authToken, transformedPayload, correlationId, fi
     contactId: response.contactId,
     accountId: response.accountId
   }, 'Case created')
+
+  // Event 1 from the FLS1-21 spike table: a case was opened for the farmer.
+  await emitAuditEvent(buildDocumentCreatedEvent({
+    correlationId,
+    entityId: response.caseId,
+    crn: transformedPayload.crn,
+    sbi: transformedPayload.sbi
+  }))
+
   return response
 }
 
-async function addMetadataToExistingCase ({ authToken, caseId, correlationId, file, fileId }) {
+async function addMetadataToExistingCase ({ authToken, caseId, correlationId, file, fileId, crn, sbi }) {
   const rpaOnlinesubmissionid = await fetchRpaOnlineSubmissionIdOrThrow(authToken, caseId, { correlationId })
 
   const metadata = {
@@ -159,5 +182,13 @@ async function addMetadataToExistingCase ({ authToken, caseId, correlationId, fi
   await markFileProcessed(correlationId, fileId)
 
   logger.info({ transaction: { id: correlationId }, event: { reference: caseId }, fileId, metadataId }, 'Metadata added to existing case')
+
+  await emitAuditEvent(buildDocumentCreatedEvent({
+    correlationId,
+    entityId: metadataId,
+    crn,
+    sbi
+  }))
+
   return { caseId }
 }
