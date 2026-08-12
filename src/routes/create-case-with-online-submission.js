@@ -4,6 +4,19 @@ import { getCrmAuthToken } from '../auth/get-crm-auth-token.js'
 import { validateApiKeyHeader } from '../api/common/helpers/validate-api-key-header.js'
 import { createCaseWithOnlineSubmissionInCrm } from '../services/create-case-with-online-submission-in-crm.js'
 import { createCasePayloadSchema, validationOptions } from '../api/schemas/index.js'
+import { sendAuditEvent } from '../messaging/outbound/audit/send-audit-event.js'
+import { buildCredentialFailureEvent } from '../messaging/outbound/audit/build-audit-event.js'
+
+// Defensive wrapper: sendAuditEvent already swallows its own errors, but this
+// route's failAction must never throw because of an audit-side problem, so a
+// second layer of isolation is kept here too (see FLS1-50 error handling requirements).
+const emitAuditEvent = async (event) => {
+  try {
+    await sendAuditEvent(event)
+  } catch {
+    // sendAuditEvent already logs; nothing further to do here.
+  }
+}
 
 export const postCreateCaseWithOnlineSubmission = () => ({
   method: 'POST',
@@ -13,12 +26,20 @@ export const postCreateCaseWithOnlineSubmission = () => ({
       ...validateApiKeyHeader(),
       payload: createCasePayloadSchema,
       options: validationOptions,
-      failAction: async (_request, h, error) => {
+      failAction: async (request, h, error) => {
         const { constants: httpConstants } = http2
         const headerError = Array.isArray(error?.details) &&
           error.details.some(d => d?.context?.key === 'x-api-key')
 
         if (headerError) {
+          // Row 7 of the spike table: invalid or missing credentials is a
+          // possible intrusion attempt, so it is audited even though it
+          // never reaches the service layer.
+          await emitAuditEvent(buildCredentialFailureEvent({
+            correlationId: request?.info?.id,
+            reason: 'Missing or invalid QA-specific x-api-key header'
+          }))
+
           return h
             .response({ error: 'Missing or invalid QA-specific x-api-key header' })
             .code(httpConstants.HTTP_STATUS_UNAUTHORIZED)
