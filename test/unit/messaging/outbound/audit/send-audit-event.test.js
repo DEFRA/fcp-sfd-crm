@@ -20,6 +20,7 @@ vi.mock('../../../../../src/logging/logger.js', () => ({
 const mockLogger = createLogger()
 
 const mockAuditEvent = {
+  correlationid: 'test-correlation-id',
   audit: {
     entities: [
       { entity: 'case', action: 'created' }
@@ -73,8 +74,78 @@ describe('sendAuditEvent', () => {
     await sendAuditEvent(mockAuditEvent)
 
     expect(mockLogger.error).toHaveBeenCalledWith(
-      { event: { type: 'audit_publish_failed', outcome: 'failure', reason: mockError.message } },
+      {
+        event: {
+          type: 'audit_publish_failed',
+          action: 'publish_audit_event',
+          category: 'process',
+          outcome: 'failure',
+          reason: 'transport',
+          reference: 'test-correlation-id'
+        }
+      },
       'Failed to publish audit event'
     )
+  })
+
+  test('should classify schema validation errors from publishAuditEvent', async () => {
+    const { publishAuditEvent } = await import('@defra/fcp-audit-publisher')
+    const { sendAuditEvent } = await import('../../../../../src/messaging/outbound/audit/send-audit-event.js')
+
+    publishAuditEvent.mockRejectedValueOnce(new Error('Invalid audit event: "correlationid" is required'))
+
+    await sendAuditEvent(mockAuditEvent)
+
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: expect.objectContaining({ reason: 'schema_validation' })
+      }),
+      'Failed to publish audit event'
+    )
+  })
+
+  test('should classify invalid config errors from publishAuditEvent as schema validation', async () => {
+    const { publishAuditEvent } = await import('@defra/fcp-audit-publisher')
+    const { sendAuditEvent } = await import('../../../../../src/messaging/outbound/audit/send-audit-event.js')
+
+    publishAuditEvent.mockRejectedValueOnce(new Error('Invalid config: "sns.topicArn" is required'))
+
+    await sendAuditEvent(mockAuditEvent)
+
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: expect.objectContaining({ reason: 'schema_validation' })
+      }),
+      'Failed to publish audit event'
+    )
+  })
+
+  test('should log a null reference when the event has no correlationid', async () => {
+    const { publishAuditEvent } = await import('@defra/fcp-audit-publisher')
+    const { sendAuditEvent } = await import('../../../../../src/messaging/outbound/audit/send-audit-event.js')
+
+    publishAuditEvent.mockRejectedValueOnce(new Error('SNS failure'))
+
+    await sendAuditEvent({ audit: mockAuditEvent.audit })
+
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: expect.objectContaining({ reference: null })
+      }),
+      'Failed to publish audit event'
+    )
+  })
+
+  test('should not log the event payload, only the failure classification', async () => {
+    const { publishAuditEvent } = await import('@defra/fcp-audit-publisher')
+    const { sendAuditEvent } = await import('../../../../../src/messaging/outbound/audit/send-audit-event.js')
+
+    publishAuditEvent.mockRejectedValueOnce(new Error('SNS failure'))
+
+    await sendAuditEvent(mockAuditEvent)
+
+    const [loggedPayload] = mockLogger.error.mock.calls[0]
+    expect(loggedPayload).not.toHaveProperty('audit')
+    expect(loggedPayload).not.toHaveProperty('event.entities')
   })
 })
