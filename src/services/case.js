@@ -9,24 +9,12 @@ import { messages } from '../constants/messages.js'
 import { metricsCounter } from '../api/common/helpers/metrics.js'
 import { caseCreationMetrics, caseActions } from '../constants/case-creation-metrics.js'
 import { isTerminalFailure } from '../utils/is-terminal-failure.js'
-import { sendAuditEvent } from '../messaging/outbound/audit/send-audit-event.js'
+import { emitAuditEvent } from '../messaging/outbound/audit/send-audit-event.js'
 import { buildDocumentCreatedEvent } from '../messaging/outbound/audit/build-audit-event.js'
 
 const logger = createLogger()
 
 const ONE_HOUR_MS = 60 * 60 * 1000
-
-// sendAuditEvent already catches its own errors, but every emission point is
-// wrapped again here as a defensive backstop: audit emission must never be
-// able to affect message processing outcome (acknowledgement, redelivery or
-// DLQ routing).
-const emitAuditEvent = async (event) => {
-  try {
-    await sendAuditEvent(event)
-  } catch (err) {
-    logger.error(`Unexpected error emitting audit event: ${err.message}`)
-  }
-}
 
 function buildCaseData (crm, file) {
   return {
@@ -103,7 +91,7 @@ export async function createCase (payload) {
   const transformedPayload = transformPayload(payload)
 
   if (prep.action === caseActions.CREATE) {
-    return createNewCase({ authToken, transformedPayload, correlationId, fileId })
+    return createNewCase({ authToken, transformedPayload, correlationId, fileId, crn, sbi })
   }
 
   return addMetadataToExistingCase({
@@ -113,8 +101,8 @@ export async function createCase (payload) {
     file,
     fileId,
     caseType: transformedPayload.caseType,
-     crn,
-     sbi
+    crn,
+    sbi
   })
 }
 
@@ -191,7 +179,7 @@ async function releaseCreatorRole (correlationId, fileId) {
   }
 }
 
-async function createNewCase ({ authToken, transformedPayload, correlationId, fileId }) {
+async function createNewCase ({ authToken, transformedPayload, correlationId, fileId, crn, sbi }) {
   let response
   try {
     response = await createCaseWithOnlineSubmissionInCrm({ authToken, fileId, ...transformedPayload })
@@ -225,11 +213,14 @@ async function createNewCase ({ authToken, transformedPayload, correlationId, fi
   }, 'Case created')
 
   // Event 1 from the FLS1-21 spike table: a case was opened for the farmer.
+  // crn/sbi come from the same payload.data extraction as
+  // addMetadataToExistingCase uses, rather than from transformedPayload, so
+  // both emission points share a single source for these identifiers.
   await emitAuditEvent(buildDocumentCreatedEvent({
     correlationId,
     entityId: response.caseId,
-    crn: transformedPayload.crn,
-    sbi: transformedPayload.sbi
+    crn,
+    sbi
   }))
 
   return response
