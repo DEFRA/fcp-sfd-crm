@@ -21,7 +21,7 @@ vi.mock('../../../src/repos/cases.js', () => ({
 }))
 
 vi.mock('../../../src/repos/crm.js', () => ({
-  getOnlineSubmissionId: vi.fn(),
+  getOnlineSubmissionActivityId: vi.fn(),
   createMetadataForOnlineSubmission: vi.fn()
 }))
 
@@ -29,7 +29,7 @@ const { createCase, transformPayload } = await import('../../../src/services/cas
 const { getCrmAuthToken } = await import('../../../src/auth/get-crm-auth-token.js')
 const { createCaseWithOnlineSubmissionInCrm } = await import('../../../src/services/create-case-with-online-submission-in-crm.js')
 const { upsertCase, updateCaseId, markFileProcessed } = await import('../../../src/repos/cases.js')
-const { getOnlineSubmissionId, createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
+const { getOnlineSubmissionActivityId, createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
 
 const validPayload = {
   data: {
@@ -49,7 +49,7 @@ describe('case service', () => {
     markFileProcessed.mockResolvedValue({ modifiedCount: 1 })
     createCaseWithOnlineSubmissionInCrm.mockResolvedValue({ caseId: 'mock-case-id', contactId: 'c1', accountId: 'a1', rpaOnlinesubmissionid: 'mock-ols-id' })
     // mocks for additional-file flow
-    getOnlineSubmissionId.mockResolvedValue({ rpaOnlinesubmissionid: 'ols-1', error: null })
+    getOnlineSubmissionActivityId.mockResolvedValue({ onlineSubmissionActivityId: '84c190b8-5d96-f111-8076-000d3ada3978', error: null })
     createMetadataForOnlineSubmission.mockResolvedValue({ metadataId: 'meta-1', error: null })
   })
 
@@ -248,7 +248,7 @@ describe('case service', () => {
 
     test('should throw if unable to retrieve online submission id', async () => {
       upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: 'existing-case-id', isCreator: false })
-      getOnlineSubmissionId.mockResolvedValue({ rpaOnlinesubmissionid: null, error: 'Not found' })
+      getOnlineSubmissionActivityId.mockResolvedValue({ onlineSubmissionActivityId: null, error: 'Not found' })
 
       await expect(createCase(validPayload)).rejects.toThrow('Failed to retrieve online submission id')
 
@@ -257,7 +257,7 @@ describe('case service', () => {
 
     test('should throw if creating metadata fails and not mark file processed', async () => {
       upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: 'existing-case-id', isCreator: false })
-      getOnlineSubmissionId.mockResolvedValue({ rpaOnlinesubmissionid: 'ols-1', error: null })
+      getOnlineSubmissionActivityId.mockResolvedValue({ onlineSubmissionActivityId: '84c190b8-5d96-f111-8076-000d3ada3978', error: null })
       createMetadataForOnlineSubmission.mockResolvedValue({ metadataId: null, error: 'CRM failure' })
 
       await expect(createCase(validPayload)).rejects.toThrow('Failed to add metadata for additional file')
@@ -269,7 +269,7 @@ describe('case service', () => {
       const retryErr = new Error('Service unavailable')
       retryErr.retryMetadata = { category: 'retryable', terminalReason: 'http_503', status: 503 }
       upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: 'existing-case-id', isCreator: false })
-      getOnlineSubmissionId.mockResolvedValue({ rpaOnlinesubmissionid: 'ols-1', error: null })
+      getOnlineSubmissionActivityId.mockResolvedValue({ onlineSubmissionActivityId: '84c190b8-5d96-f111-8076-000d3ada3978', error: null })
       createMetadataForOnlineSubmission.mockResolvedValue({ metadataId: null, error: retryErr })
 
       const thrown = await createCase(validPayload).catch(e => e)
@@ -284,7 +284,7 @@ describe('case service', () => {
       const nonRetryErr = new Error('Bad request')
       nonRetryErr.retryMetadata = { category: 'non-retryable', terminalReason: 'http_400', status: 400 }
       upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: 'existing-case-id', isCreator: false })
-      getOnlineSubmissionId.mockResolvedValue({ rpaOnlinesubmissionid: 'ols-1', error: null })
+      getOnlineSubmissionActivityId.mockResolvedValue({ onlineSubmissionActivityId: '84c190b8-5d96-f111-8076-000d3ada3978', error: null })
       createMetadataForOnlineSubmission.mockResolvedValue({ metadataId: null, error: nonRetryErr })
 
       const thrown = await createCase(validPayload).catch(e => e)
@@ -296,7 +296,7 @@ describe('case service', () => {
 
     test('should use fallback values for metadata name and fileUrl when file properties missing', async () => {
       upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: 'existing-case-id', isCreator: false })
-      getOnlineSubmissionId.mockResolvedValue({ rpaOnlinesubmissionid: 'ols-1', error: null })
+      getOnlineSubmissionActivityId.mockResolvedValue({ onlineSubmissionActivityId: '84c190b8-5d96-f111-8076-000d3ada3978', error: null })
       createMetadataForOnlineSubmission.mockResolvedValue({ metadataId: 'meta-2', error: null })
 
       const payloadMissingFileProps = {
