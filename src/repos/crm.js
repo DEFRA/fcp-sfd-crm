@@ -1,10 +1,14 @@
 import { randomBytes } from 'node:crypto'
+import Joi from 'joi'
 import { config } from '../config/index.js'
 import { httpClient } from '../http/client.js'
 
 const baseUrl = config.get('crm.baseUrl')
 const caseOriginCode = config.get('crm.caseOriginCode')
 const DEFAULT_DOCUMENT_TYPE_ID = '4e88916b-aae2-ee11-904c-000d3adc1ec9'
+// Dataverse GUIDs are not necessarily RFC 4122 version 4, so no version
+// constraint here — consistent with the caseId schema in api/schemas/outbound.js.
+const guidSchema = Joi.string().guid().required()
 
 const baseHeaders = {
   'Content-Type': 'application/json',
@@ -162,11 +166,20 @@ const createCaseWithOnlineSubmission = async (request) => {
   }
 }
 
-const getOnlineSubmissionId = async (authToken, caseId) => {
+/**
+ * Resolve the Dataverse primary key (activityid) of the online submission
+ * activity attached to a case.
+ *
+ * rpa_onlinesubmissionid is a separate, non-key text attribute (set by this
+ * service to a client-generated hex string at creation time) and must not be
+ * used to address the entity — Dataverse's PrimaryIdAttribute for
+ * rpa_onlinesubmission is activityid.
+ */
+const getOnlineSubmissionActivityId = async (authToken, caseId) => {
   try {
     const query = `/incidents(${caseId})?${buildQuery({
       $select: 'incidentid,title',
-      $expand: 'incident_rpa_onlinesubmissions($select=rpa_onlinesubmissionid)'
+      $expand: 'incident_rpa_onlinesubmissions($select=activityid,rpa_onlinesubmissionid)'
     })}`
     const response = await httpClient(`${baseUrl}${query}`, {
       method: 'GET',
@@ -175,15 +188,15 @@ const getOnlineSubmissionId = async (authToken, caseId) => {
 
     const data = await response.json()
 
-    const rpaId = data?.incident_rpa_onlinesubmissions?.[0]?.rpa_onlinesubmissionid || null
+    const activityId = data?.incident_rpa_onlinesubmissions?.[0]?.activityid || null
 
     return {
-      rpaOnlinesubmissionid: rpaId,
+      onlineSubmissionActivityId: activityId,
       error: null
     }
   } catch (err) {
     return {
-      rpaOnlinesubmissionid: null,
+      onlineSubmissionActivityId: null,
       error: err
     }
   }
@@ -191,7 +204,12 @@ const getOnlineSubmissionId = async (authToken, caseId) => {
 
 const createMetadataForOnlineSubmission = async (request) => {
   try {
-    const { authToken, rpaOnlinesubmissionid, metadata } = request
+    const { authToken, onlineSubmissionActivityId, metadata } = request
+
+    if (guidSchema.validate(onlineSubmissionActivityId).error) {
+      throw new Error(`Invalid onlineSubmissionActivityId: expected a GUID, got '${onlineSubmissionActivityId}'`)
+    }
+
     const { name, blobFileId, documentTypeId, mimeType } = metadata
 
     const payload = {
@@ -209,7 +227,7 @@ const createMetadataForOnlineSubmission = async (request) => {
       payload['rpa_DocumentTypeMetaId@odata.bind'] = `/rpa_documenttypeses(${DEFAULT_DOCUMENT_TYPE_ID})`
     }
 
-    const endpoint = `${baseUrl}/rpa_onlinesubmissions(${rpaOnlinesubmissionid})/rpa_onlinesubmission_rpa_activitymetadata`
+    const endpoint = `${baseUrl}/rpa_onlinesubmissions(${onlineSubmissionActivityId})/rpa_onlinesubmission_rpa_activitymetadata`
 
     const response = await httpClient(endpoint, {
       method: 'POST',
@@ -312,7 +330,7 @@ export {
   getContactIdFromCrn,
   getAccountIdFromSbi,
   createCaseWithOnlineSubmission,
-  getOnlineSubmissionId,
+  getOnlineSubmissionActivityId,
   getCaseIdByOnlineSubmissionId,
   createMetadataForOnlineSubmission,
   getDocumentTypeMetadata

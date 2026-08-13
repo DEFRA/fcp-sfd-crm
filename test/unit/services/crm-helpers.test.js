@@ -7,13 +7,13 @@ vi.mock('../../../src/logging/logger.js', () => ({
 }))
 
 vi.mock('../../../src/repos/crm.js', () => ({
-  getOnlineSubmissionId: vi.fn(),
+  getOnlineSubmissionActivityId: vi.fn(),
   getContactIdFromCrn: vi.fn(),
   getAccountIdFromSbi: vi.fn()
 }))
 
-const { ensureContactAndAccount, fetchRpaOnlineSubmissionIdOrThrow, maskCrn } = await import('../../../src/services/crm-helpers.js')
-const { getOnlineSubmissionId, getContactIdFromCrn, getAccountIdFromSbi } = await import('../../../src/repos/crm.js')
+const { ensureContactAndAccount, fetchOnlineSubmissionActivityIdOrThrow, maskCrn } = await import('../../../src/services/crm-helpers.js')
+const { getOnlineSubmissionActivityId, getContactIdFromCrn, getAccountIdFromSbi } = await import('../../../src/repos/crm.js')
 
 const makeRetryableError = () => {
   const err = new Error('Service unavailable')
@@ -130,20 +130,20 @@ describe('ensureContactAndAccount', () => {
   })
 })
 
-describe('fetchRpaOnlineSubmissionIdOrThrow', () => {
+describe('fetchOnlineSubmissionActivityIdOrThrow', () => {
   test('returns the submission ID on success', async () => {
-    getOnlineSubmissionId.mockResolvedValue({ rpaOnlinesubmissionid: 'sub-1', error: null })
+    getOnlineSubmissionActivityId.mockResolvedValue({ onlineSubmissionActivityId: '84c190b8-5d96-f111-8076-000d3ada3978', error: null })
 
-    const result = await fetchRpaOnlineSubmissionIdOrThrow('token', 'case-1', { correlationId: 'corr-1' })
+    const result = await fetchOnlineSubmissionActivityIdOrThrow('token', 'case-1', { correlationId: 'corr-1' })
 
-    expect(result).toBe('sub-1')
+    expect(result).toBe('84c190b8-5d96-f111-8076-000d3ada3978')
   })
 
   test('throws with retryable=true when repo returns a retryable HTTP error', async () => {
     const err = makeRetryableError()
-    getOnlineSubmissionId.mockResolvedValue({ rpaOnlinesubmissionid: null, error: err })
+    getOnlineSubmissionActivityId.mockResolvedValue({ onlineSubmissionActivityId: null, error: err })
 
-    const thrown = await fetchRpaOnlineSubmissionIdOrThrow('token', 'case-1', { correlationId: 'corr-1' }).catch(e => e)
+    const thrown = await fetchOnlineSubmissionActivityIdOrThrow('token', 'case-1', { correlationId: 'corr-1' }).catch(e => e)
 
     expect(thrown.retryable).toBe(true)
     expect(thrown.retryMetadata).toEqual(err.retryMetadata)
@@ -151,27 +151,27 @@ describe('fetchRpaOnlineSubmissionIdOrThrow', () => {
   })
 
   test('throws with retryable=false when repo returns a non-retryable HTTP error', async () => {
-    getOnlineSubmissionId.mockResolvedValue({ rpaOnlinesubmissionid: null, error: makeNonRetryableError() })
+    getOnlineSubmissionActivityId.mockResolvedValue({ onlineSubmissionActivityId: null, error: makeNonRetryableError() })
 
-    const thrown = await fetchRpaOnlineSubmissionIdOrThrow('token', 'case-1', { correlationId: 'corr-1' }).catch(e => e)
+    const thrown = await fetchOnlineSubmissionActivityIdOrThrow('token', 'case-1', { correlationId: 'corr-1' }).catch(e => e)
 
     expect(thrown.retryable).toBe(false)
     expect(thrown.message).toBe('Failed to retrieve online submission id')
   })
 
   test('throws with retryable=false when submission ID is genuinely not found (no error)', async () => {
-    getOnlineSubmissionId.mockResolvedValue({ rpaOnlinesubmissionid: null, error: null })
+    getOnlineSubmissionActivityId.mockResolvedValue({ onlineSubmissionActivityId: null, error: null })
 
-    const thrown = await fetchRpaOnlineSubmissionIdOrThrow('token', 'case-1', { correlationId: 'corr-1' }).catch(e => e)
+    const thrown = await fetchOnlineSubmissionActivityIdOrThrow('token', 'case-1', { correlationId: 'corr-1' }).catch(e => e)
 
     expect(thrown.retryable).toBe(false)
     expect(thrown.message).toBe('Failed to retrieve online submission id')
   })
 
   test('works without context argument', async () => {
-    getOnlineSubmissionId.mockResolvedValue({ rpaOnlinesubmissionid: null, error: makeNonRetryableError() })
+    getOnlineSubmissionActivityId.mockResolvedValue({ onlineSubmissionActivityId: null, error: makeNonRetryableError() })
 
-    const thrown = await fetchRpaOnlineSubmissionIdOrThrow('token', 'case-1').catch(e => e)
+    const thrown = await fetchOnlineSubmissionActivityIdOrThrow('token', 'case-1').catch(e => e)
 
     expect(thrown.retryable).toBe(false)
   })
