@@ -1,5 +1,13 @@
 import { vi, describe, test, expect, beforeEach, afterAll } from 'vitest'
 
+const { mockRunWithCorrelationId } = vi.hoisted(() => ({
+  mockRunWithCorrelationId: vi.fn((_correlationId, fn) => fn())
+}))
+
+vi.mock('../../../../src/logging/correlation-id-store.js', () => ({
+  runWithCorrelationId: mockRunWithCorrelationId
+}))
+
 vi.mock('../../../../src/data/db.js', () => ({
   default: {
     collection: () => ({
@@ -61,6 +69,7 @@ let startCRMListener, stopCRMListener, setLogger, mockLogger
 
 beforeEach(async () => {
   vi.resetModules()
+  mockRunWithCorrelationId.mockClear()
   mockLogger = {
     fatal: vi.fn(),
     info: vi.fn(),
@@ -216,6 +225,10 @@ describe('CRM request sqs consumer', () => {
       const result = await capturedHandleMessage(message)
 
       expect(createCase).toHaveBeenCalledWith(JSON.parse(message.Body))
+      expect(mockRunWithCorrelationId).toHaveBeenCalledWith(
+        '550e8400-e29b-41d4-a716-446655440000',
+        expect.any(Function)
+      )
       expect(result).toEqual(message)
     })
 
@@ -280,6 +293,7 @@ describe('CRM request sqs consumer', () => {
         }),
         'Message routed to DLQ'
       )
+      expect(mockRunWithCorrelationId).toHaveBeenCalledWith('msg-bad-json', expect.any(Function))
       expect(result).toEqual(message)
     })
 
@@ -514,6 +528,7 @@ describe('CRM request sqs consumer', () => {
         expect(sqsClient.send).toHaveBeenCalledWith(
           expect.objectContaining({ input: expect.objectContaining({ QueueUrl: 'mock-dlq-url' }) })
         )
+        expect(mockRunWithCorrelationId).toHaveBeenCalledWith('msg-schema-bad', expect.any(Function))
         expect(result).toEqual(message)
       })
 

@@ -177,7 +177,6 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
 
     expect(mockLogger.error).toHaveBeenCalledWith(
       {
-        transaction: { id: 'mock-correlation-id' },
         error: caseErr,
         event: {
           category: 'crm_case_create_failed',
@@ -209,7 +208,7 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     expect(result.caseId).toBe('fallback-case-id')
     expect(result.rpaOnlinesubmissionid).toBe('mock-ols-id')
     expect(mockLogger.warn).toHaveBeenCalledWith(
-      { transaction: { id: 'mock-correlation-id' }, rpaOnlinesubmissionid: 'mock-ols-id' },
+      { rpaOnlinesubmissionid: 'mock-ols-id' },
       'CRM POST response missing incidentid, falling back to lookup by online submission'
     )
   })
@@ -232,7 +231,7 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     })).rejects.toMatchObject({ message: 'CRM did not return a case ID and fallback lookup failed', retryable: true })
 
     expect(mockLogger.error).toHaveBeenCalledWith(
-      { transaction: { id: 'mock-correlation-id' }, rpaOnlinesubmissionid: 'mock-ols-id', error: expect.any(Error) },
+      { rpaOnlinesubmissionid: 'mock-ols-id', error: expect.any(Error) },
       'Fallback lookup for caseId failed'
     )
   })
@@ -255,7 +254,7 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     })).rejects.toMatchObject({ message: 'CRM unavailable', retryable: true })
 
     expect(mockLogger.error).toHaveBeenCalledWith(
-      { transaction: { id: 'mock-correlation-id' }, caseType: 'CS_Agreement_Evidence', error: lookupErr },
+      { caseType: 'CS_Agreement_Evidence', error: lookupErr },
       'Error looking up document type metadata'
     )
   })
@@ -296,7 +295,7 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     })).rejects.toMatchObject({ retryable: true })
 
     expect(mockLogger.warn).toHaveBeenCalledWith(
-      { transaction: { id: 'mock-correlation-id' }, caseType: 'NonExistent_Type' },
+      { caseType: 'NonExistent_Type' },
       'Document type metadata not found for caseType'
     )
   })
@@ -323,7 +322,7 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     })
 
     expect(mockLogger.warn).toHaveBeenCalledWith(
-      { transaction: { id: 'mock-correlation-id' }, caseType: 'NonExistent_Type', error: lookupErr },
+      { caseType: 'NonExistent_Type', error: lookupErr },
       'Invalid caseType for document type lookup'
     )
   })
@@ -356,7 +355,6 @@ test('re-throws original retryable CRM error when createCaseWithOnlineSubmission
 
   // logger should have been called with the original case error
   expect(mockLogger.error).toHaveBeenCalledWith({
-    transaction: { id: 'cid' },
     error: retryErr,
     event: { category: 'crm_case_create_failed', reason: '{"error":{"code":"0x80060891"}}' }
   }, 'Error creating case with online submission activity')

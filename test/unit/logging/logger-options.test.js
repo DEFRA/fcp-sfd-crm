@@ -1,4 +1,9 @@
-import { describe, test, expect, vi } from 'vitest'
+import { beforeEach, describe, test, expect, vi } from 'vitest'
+
+const mocks = vi.hoisted(() => ({
+  getTraceId: vi.fn(),
+  getCorrelationId: vi.fn()
+}))
 
 vi.mock('../../../src/config/index.js', () => ({
   config: {
@@ -12,15 +17,24 @@ vi.mock('../../../src/config/index.js', () => ({
 }))
 
 vi.mock('@defra/hapi-tracing', () => ({
-  getTraceId: vi.fn()
+  getTraceId: mocks.getTraceId
 }))
 
-const { getTraceId } = await import('@defra/hapi-tracing')
+vi.mock('../../../src/logging/correlation-id-store.js', () => ({
+  getCorrelationId: mocks.getCorrelationId
+}))
+
 const { loggerOptions } = await import('../../../src/logging/logger-options.js')
 
 describe('loggerOptions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.getTraceId.mockReturnValue(undefined)
+    mocks.getCorrelationId.mockReturnValue(undefined)
+  })
+
   test('should include trace id in mixin when getTraceId returns a value', () => {
-    getTraceId.mockReturnValue('trace-123')
+    mocks.getTraceId.mockReturnValue('trace-123')
 
     const result = loggerOptions.mixin()
 
@@ -28,10 +42,26 @@ describe('loggerOptions', () => {
   })
 
   test('should return empty object when getTraceId returns null', () => {
-    getTraceId.mockReturnValue(null)
+    mocks.getTraceId.mockReturnValue(null)
 
     const result = loggerOptions.mixin()
 
     expect(result).toEqual({})
+  })
+
+  test('should include transaction.id as a flattened key when correlation context is active', () => {
+    mocks.getCorrelationId.mockReturnValue('correlation-123')
+
+    expect(loggerOptions.mixin()).toEqual({ 'transaction.id': 'correlation-123' })
+  })
+
+  test('should include trace and transaction IDs together', () => {
+    mocks.getTraceId.mockReturnValue('trace-123')
+    mocks.getCorrelationId.mockReturnValue('correlation-123')
+
+    expect(loggerOptions.mixin()).toEqual({
+      trace: { id: 'trace-123' },
+      'transaction.id': 'correlation-123'
+    })
   })
 })

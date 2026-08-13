@@ -6,6 +6,7 @@ import { config } from '../../config/index.js'
 import { createCase } from '../../services/case.js'
 import { inboundCloudEventSchema, validationOptions } from '../../api/schemas/index.js'
 import { logInboundValidationFailure } from '../../utils/validation-logger.js'
+import { runWithCorrelationId } from '../../logging/correlation-id-store.js'
 
 // Allow injection of logger for testing
 let logger = createLogger()
@@ -102,35 +103,39 @@ const startCRMListener = (sqsClient) => {
     pollingWaitTime: config.get('messaging.pollingWaitTime'),
     sqs: sqsClient,
     async handleMessage (message) {
-      if (message.MessageAttributes?.replayed_from?.StringValue === 'DLQ') {
-        logger.info({
-          event: {
-            type: 'crm.dlq.message_replayed',
-            action: 'process_replayed_message',
-            category: 'messaging',
-            outcome: 'unknown',
-            reference: message.MessageId,
-            reason: 'recovery_attempt'
-          }
-        }, 'Processing replayed DLQ message')
-      }
-
       let payload
       try {
         payload = JSON.parse(message.Body)
       } catch (err) {
-        await sendToDlq(sqsClient, dlqUrl, message, { errorClassification: 'invalid_json', message: err.message })
-        return message
+        return runWithCorrelationId(message.MessageId, async () => {
+          await sendToDlq(sqsClient, dlqUrl, message, { errorClassification: 'invalid_json', message: err.message })
+          return message
+        })
       }
 
-      const { error } = inboundCloudEventSchema.validate(payload, validationOptions)
-      if (error) {
-        logInboundValidationFailure(logger, error, payload)
-        await sendToDlq(sqsClient, dlqUrl, message, { errorClassification: 'schema_invalid' })
-        return message
-      }
+      return runWithCorrelationId(payload?.data?.correlationId ?? message.MessageId, async () => {
+        if (message.MessageAttributes?.replayed_from?.StringValue === 'DLQ') {
+          logger.info({
+            event: {
+              type: 'crm.dlq.message_replayed',
+              action: 'process_replayed_message',
+              category: 'messaging',
+              outcome: 'unknown',
+              reference: message.MessageId,
+              reason: 'recovery_attempt'
+            }
+          }, 'Processing replayed DLQ message')
+        }
 
-      return processValidatedMessage(sqsClient, dlqUrl, payload, message)
+        const { error } = inboundCloudEventSchema.validate(payload, validationOptions)
+        if (error) {
+          logInboundValidationFailure(logger, error, payload)
+          await sendToDlq(sqsClient, dlqUrl, message, { errorClassification: 'schema_invalid' })
+          return message
+        }
+
+        return processValidatedMessage(sqsClient, dlqUrl, payload, message)
+      })
     }
   })
 

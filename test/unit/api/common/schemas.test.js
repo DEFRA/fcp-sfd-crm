@@ -10,6 +10,7 @@ describe('api/common/schemas', () => {
   test('createCasePayloadSchema accepts valid payload', () => {
     const valid = {
       caseType: 'some-type',
+      correlationId: '550e8400-e29b-41d4-a716-446655440000',
       crn: 'CRN123',
       sbi: 'SBI123',
       caseData: {
@@ -46,6 +47,7 @@ describe('api/common/schemas', () => {
     expect(error).toBeTruthy()
     // should mention missing caseType and other fields
     expect(error.details.some(d => d.message.includes('caseType'))).toBeTruthy()
+    expect(error.details.some(d => d.message.includes('correlationId'))).toBeTruthy()
   })
 
   test('inboundCloudEventSchema accepts valid cloud event wrapper', () => {

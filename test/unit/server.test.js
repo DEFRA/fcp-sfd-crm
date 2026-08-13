@@ -29,6 +29,7 @@ vi.mock('../../src/services/create-case-with-online-submission-in-crm.js', () =>
 const { config } = await import('../../src/config/index.js')
 const { getCrmAuthToken } = await import('../../src/auth/get-crm-auth-token.js')
 const { createCaseWithOnlineSubmissionInCrm } = await import('../../src/services/create-case-with-online-submission-in-crm.js')
+const { getCorrelationId } = await import('../../src/logging/correlation-id-store.js')
 const { createServer } = await import('../../src/server.js')
 
 describe('POST methods for creating cases in CRM', () => {
@@ -91,6 +92,7 @@ describe('POST methods for creating cases in CRM', () => {
     test('calls createCaseWithOnlineSubmissionInCrm if API key is valid', async () => {
       const payload = {
         caseType: 'DOCUMENT_UPLOAD',
+        correlationId: '550e8400-e29b-41d4-a716-446655440000',
         crn: '123456',
         sbi: '654321',
         caseData: { title: 'Test case', caseDescription: 'Test description' },
@@ -109,6 +111,11 @@ describe('POST methods for creating cases in CRM', () => {
         }
       }
 
+      createCaseWithOnlineSubmissionInCrm.mockImplementationOnce(async () => {
+        expect(getCorrelationId()).toBe('550e8400-e29b-41d4-a716-446655440000')
+        return { caseId: '123-abc' }
+      })
+
       const res = await server.inject({
         method: 'POST',
         url: '/create-case-with-online-submission',
@@ -120,7 +127,7 @@ describe('POST methods for creating cases in CRM', () => {
 
       expect(createCaseWithOnlineSubmissionInCrm).toHaveBeenCalledWith({
         authToken: 'token',
-        correlationId: expect.any(String),
+        correlationId: '550e8400-e29b-41d4-a716-446655440000',
         caseType: 'DOCUMENT_UPLOAD',
         crn: '123456',
         sbi: '654321',
