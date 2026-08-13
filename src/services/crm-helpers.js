@@ -2,7 +2,7 @@ import http2 from 'node:http2'
 import Boom from '@hapi/boom'
 import { createLogger } from '../logging/logger.js'
 import {
-  getOnlineSubmissionId,
+  getOnlineSubmissionActivityId,
   getContactIdFromCrn,
   getAccountIdFromSbi
 } from '../repos/crm.js'
@@ -76,8 +76,8 @@ export async function ensureContactAndAccount (authToken, crn, sbi) {
   return { contactId, accountId }
 }
 
-export async function fetchRpaOnlineSubmissionIdOrThrow (authToken, caseId) {
-  const { rpaOnlinesubmissionid, error } = await getOnlineSubmissionId(authToken, caseId)
+export async function fetchOnlineSubmissionActivityIdOrThrow (authToken, caseId) {
+  const { onlineSubmissionActivityId, error } = await getOnlineSubmissionActivityId(authToken, caseId)
 
   if (error) {
     if (error.retryMetadata?.category === 'retryable') {
@@ -92,12 +92,12 @@ export async function fetchRpaOnlineSubmissionIdOrThrow (authToken, caseId) {
     throw err
   }
 
-  if (!rpaOnlinesubmissionid) {
+  if (!onlineSubmissionActivityId) {
     logger.error({ event: { reference: caseId } }, 'Online submission id not found')
     const err = new Error(messages.SUBMISSION_ID_FAILURE)
     err.retryable = false
     throw err
   }
 
-  return rpaOnlinesubmissionid
+  return onlineSubmissionActivityId
 }

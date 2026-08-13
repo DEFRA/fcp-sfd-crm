@@ -3,7 +3,7 @@ import { getCrmAuthToken } from '../auth/get-crm-auth-token.js'
 import { createCaseWithOnlineSubmissionInCrm } from './create-case-with-online-submission-in-crm.js'
 import { upsertCase, updateCaseId, markFileProcessed } from '../repos/cases.js'
 import { createMetadataForOnlineSubmission } from '../repos/crm.js'
-import { fetchRpaOnlineSubmissionIdOrThrow } from './crm-helpers.js'
+import { fetchOnlineSubmissionActivityIdOrThrow } from './crm-helpers.js'
 import { messages } from '../constants/messages.js'
 
 const logger = createLogger()
@@ -127,7 +127,7 @@ async function createNewCase ({ authToken, transformedPayload, correlationId, fi
 }
 
 async function addMetadataToExistingCase ({ authToken, caseId, correlationId, file, fileId }) {
-  const rpaOnlinesubmissionid = await fetchRpaOnlineSubmissionIdOrThrow(authToken, caseId, { correlationId })
+  const onlineSubmissionActivityId = await fetchOnlineSubmissionActivityIdOrThrow(authToken, caseId, { correlationId })
 
   const metadata = {
     name: file?.fileName || 'unknown',
@@ -138,7 +138,7 @@ async function addMetadataToExistingCase ({ authToken, caseId, correlationId, fi
 
   const { metadataId, error: metadataError } = await createMetadataForOnlineSubmission({
     authToken,
-    rpaOnlinesubmissionid,
+    onlineSubmissionActivityId,
     metadata
   })
 
