@@ -14,6 +14,11 @@ This service is part of the [Single Front Door (SFD)](https://github.com/defra/f
 
 Create a `.env` file in the root of the project based on `.env.example`.
 
+CRM uses federated credentials when `CRM_AUTH_FEDERATED_AUDIENCE` is configured.
+Set `CRM_AUTH_FEDERATED_DISABLED=true` to opt out and use the client-credentials
+flow with `CRM_AUTH_ENDPOINT` and `CRM_AUTH_CLIENT_SECRET` instead. The flag
+defaults to `false` so existing authentication behaviour is unchanged.
+
 ### Pre-commit hooks
 
 This repo includes pre-commit hooks:
