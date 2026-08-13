@@ -234,58 +234,6 @@ const createMetadataForOnlineSubmission = async (request) => {
   }
 }
 
-const createMetadataForExistingCase = async (request) => {
-  try {
-    const { authToken, caseId, metadata } = request
-    const { name, blobFileId, documentTypeId, contactId, accountId, mimeType } = metadata
-
-    const payload = {
-      rpa_name: name,
-      rpa_blobfileid: blobFileId
-    }
-
-    if (mimeType) {
-      payload.rpa_filemimetype = mimeType
-    }
-
-    if (documentTypeId) {
-      payload['rpa_DocumentTypeMetaId@odata.bind'] = `/rpa_documenttypeses(${documentTypeId})`
-    } else {
-      payload['rpa_DocumentTypeMetaId@odata.bind'] = `/rpa_documenttypeses(${DEFAULT_DOCUMENT_TYPE_ID})`
-    }
-
-    if (contactId) {
-      payload['rpa_Contact@odata.bind'] = `/contacts(${contactId})`
-    }
-    if (accountId) {
-      payload['rpa_Organisation@odata.bind'] = `/accounts(${accountId})`
-    }
-
-    const endpoint = `${baseUrl}/incidents(${caseId})/incident_rpa_activitymetadata`
-
-    const response = await httpClient(endpoint, {
-      method: 'POST',
-      headers: {
-        Authorization: authToken,
-        ...baseHeaders
-      },
-      body: JSON.stringify(payload)
-    })
-
-    const data = await response.json()
-
-    return {
-      metadataId: data?.rpa_activitymetadataid || null,
-      error: null
-    }
-  } catch (err) {
-    return {
-      metadataId: null,
-      error: err
-    }
-  }
-}
-
 const CASE_TYPE_MAX_LENGTH = 200
 const CONTROL_CHAR_UPPER_BOUND = 0x1f
 const DELETE_CHAR_CODE = 0x7f
@@ -367,6 +315,5 @@ export {
   getOnlineSubmissionId,
   getCaseIdByOnlineSubmissionId,
   createMetadataForOnlineSubmission,
-  createMetadataForExistingCase,
   getDocumentTypeMetadata
 }
