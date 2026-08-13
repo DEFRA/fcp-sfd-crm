@@ -3,8 +3,8 @@ import { generateTokenViaFederatedCredentials } from './strategies/federated-cre
 import { generateTokenViaClientSecret } from './strategies/client-secret.js'
 
 const useFederatedCredentials = () => {
-  const { audience } = config.get('auth.federatedCredentials')
-  return Boolean(audience)
+  const { audience, disabled } = config.get('auth.federatedCredentials')
+  return !disabled && Boolean(audience)
 }
 
 const generateCrmAuthToken = async () => {

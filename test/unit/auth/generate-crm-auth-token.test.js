@@ -52,6 +52,7 @@ const baseAuthConfig = {
 
 const baseFederatedConfig = {
   audience: 'fcp-sfd-crm',
+  disabled: false,
   enableMocking: false
 }
 
@@ -74,6 +75,19 @@ describe('generateCrmAuthToken', () => {
     })
 
     describe('when enableMocking is false', () => {
+      test('uses federated credentials when the opt-out flag is absent', async () => {
+        config.get.mockImplementation((key) => {
+          if (key === 'auth') return baseAuthConfig
+          if (key === 'auth.federatedCredentials') {
+            return { audience: baseFederatedConfig.audience, enableMocking: false }
+          }
+        })
+
+        await generateCrmAuthToken()
+
+        expect(WebIdentityTokenProvider).toHaveBeenCalledWith({ audience: 'fcp-sfd-crm' })
+      })
+
       test('uses WebIdentityTokenProvider', async () => {
         await generateCrmAuthToken()
 
@@ -177,6 +191,29 @@ describe('generateCrmAuthToken', () => {
         token: 'Bearer oauth-access-token',
         expiresIn: 3600
       })
+    })
+
+    test('uses client-secret authentication when federated credentials are disabled', async () => {
+      config.get.mockImplementation((key) => {
+        if (key === 'auth') return baseAuthConfig
+        if (key === 'auth.federatedCredentials') {
+          return { ...baseFederatedConfig, disabled: true }
+        }
+      })
+      authHttpClient.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          token_type: 'Bearer',
+          access_token: 'oauth-access-token',
+          expires_in: 3600
+        })
+      })
+
+      await generateCrmAuthToken()
+
+      expect(authHttpClient).toHaveBeenCalledOnce()
+      expect(WebIdentityTokenProvider).not.toHaveBeenCalled()
+      expect(ClientAssertionCredential).not.toHaveBeenCalled()
     })
 
     test('throws when the HTTP request fails', async () => {

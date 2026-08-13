@@ -39,6 +39,12 @@ export const authConfig = {
       default: 'crmAuthToken'
     },
     federatedCredentials: {
+      disabled: {
+        doc: 'Disable federated credentials and use client-secret authentication instead.',
+        format: Boolean,
+        default: false,
+        env: 'CRM_AUTH_FEDERATED_DISABLED'
+      },
       audience: {
         doc: 'Audience value presented to AWS STS when requesting the web identity token.',
         format: String,
