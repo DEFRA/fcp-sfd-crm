@@ -231,7 +231,14 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     })).rejects.toMatchObject({ message: 'CRM did not return a case ID and fallback lookup failed', retryable: true })
 
     expect(mockLogger.error).toHaveBeenCalledWith(
-      { rpaOnlinesubmissionid: 'mock-ols-id', error: expect.any(Error) },
+      expect.objectContaining({
+        error: expect.any(Error),
+        event: expect.objectContaining({
+          reference: 'mock-ols-id',
+          category: 'fallback_case_lookup_failed',
+          reason: 'Lookup failed'
+        })
+      }),
       'Fallback lookup for caseId failed'
     )
   })
@@ -254,12 +261,16 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     })).rejects.toMatchObject({ message: 'CRM unavailable', retryable: true })
 
     expect(mockLogger.error).toHaveBeenCalledWith(
-      { caseType: 'CS_Agreement_Evidence', error: lookupErr },
+      expect.objectContaining({
+        error: lookupErr,
+        caseType: 'CS_Agreement_Evidence',
+        event: expect.objectContaining({ category: 'retryable', reason: 'CRM unavailable' })
+      }),
       'Error looking up document type metadata'
     )
   })
 
-  test('throws retryable error when document type lookup returns non-retryable error', async () => {
+  test('throws non-retryable error when document type lookup returns non-retryable error', async () => {
     const lookupErr = new Error('Bad request')
     lookupErr.retryMetadata = { category: 'non-retryable', status: 400 }
     getContactIdFromCrn.mockResolvedValue({ contactId: 'mock-contact-id' })
@@ -274,12 +285,15 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
       sbi: 'mock-sbi',
       caseData: {},
       onlineSubmissionActivity: {}
-    })).rejects.toMatchObject({ retryable: true })
+    })).rejects.toMatchObject({
+      retryable: false,
+      retryMetadata: expect.objectContaining({ terminalReason: 'document_type_lookup_failed' })
+    })
 
     expect(mockLogger.error).toHaveBeenCalled()
   })
 
-  test('throws retryable error when document type lookup returns empty result', async () => {
+  test('throws non-retryable error when document type lookup returns empty result', async () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: 'mock-contact-id' })
     getAccountIdFromSbi.mockResolvedValue({ accountId: 'mock-account-id' })
     getDocumentTypeMetadata.mockResolvedValue({ documentTypeMetadata: null, error: null })
@@ -292,10 +306,16 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
       sbi: 'mock-sbi',
       caseData: {},
       onlineSubmissionActivity: {}
-    })).rejects.toMatchObject({ retryable: true })
+    })).rejects.toMatchObject({
+      retryable: false,
+      retryMetadata: { category: 'non-retryable', terminalReason: 'document_type_not_found' }
+    })
 
-    expect(mockLogger.warn).toHaveBeenCalledWith(
-      { caseType: 'NonExistent_Type' },
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        caseType: 'NonExistent_Type',
+        event: expect.objectContaining({ category: 'non-retryable', reason: 'document_type_not_found' })
+      }),
       'Document type metadata not found for caseType'
     )
   })
@@ -322,7 +342,14 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     })
 
     expect(mockLogger.warn).toHaveBeenCalledWith(
-      { caseType: 'NonExistent_Type', error: lookupErr },
+      expect.objectContaining({
+        error: lookupErr,
+        caseType: 'NonExistent_Type',
+        event: expect.objectContaining({
+          category: 'invalid_case_type',
+          reason: 'Invalid caseType: NonExistent_Type'
+        })
+      }),
       'Invalid caseType for document type lookup'
     )
   })
@@ -356,6 +383,6 @@ test('re-throws original retryable CRM error when createCaseWithOnlineSubmission
   // logger should have been called with the original case error
   expect(mockLogger.error).toHaveBeenCalledWith({
     error: retryErr,
-    event: { category: 'crm_case_create_failed', reason: '{"error":{"code":"0x80060891"}}' }
+    event: { category: 'retryable', reason: '{"error":{"code":"0x80060891"}}' }
   }, 'Error creating case with online submission activity')
 })

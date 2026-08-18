@@ -5,10 +5,14 @@ import { httpClient } from '../http/client.js'
 
 const baseUrl = config.get('crm.baseUrl')
 const caseOriginCode = config.get('crm.caseOriginCode')
-const DEFAULT_DOCUMENT_TYPE_ID = '4e88916b-aae2-ee11-904c-000d3adc1ec9'
 // Dataverse GUIDs are not necessarily RFC 4122 version 4, so no version
 // constraint here — consistent with the caseId schema in api/schemas/outbound.js.
 const guidSchema = Joi.string().guid().required()
+
+// CRM error bodies are unbounded third party output. Cap what reaches the log
+// so a single rejection cannot flood the ingestion pipeline.
+const CRM_ERROR_BODY_MAX_LENGTH = 2000
+const TRUNCATION_SUFFIX = '... (truncated)'
 
 const baseHeaders = {
   'Content-Type': 'application/json',
@@ -21,7 +25,10 @@ const attachCrmErrorBody = async (err) => {
     return
   }
   try {
-    err.crmError = await response.text()
+    const body = await response.text()
+    err.crmError = body.length > CRM_ERROR_BODY_MAX_LENGTH
+      ? `${body.slice(0, CRM_ERROR_BODY_MAX_LENGTH)}${TRUNCATION_SUFFIX}`
+      : body
   } catch {
     // Body already consumed or unreadable — leave the original error untouched
   }
@@ -195,6 +202,7 @@ const getOnlineSubmissionActivityId = async (authToken, caseId) => {
       error: null
     }
   } catch (err) {
+    await attachCrmErrorBody(err)
     return {
       onlineSubmissionActivityId: null,
       error: err
@@ -212,19 +220,21 @@ const createMetadataForOnlineSubmission = async (request) => {
 
     const { name, blobFileId, documentTypeId, mimeType } = metadata
 
+    // The document type must be resolved before writing. There is deliberately
+    // no default: a fallback would silently miscategorise the record in CRM,
+    // so an unresolved document type is reported as an error instead.
+    if (guidSchema.validate(documentTypeId).error) {
+      throw new Error(`Invalid documentTypeId: expected a GUID, got '${documentTypeId}'`)
+    }
+
     const payload = {
       rpa_name: name,
-      rpa_blobfileid: blobFileId
+      rpa_blobfileid: blobFileId,
+      'rpa_DocumentTypeMetaId@odata.bind': `/rpa_documenttypeses(${documentTypeId})`
     }
 
     if (mimeType) {
       payload.rpa_filemimetype = mimeType
-    }
-
-    if (documentTypeId) {
-      payload['rpa_DocumentTypeMetaId@odata.bind'] = `/rpa_documenttypeses(${documentTypeId})`
-    } else {
-      payload['rpa_DocumentTypeMetaId@odata.bind'] = `/rpa_documenttypeses(${DEFAULT_DOCUMENT_TYPE_ID})`
     }
 
     const endpoint = `${baseUrl}/rpa_onlinesubmissions(${onlineSubmissionActivityId})/rpa_onlinesubmission_rpa_activitymetadata`
@@ -245,6 +255,7 @@ const createMetadataForOnlineSubmission = async (request) => {
       error: null
     }
   } catch (err) {
+    await attachCrmErrorBody(err)
     return {
       metadataId: null,
       error: err

@@ -1,6 +1,6 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
 
-const mockLogger = { info: vi.fn(), error: vi.fn() }
+const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
 
 vi.mock('../../../src/logging/logger.js', () => ({
   createLogger: () => mockLogger
@@ -159,13 +159,34 @@ describe('fetchOnlineSubmissionActivityIdOrThrow', () => {
     expect(thrown.message).toBe('Failed to retrieve online submission id')
   })
 
-  test('throws with retryable=false when submission ID is genuinely not found (no error)', async () => {
+  test('throws with retryable=true when the submission is not yet queryable', async () => {
     getOnlineSubmissionActivityId.mockResolvedValue({ onlineSubmissionActivityId: null, error: null })
 
-    const thrown = await fetchOnlineSubmissionActivityIdOrThrow('token', 'case-1', { correlationId: 'corr-1' }).catch(e => e)
+    const thrown = await fetchOnlineSubmissionActivityIdOrThrow('token', 'case-1', { fileId: 'file-1' }).catch(e => e)
 
-    expect(thrown.retryable).toBe(false)
+    expect(thrown.retryable).toBe(true)
+    expect(thrown.retryMetadata).toEqual({ category: 'retryable', terminalReason: 'online_submission_not_found' })
     expect(thrown.message).toBe('Failed to retrieve online submission id')
+  })
+
+  test('logs the CRM rejection reason on event.reason and the error under the error key', async () => {
+    const err = makeNonRetryableError()
+    err.crmError = 'CRM rejected the lookup'
+    getOnlineSubmissionActivityId.mockResolvedValue({ onlineSubmissionActivityId: null, error: err })
+
+    await fetchOnlineSubmissionActivityIdOrThrow('token', 'case-1', { fileId: 'file-1' }).catch(e => e)
+
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: err,
+        fileId: 'file-1',
+        event: expect.objectContaining({
+          reference: 'case-1',
+          reason: 'CRM rejected the lookup'
+        })
+      }),
+      'Failed to retrieve online submission id'
+    )
   })
 
   test('works without context argument', async () => {
