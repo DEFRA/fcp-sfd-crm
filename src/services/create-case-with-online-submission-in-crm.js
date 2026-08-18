@@ -12,33 +12,60 @@ import { publishReceivedEvent } from '../messaging/outbound/received-event/publi
 const { internal } = Boom
 const logger = createLogger()
 
-async function resolveDocumentTypeOrThrow (authToken, caseType) {
+export async function resolveDocumentTypeOrThrow (authToken, caseType) {
   const { documentTypeMetadata, error: docTypeError } = await getDocumentTypeMetadata(authToken, caseType)
 
   if (docTypeError) {
     if (docTypeError.message?.startsWith('Invalid caseType:')) {
-      logger.warn({ caseType, error: docTypeError }, 'Invalid caseType for document type lookup')
+      logger.warn({
+        error: docTypeError,
+        event: {
+          category: docTypeError.retryMetadata?.category ?? 'invalid_case_type',
+          reason: docTypeError.crmError ?? docTypeError.message
+        },
+        caseType
+      }, 'Invalid caseType for document type lookup')
       const badRequestError = Boom.badRequest(docTypeError.message)
       badRequestError.retryable = false
       badRequestError.retryMetadata = { category: 'non-retryable', status: 400 }
       throw badRequestError
     }
 
-    logger.error({ caseType, error: docTypeError }, 'Error looking up document type metadata')
+    logger.error({
+      error: docTypeError,
+      event: {
+        category: docTypeError.retryMetadata?.category ?? 'document_type_lookup_failed',
+        reason: docTypeError.crmError ?? docTypeError.message
+      },
+      caseType
+    }, 'Error looking up document type metadata')
     if (docTypeError?.retryMetadata?.category === 'retryable') {
       docTypeError.retryable = true
       throw docTypeError
     }
+    // Only non-retryable lookup failures reach here — the retryable case is
+    // handled above. Retrying cannot change the outcome, so fail fast rather
+    // than burning every receive attempt before the DLQ.
     const err = internal('Unable to look up document type metadata from CRM')
-    err.retryable = true
-    err.retryMetadata = docTypeError?.retryMetadata ?? null
+    err.retryable = false
+    err.retryMetadata = {
+      ...(docTypeError?.retryMetadata ?? { category: 'non-retryable' }),
+      terminalReason: 'document_type_lookup_failed'
+    }
     throw err
   }
 
   if (!documentTypeMetadata) {
-    logger.warn({ caseType }, 'Document type metadata not found for caseType')
+    // CRM answered and has no document type for this case type. That is a data
+    // or configuration problem, not a transient fault, so it never recovers on
+    // retry. Writing a fallback instead would miscategorise the record in CRM.
+    logger.error({
+      event: { category: 'non-retryable', reason: 'document_type_not_found' },
+      caseType
+    }, 'Document type metadata not found for caseType')
     const err = internal(`No document type metadata found for caseType: ${caseType}`)
-    err.retryable = true
+    err.retryable = false
+    err.retryMetadata = { category: 'non-retryable', terminalReason: 'document_type_not_found' }
     throw err
   }
 
@@ -58,7 +85,7 @@ async function createCrmCaseOrThrow (authToken, contactId, accountId, caseData, 
     logger.error({
       error: caseError,
       event: {
-        category: 'crm_case_create_failed',
+        category: caseError?.retryMetadata?.category ?? 'crm_case_create_failed',
         reason: caseError?.crmError ?? caseError?.message
       }
     }, 'Error creating case with online submission activity')
@@ -77,7 +104,14 @@ async function createCrmCaseOrThrow (authToken, contactId, accountId, caseData, 
     const { caseId: fallbackCaseId, error: lookupError } = await getCaseIdByOnlineSubmissionId(authToken, rpaOnlinesubmissionid)
 
     if (lookupError || !fallbackCaseId) {
-      logger.error({ rpaOnlinesubmissionid, error: lookupError }, 'Fallback lookup for caseId failed')
+      logger.error({
+        error: lookupError,
+        event: {
+          reference: rpaOnlinesubmissionid,
+          category: lookupError?.retryMetadata?.category ?? 'fallback_case_lookup_failed',
+          reason: lookupError?.crmError ?? lookupError?.message
+        }
+      }, 'Fallback lookup for caseId failed')
       const err = internal('CRM did not return a case ID and fallback lookup failed')
       err.retryable = true
       throw err
@@ -99,8 +133,8 @@ export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi,
   const eventData = { correlationId, caseId, crn: Number(crn), sbi: Number(sbi) }
   try {
     await publishReceivedEvent({ type: crmEvents.CASE_CREATED, data: eventData })
-  } catch (err) {
-    logger.error({ err, event: { reference: caseId } }, 'publishReceivedEvent threw unexpectedly — case creation still succeeded')
+  } catch (error) {
+    logger.error({ error, event: { reference: caseId } }, 'publishReceivedEvent threw unexpectedly — case creation still succeeded')
   }
 
   return { contactId, accountId, caseId, rpaOnlinesubmissionid }
