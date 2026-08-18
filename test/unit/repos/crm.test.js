@@ -377,6 +377,41 @@ describe('CRM repository', () => {
       expect(error.crmError).toBe('{"error":{"code":"0x80040265","message":"Cannot find record to be updated"}}')
     })
 
+    test('should cap truncated CRM error body at the configured max length', async () => {
+      const CRM_ERROR_BODY_MAX_LENGTH = 2000
+      const httpError = new Error('HTTP error: 400 Bad Request')
+      httpError.cause = { text: vi.fn().mockResolvedValue('a'.repeat(CRM_ERROR_BODY_MAX_LENGTH + 500)) }
+      mockHttpClient.mockRejectedValue(httpError)
+
+      const { caseId, error } = await createCaseWithOnlineSubmission({
+        authToken: '******',
+        case: {
+          title: 'Test',
+          caseDescription: 'Test',
+          contactId: 'contact-123',
+          accountId: 'account-456',
+          documentTypeMetadata: {
+            schemeValue: 'scheme-abc',
+            subjectValue: 'subject-def',
+            documentTypesId: 'doctype-789'
+          }
+        },
+        onlineSubmissionActivity: {
+          subject: 'Subject',
+          description: 'Description',
+          scheduledStart: '2026-01-01T10:00:00Z',
+          scheduledEnd: '2026-01-01T11:00:00Z',
+          stateCode: 0,
+          statusCode: 1,
+          metadata: { name: 'file.pdf', documentType: 'doc-type', blobFileId: 'blob-1' }
+        }
+      })
+
+      expect(caseId).toBeNull()
+      expect(error.crmError.length).toBe(CRM_ERROR_BODY_MAX_LENGTH)
+      expect(error.crmError.endsWith('... (truncated)')).toBe(true)
+    })
+
     test('should swallow body read failures when attaching CRM error body', async () => {
       const httpError = new Error('HTTP error: 400 Bad Request')
       httpError.cause = { text: vi.fn().mockRejectedValue(new Error('already consumed')) }

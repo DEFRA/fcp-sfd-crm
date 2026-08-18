@@ -165,7 +165,7 @@ describe('fetchOnlineSubmissionActivityIdOrThrow', () => {
     const thrown = await fetchOnlineSubmissionActivityIdOrThrow('token', 'case-1', { fileId: 'file-1' }).catch(e => e)
 
     expect(thrown.retryable).toBe(true)
-    expect(thrown.retryMetadata).toEqual({ category: 'retryable', terminalReason: 'online_submission_not_found' })
+    expect(thrown.retryMetadata).toEqual({ category: 'retryable', terminalReason: 'online_submission_not_yet_queryable' })
     expect(thrown.message).toBe('Failed to retrieve online submission id')
   })
 

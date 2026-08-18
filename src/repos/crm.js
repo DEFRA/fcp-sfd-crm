@@ -27,7 +27,7 @@ const attachCrmErrorBody = async (err) => {
   try {
     const body = await response.text()
     err.crmError = body.length > CRM_ERROR_BODY_MAX_LENGTH
-      ? `${body.slice(0, CRM_ERROR_BODY_MAX_LENGTH)}${TRUNCATION_SUFFIX}`
+      ? `${body.slice(0, CRM_ERROR_BODY_MAX_LENGTH - TRUNCATION_SUFFIX.length)}${TRUNCATION_SUFFIX}`
       : body
   } catch {
     // Body already consumed or unreadable — leave the original error untouched

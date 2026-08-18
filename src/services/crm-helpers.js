@@ -112,7 +112,7 @@ export async function fetchOnlineSubmissionActivityIdOrThrow (authToken, caseId,
     }, 'Online submission not yet queryable, will retry')
     const err = new Error(messages.SUBMISSION_ID_FAILURE)
     err.retryable = true
-    err.retryMetadata = { category: 'retryable', terminalReason: 'online_submission_not_found' }
+    err.retryMetadata = { category: 'retryable', terminalReason: 'online_submission_not_yet_queryable' }
     throw err
   }
 
