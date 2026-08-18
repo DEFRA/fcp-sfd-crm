@@ -447,34 +447,34 @@ describe('CRM repository', () => {
     })
   })
 
-  describe('getOnlineSubmissionId', () => {
-    test('should fetch online submission id for case', async () => {
+  describe('getOnlineSubmissionActivityId', () => {
+    test('should fetch online submission activity id for case', async () => {
       const mockResponse = {
         ok: true,
-        json: vi.fn().mockResolvedValue({ incident_rpa_onlinesubmissions: [{ rpa_onlinesubmissionid: 'OLS-2026-0001' }] })
+        json: vi.fn().mockResolvedValue({ incident_rpa_onlinesubmissions: [{ activityid: '84c190b8-5d96-f111-8076-000d3ada3978', rpa_onlinesubmissionid: '45f08e57040f77977a63' }] })
       }
       mockHttpClient.mockResolvedValue(mockResponse)
 
-      const { getOnlineSubmissionId } = await import('../../../src/repos/crm.js')
+      const { getOnlineSubmissionActivityId } = await import('../../../src/repos/crm.js')
 
-      const result = await getOnlineSubmissionId('Bearer token', 'case-123')
+      const result = await getOnlineSubmissionActivityId('******', 'case-123')
 
       expect(mockHttpClient).toHaveBeenCalledWith(
-        'https://crm.example.com/api/incidents(case-123)?%24select=incidentid,title&%24expand=incident_rpa_onlinesubmissions(%24select=rpa_onlinesubmissionid)',
+        'https://crm.example.com/api/incidents(case-123)?%24select=incidentid,title&%24expand=incident_rpa_onlinesubmissions(%24select=activityid,rpa_onlinesubmissionid)',
         {
           method: 'GET',
-          headers: { Authorization: 'Bearer token', Prefer: 'return=representation', 'Content-Type': 'application/json' }
+          headers: { Authorization: '******', Prefer: 'return=representation', 'Content-Type': 'application/json' }
         }
       )
 
-      expect(result).toEqual({ rpaOnlinesubmissionid: 'OLS-2026-0001', error: null })
+      expect(result).toEqual({ onlineSubmissionActivityId: '84c190b8-5d96-f111-8076-000d3ada3978', error: null })
     })
 
     test('should return error when fetch fails', async () => {
       mockHttpClient.mockRejectedValue(new Error('Network error'))
-      const { getOnlineSubmissionId } = await import('../../../src/repos/crm.js')
-      const result = await getOnlineSubmissionId('Bearer token', 'case-123')
-      expect(result.rpaOnlinesubmissionid).toBeNull()
+      const { getOnlineSubmissionActivityId } = await import('../../../src/repos/crm.js')
+      const result = await getOnlineSubmissionActivityId('******', 'case-123')
+      expect(result.onlineSubmissionActivityId).toBeNull()
       expect(result.error).toBeInstanceOf(Error)
       expect(result.error.message).toBe('Network error')
     })
@@ -482,9 +482,9 @@ describe('CRM repository', () => {
     test('should handle empty online submissions array', async () => {
       const mockResponse = { ok: true, json: vi.fn().mockResolvedValue({ incident_rpa_onlinesubmissions: [] }) }
       mockHttpClient.mockResolvedValue(mockResponse)
-      const { getOnlineSubmissionId } = await import('../../../src/repos/crm.js')
-      const result = await getOnlineSubmissionId('Bearer token', 'case-123')
-      expect(result).toEqual({ rpaOnlinesubmissionid: null, error: null })
+      const { getOnlineSubmissionActivityId } = await import('../../../src/repos/crm.js')
+      const result = await getOnlineSubmissionActivityId('******', 'case-123')
+      expect(result).toEqual({ onlineSubmissionActivityId: null, error: null })
     })
   })
 
@@ -499,13 +499,14 @@ describe('CRM repository', () => {
       const { createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
 
       const result = await createMetadataForOnlineSubmission({
-        authToken: 'Bearer token',
-        rpaOnlinesubmissionid: 'OLS-2026-0001',
+        authToken: '******',
+        onlineSubmissionActivityId: '84c190b8-5d96-f111-8076-000d3ada3978',
         metadata: { name: 'file.pdf', blobFileId: 'blob-1', mimeType: 'application/pdf' }
       })
 
       expect(result).toEqual({ metadataId: 'meta-123', error: null })
       const lastCall = mockHttpClient.mock.calls[0]
+      expect(lastCall[0]).toBe('https://crm.example.com/api/rpa_onlinesubmissions(84c190b8-5d96-f111-8076-000d3ada3978)/rpa_onlinesubmission_rpa_activitymetadata')
       const body = JSON.parse(lastCall[1].body)
       expect(body.rpa_filemimetype).toBe('application/pdf')
     })
@@ -519,8 +520,8 @@ describe('CRM repository', () => {
       const { createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
 
       const result = await createMetadataForOnlineSubmission({
-        authToken: 'Bearer token',
-        rpaOnlinesubmissionid: 'OLS-2026-0002',
+        authToken: '******',
+        onlineSubmissionActivityId: '84c190b8-5d96-f111-8076-000d3ada3978',
         metadata: { name: 'file.pdf', blobFileId: 'blob-1' }
       })
 
@@ -533,7 +534,7 @@ describe('CRM repository', () => {
     test('should return error when fetch fails', async () => {
       mockHttpClient.mockRejectedValue(new Error('Network error'))
       const { createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
-      const result = await createMetadataForOnlineSubmission({ authToken: 'Bearer token', rpaOnlinesubmissionid: 'ols', metadata: {} })
+      const result = await createMetadataForOnlineSubmission({ authToken: '******', onlineSubmissionActivityId: '84c190b8-5d96-f111-8076-000d3ada3978', metadata: {} })
       expect(result.metadataId).toBeNull()
       expect(result.error).toBeInstanceOf(Error)
       expect(result.error.message).toBe('Network error')
@@ -543,7 +544,7 @@ describe('CRM repository', () => {
       const mockResponse = { ok: true, json: vi.fn().mockResolvedValue({}) }
       mockHttpClient.mockResolvedValue(mockResponse)
       const { createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
-      const result = await createMetadataForOnlineSubmission({ authToken: 'Bearer token', rpaOnlinesubmissionid: 'ols', metadata: { name: 'a' } })
+      const result = await createMetadataForOnlineSubmission({ authToken: '******', onlineSubmissionActivityId: '84c190b8-5d96-f111-8076-000d3ada3978', metadata: { name: 'a' } })
       expect(result).toEqual({ metadataId: null, error: null })
     })
 
@@ -553,8 +554,8 @@ describe('CRM repository', () => {
       const { createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
 
       const result = await createMetadataForOnlineSubmission({
-        authToken: 'Bearer token',
-        rpaOnlinesubmissionid: 'OLS-2026-0001',
+        authToken: '******',
+        onlineSubmissionActivityId: '84c190b8-5d96-f111-8076-000d3ada3978',
         metadata: { name: 'file.pdf', blobFileId: 'blob-1', documentTypeId: 'abcd-1234' }
       })
 
@@ -562,6 +563,36 @@ describe('CRM repository', () => {
       const lastCall = mockHttpClient.mock.calls[0]
       const body = JSON.parse(lastCall[1].body)
       expect(body['rpa_DocumentTypeMetaId@odata.bind']).toBe('/rpa_documenttypeses(abcd-1234)')
+    })
+
+    test('should reject a non-GUID onlineSubmissionActivityId without calling the CRM API', async () => {
+      const { createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
+
+      const result = await createMetadataForOnlineSubmission({
+        authToken: '******',
+        onlineSubmissionActivityId: '45f08e57040f77977a63',
+        metadata: { name: 'file.pdf', blobFileId: 'blob-1' }
+      })
+
+      expect(result.metadataId).toBeNull()
+      expect(result.error).toBeInstanceOf(Error)
+      expect(result.error.message).toContain('Invalid onlineSubmissionActivityId')
+      expect(mockHttpClient).not.toHaveBeenCalled()
+    })
+
+    test('should reject a missing onlineSubmissionActivityId without calling the CRM API', async () => {
+      const { createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
+
+      const result = await createMetadataForOnlineSubmission({
+        authToken: '******',
+        onlineSubmissionActivityId: null,
+        metadata: { name: 'file.pdf', blobFileId: 'blob-1' }
+      })
+
+      expect(result.metadataId).toBeNull()
+      expect(result.error).toBeInstanceOf(Error)
+      expect(result.error.message).toContain('Invalid onlineSubmissionActivityId')
+      expect(mockHttpClient).not.toHaveBeenCalled()
     })
   })
 
