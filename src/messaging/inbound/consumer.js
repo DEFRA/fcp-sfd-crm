@@ -46,46 +46,63 @@ const sendToDlq = async (sqsClient, dlqUrl, message, logContext) => {
 
 let crmRequestConsumer
 
+const getRetryDetails = (err) => ({
+  metadata: err.retryMetadata ?? null,
+  status: err.retryMetadata?.status ?? null,
+  category: err.retryMetadata?.category ?? null
+})
+
+const logRetryableFailure = (err) => {
+  const { metadata } = getRetryDetails(err)
+  logger.info({
+    event: {
+      type: 'crm_case_creation_retryable',
+      action: 'leave_on_queue',
+      category: 'messaging',
+      outcome: 'unknown',
+      reason: err.message
+    },
+    retry: metadata
+  }, 'Retryable error, leaving message on queue')
+}
+
+const discardFailedMessage = async (sqsClient, dlqUrl, payload, message, err) => {
+  const { metadata, status, category } = getRetryDetails(err)
+
+  await sendToDlq(sqsClient, dlqUrl, message, {
+    errorClassification: category ?? 'non-retryable',
+    fileId: payload?.data?.file?.fileId ?? null,
+    status
+  })
+
+  logger.error({
+    event: {
+      type: 'crm_case_creation_failed',
+      action: 'discard_message',
+      category: 'messaging',
+      outcome: 'failure',
+      reason: err.message
+    },
+    error: {
+      message: err.message,
+      status,
+      category
+    },
+    retry: metadata
+  }, 'Failed to create case via CRM API')
+}
+
 const processValidatedMessage = async (sqsClient, dlqUrl, payload, message) => {
   try {
     await createCase(payload)
     return message
   } catch (err) {
     if (err.retryable) {
-      logger.info({
-        event: {
-          type: 'crm_case_creation_retryable',
-          action: 'leave_on_queue',
-          category: 'messaging',
-          outcome: 'unknown',
-          reason: err.message
-        },
-        retry: err.retryMetadata ?? null
-      }, 'Retryable error, leaving message on queue')
+      logRetryableFailure(err)
       return undefined
     }
 
-    const fileId = payload?.data?.file?.fileId ?? null
-    await sendToDlq(sqsClient, dlqUrl, message, {
-      errorClassification: err.retryMetadata?.category ?? 'non-retryable',
-      fileId,
-      status: err.retryMetadata?.status ?? null
-    })
-    logger.error({
-      event: {
-        type: 'crm_case_creation_failed',
-        action: 'discard_message',
-        category: 'messaging',
-        outcome: 'failure',
-        reason: err.message
-      },
-      error: {
-        message: err.message,
-        status: err.retryMetadata?.status ?? null,
-        category: err.retryMetadata?.category ?? null
-      },
-      retry: err.retryMetadata ?? null
-    }, 'Failed to create case via CRM API')
+    await discardFailedMessage(sqsClient, dlqUrl, payload, message, err)
     return message
   }
 }

@@ -54,6 +54,16 @@ export const retryConfig = {
         format: Number,
         default: 10000,
         env: 'RETRY_UNKNOWN_MAX_DELAY_MS'
+      },
+      // Dataverse service protection limits routinely advertise a Retry-After
+      // well above maxDelayMs. Capping an advertised delay at that lower value
+      // would retry sooner than instructed and prolong the throttling, so the
+      // server's instruction is given its own, higher ceiling.
+      retryAfterMaxDelayMs: {
+        doc: 'Maximum delay in milliseconds honoured from a Retry-After header',
+        format: Number,
+        default: 60000,
+        env: 'RETRY_AFTER_MAX_DELAY_MS'
       }
     }
   }

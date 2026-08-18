@@ -277,7 +277,9 @@ describe('case service', () => {
       expect(resolveDocumentTypeOrThrow).toHaveBeenCalledWith('mock-token', 'Document Upload')
       expect(createMetadataForOnlineSubmission).toHaveBeenCalledWith(
         expect.objectContaining({
-          metadata: expect.objectContaining({ documentTypeId: 'doc-type-guid' })
+          metadata: expect.objectContaining({ documentTypeId: 'doc-type-guid' }),
+          correlationId: 'corr-1',
+          fileId: 'file-1'
         })
       )
     })

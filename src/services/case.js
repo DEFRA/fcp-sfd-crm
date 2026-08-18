@@ -151,7 +151,9 @@ async function addMetadataToExistingCase ({ authToken, caseId, correlationId, fi
   const { metadataId, error: metadataError } = await createMetadataForOnlineSubmission({
     authToken,
     onlineSubmissionActivityId,
-    metadata
+    metadata,
+    correlationId,
+    fileId
   })
 
   if (metadataError) {
