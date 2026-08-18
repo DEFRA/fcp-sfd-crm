@@ -49,6 +49,35 @@ const calcDelay = (attempt, baseDelayMs, backoffMultiplier, jitterPct, capMs) =>
   return Math.min(base + jitter, capMs)
 }
 
+// Retry-After is either a number of seconds or an HTTP date (RFC 9110 §10.2.3),
+// which specifies delay-seconds as 1*DIGIT. Number() alone is too permissive:
+// it accepts whitespace, signs, decimals and hex, none of which are valid.
+const DELAY_SECONDS_PATTERN = /^\d+$/
+// All three HTTP-date formats RFC 9110 permits begin with a day name. Checking
+// for one first stops Date.parse from salvaging a date out of a malformed
+// delay-seconds value: Date.parse('-5'), for instance, yields the year 5 BC.
+const HTTP_DATE_PATTERN = /^(mon|tue|wed|thu|fri|sat|sun)/i
+const MS_PER_SECOND = 1000
+
+const parseRetryAfterMs = (response) => {
+  const header = response?.headers.get('retry-after')
+  if (!header) {
+    return null
+  }
+
+  const trimmed = header.trim()
+  if (DELAY_SECONDS_PATTERN.test(trimmed)) {
+    return Number(trimmed) * MS_PER_SECOND
+  }
+
+  if (!HTTP_DATE_PATTERN.test(trimmed)) {
+    return null
+  }
+
+  const dateMs = Date.parse(trimmed)
+  return Number.isFinite(dateMs) ? Math.max(0, dateMs - Date.now()) : null
+}
+
 const errorMessage = (err) => {
   if (err instanceof Error) { return err.message }
   if (typeof err === 'string') { return err }
@@ -90,6 +119,12 @@ const isRetryDecisionFailure = (ctx) => {
 
   return Boolean(ctx.response && ctx.response.status >= HTTP_CLIENT_ERROR_MIN)
 }
+
+// throwOnHttpError constructs its HttpError after the onComplete hook has run,
+// so a failing response reaches that hook with no error argument. Reporting
+// such a request as recovered would be misleading.
+const isHttpFailureResponse = (response) =>
+  Boolean(response && response.status >= HTTP_CLIENT_ERROR_MIN)
 
 const retryDurationNs = (startedAtMs) => (Date.now() - startedAtMs) * 1_000_000
 
@@ -156,7 +191,7 @@ const onCompleteHook = (request, response, error, retryStateByRequest) => {
     return
   }
 
-  if (attempts > 1) {
+  if (attempts > 1 && !isHttpFailureResponse(response)) {
     logger.info({
       event: {
         type: 'http_retry_recovered',
@@ -218,6 +253,18 @@ const computeRetryDelay = (ctx) => {
   const cap = cls === 'unknown'
     ? config.get('retry.http.unknownMaxDelayMs')
     : config.get('retry.http.maxDelayMs')
+
+  if (ctx.response?.status === HTTP_TOO_MANY_REQUESTS) {
+    const retryAfterMs = parseRetryAfterMs(ctx.response)
+    if (retryAfterMs !== null) {
+      // Dataverse advertises how long to wait before its throttling clears.
+      // Retrying sooner than instructed only prolongs the throttling, so the
+      // advertised delay takes priority over the computed backoff and is
+      // bounded by its own higher ceiling rather than the backoff cap.
+      return Math.min(retryAfterMs, config.get('retry.http.retryAfterMaxDelayMs'))
+    }
+  }
+
   return calcDelay(
     ctx.attempt,
     config.get('retry.http.baseDelayMs'),
@@ -253,3 +300,7 @@ export const httpClient = makeClient(config.get('retry.http.timeoutMs'))
 export const authHttpClient = makeClient(config.get('retry.http.authTimeoutMs'))
 
 export { NetworkError, TimeoutError, AbortError }
+
+// Exported for direct unit testing of the retry delay decision, which is more
+// precise and far less flaky than timing the resulting sleep.
+export { computeRetryDelay, parseRetryAfterMs }
