@@ -20,6 +20,9 @@ vi.mock('../../../src/config/index.js', () => ({
 // Import after mocks
 const { getContactIdFromCrn, getAccountIdFromSbi, createCaseWithOnlineSubmission, getDocumentTypeMetadata } = await import('../../../src/repos/crm.js')
 
+const DOC_TYPE_ID = '4e88916b-aae2-ee11-904c-000d3adc1ec9'
+const ACTIVITY_ID = '84c190b8-5d96-f111-8076-000d3ada3978'
+
 describe('CRM repository', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -374,6 +377,41 @@ describe('CRM repository', () => {
       expect(error.crmError).toBe('{"error":{"code":"0x80040265","message":"Cannot find record to be updated"}}')
     })
 
+    test('should cap truncated CRM error body at the configured max length', async () => {
+      const CRM_ERROR_BODY_MAX_LENGTH = 2000
+      const httpError = new Error('HTTP error: 400 Bad Request')
+      httpError.cause = { text: vi.fn().mockResolvedValue('a'.repeat(CRM_ERROR_BODY_MAX_LENGTH + 500)) }
+      mockHttpClient.mockRejectedValue(httpError)
+
+      const { caseId, error } = await createCaseWithOnlineSubmission({
+        authToken: '******',
+        case: {
+          title: 'Test',
+          caseDescription: 'Test',
+          contactId: 'contact-123',
+          accountId: 'account-456',
+          documentTypeMetadata: {
+            schemeValue: 'scheme-abc',
+            subjectValue: 'subject-def',
+            documentTypesId: 'doctype-789'
+          }
+        },
+        onlineSubmissionActivity: {
+          subject: 'Subject',
+          description: 'Description',
+          scheduledStart: '2026-01-01T10:00:00Z',
+          scheduledEnd: '2026-01-01T11:00:00Z',
+          stateCode: 0,
+          statusCode: 1,
+          metadata: { name: 'file.pdf', documentType: 'doc-type', blobFileId: 'blob-1' }
+        }
+      })
+
+      expect(caseId).toBeNull()
+      expect(error.crmError.length).toBe(CRM_ERROR_BODY_MAX_LENGTH)
+      expect(error.crmError.endsWith('... (truncated)')).toBe(true)
+    })
+
     test('should swallow body read failures when attaching CRM error body', async () => {
       const httpError = new Error('HTTP error: 400 Bad Request')
       httpError.cause = { text: vi.fn().mockRejectedValue(new Error('already consumed')) }
@@ -501,7 +539,7 @@ describe('CRM repository', () => {
       const result = await createMetadataForOnlineSubmission({
         authToken: '******',
         onlineSubmissionActivityId: '84c190b8-5d96-f111-8076-000d3ada3978',
-        metadata: { name: 'file.pdf', blobFileId: 'blob-1', mimeType: 'application/pdf' }
+        metadata: { name: 'file.pdf', blobFileId: 'blob-1', documentTypeId: DOC_TYPE_ID, mimeType: 'application/pdf' }
       })
 
       expect(result).toEqual({ metadataId: 'meta-123', error: null })
@@ -522,7 +560,7 @@ describe('CRM repository', () => {
       const result = await createMetadataForOnlineSubmission({
         authToken: '******',
         onlineSubmissionActivityId: '84c190b8-5d96-f111-8076-000d3ada3978',
-        metadata: { name: 'file.pdf', blobFileId: 'blob-1' }
+        metadata: { name: 'file.pdf', blobFileId: 'blob-1', documentTypeId: DOC_TYPE_ID }
       })
 
       expect(result).toEqual({ metadataId: 'meta-124', error: null })
@@ -534,7 +572,7 @@ describe('CRM repository', () => {
     test('should return error when fetch fails', async () => {
       mockHttpClient.mockRejectedValue(new Error('Network error'))
       const { createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
-      const result = await createMetadataForOnlineSubmission({ authToken: '******', onlineSubmissionActivityId: '84c190b8-5d96-f111-8076-000d3ada3978', metadata: {} })
+      const result = await createMetadataForOnlineSubmission({ authToken: '******', onlineSubmissionActivityId: '84c190b8-5d96-f111-8076-000d3ada3978', metadata: { documentTypeId: DOC_TYPE_ID } })
       expect(result.metadataId).toBeNull()
       expect(result.error).toBeInstanceOf(Error)
       expect(result.error.message).toBe('Network error')
@@ -544,7 +582,7 @@ describe('CRM repository', () => {
       const mockResponse = { ok: true, json: vi.fn().mockResolvedValue({}) }
       mockHttpClient.mockResolvedValue(mockResponse)
       const { createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
-      const result = await createMetadataForOnlineSubmission({ authToken: '******', onlineSubmissionActivityId: '84c190b8-5d96-f111-8076-000d3ada3978', metadata: { name: 'a' } })
+      const result = await createMetadataForOnlineSubmission({ authToken: '******', onlineSubmissionActivityId: '84c190b8-5d96-f111-8076-000d3ada3978', metadata: { name: 'a', documentTypeId: DOC_TYPE_ID } })
       expect(result).toEqual({ metadataId: null, error: null })
     })
 
@@ -556,13 +594,43 @@ describe('CRM repository', () => {
       const result = await createMetadataForOnlineSubmission({
         authToken: '******',
         onlineSubmissionActivityId: '84c190b8-5d96-f111-8076-000d3ada3978',
-        metadata: { name: 'file.pdf', blobFileId: 'blob-1', documentTypeId: 'abcd-1234' }
+        metadata: { name: 'file.pdf', blobFileId: 'blob-1', documentTypeId: DOC_TYPE_ID }
       })
 
       expect(result).toEqual({ metadataId: 'meta-456', error: null })
       const lastCall = mockHttpClient.mock.calls[0]
       const body = JSON.parse(lastCall[1].body)
-      expect(body['rpa_DocumentTypeMetaId@odata.bind']).toBe('/rpa_documenttypeses(abcd-1234)')
+      expect(body['rpa_DocumentTypeMetaId@odata.bind']).toBe(`/rpa_documenttypeses(${DOC_TYPE_ID})`)
+    })
+
+    test('should reject a missing documentTypeId without calling the CRM API', async () => {
+      const { createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
+
+      const result = await createMetadataForOnlineSubmission({
+        authToken: '******',
+        onlineSubmissionActivityId: ACTIVITY_ID,
+        metadata: { name: 'file.pdf', blobFileId: 'blob-1', documentTypeId: null }
+      })
+
+      expect(result.metadataId).toBeNull()
+      expect(result.error).toBeInstanceOf(Error)
+      expect(result.error.message).toContain('Invalid documentTypeId')
+      expect(mockHttpClient).not.toHaveBeenCalled()
+    })
+
+    test('should reject a non-GUID documentTypeId without calling the CRM API', async () => {
+      const { createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
+
+      const result = await createMetadataForOnlineSubmission({
+        authToken: '******',
+        onlineSubmissionActivityId: ACTIVITY_ID,
+        metadata: { name: 'file.pdf', blobFileId: 'blob-1', documentTypeId: 'not-a-guid' }
+      })
+
+      expect(result.metadataId).toBeNull()
+      expect(result.error).toBeInstanceOf(Error)
+      expect(result.error.message).toContain('Invalid documentTypeId')
+      expect(mockHttpClient).not.toHaveBeenCalled()
     })
 
     test('should reject a non-GUID onlineSubmissionActivityId without calling the CRM API', async () => {
@@ -571,7 +639,7 @@ describe('CRM repository', () => {
       const result = await createMetadataForOnlineSubmission({
         authToken: '******',
         onlineSubmissionActivityId: '45f08e57040f77977a63',
-        metadata: { name: 'file.pdf', blobFileId: 'blob-1' }
+        metadata: { name: 'file.pdf', blobFileId: 'blob-1', documentTypeId: DOC_TYPE_ID }
       })
 
       expect(result.metadataId).toBeNull()
@@ -586,7 +654,7 @@ describe('CRM repository', () => {
       const result = await createMetadataForOnlineSubmission({
         authToken: '******',
         onlineSubmissionActivityId: null,
-        metadata: { name: 'file.pdf', blobFileId: 'blob-1' }
+        metadata: { name: 'file.pdf', blobFileId: 'blob-1', documentTypeId: DOC_TYPE_ID }
       })
 
       expect(result.metadataId).toBeNull()

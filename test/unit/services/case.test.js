@@ -1,6 +1,6 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
 
-const mockLogger = { info: vi.fn(), error: vi.fn() }
+const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
 
 vi.mock('../../../src/logging/logger.js', () => ({
   createLogger: () => mockLogger
@@ -11,7 +11,8 @@ vi.mock('../../../src/auth/get-crm-auth-token.js', () => ({
 }))
 
 vi.mock('../../../src/services/create-case-with-online-submission-in-crm.js', () => ({
-  createCaseWithOnlineSubmissionInCrm: vi.fn(async () => ({ caseId: 'mock-case-id', contactId: 'c1', accountId: 'a1', rpaOnlinesubmissionid: 'mock-ols-id' }))
+  createCaseWithOnlineSubmissionInCrm: vi.fn(async () => ({ caseId: 'mock-case-id', contactId: 'c1', accountId: 'a1', rpaOnlinesubmissionid: 'mock-ols-id' })),
+  resolveDocumentTypeOrThrow: vi.fn(async () => ({ schemeValue: 's', subjectValue: 'sub', documentTypesId: 'doc-type-guid' }))
 }))
 
 vi.mock('../../../src/repos/cases.js', () => ({
@@ -27,7 +28,7 @@ vi.mock('../../../src/repos/crm.js', () => ({
 
 const { createCase, transformPayload } = await import('../../../src/services/case.js')
 const { getCrmAuthToken } = await import('../../../src/auth/get-crm-auth-token.js')
-const { createCaseWithOnlineSubmissionInCrm } = await import('../../../src/services/create-case-with-online-submission-in-crm.js')
+const { createCaseWithOnlineSubmissionInCrm, resolveDocumentTypeOrThrow } = await import('../../../src/services/create-case-with-online-submission-in-crm.js')
 const { upsertCase, updateCaseId, markFileProcessed } = await import('../../../src/repos/cases.js')
 const { getOnlineSubmissionActivityId, createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
 
@@ -151,6 +152,7 @@ describe('case service', () => {
       expect(mockLogger.info).toHaveBeenCalledWith(
         {
           event: { action: 'case-created', outcome: 'success', reference: 'mock-case-id' },
+          fileId: 'file-1',
           rpaOnlinesubmissionid: 'mock-ols-id',
           contactId: 'c1',
           accountId: 'a1'
@@ -262,6 +264,35 @@ describe('case service', () => {
 
       await expect(createCase(validPayload)).rejects.toThrow('Failed to add metadata for additional file')
 
+      expect(markFileProcessed).not.toHaveBeenCalled()
+    })
+
+    test('should resolve the document type and pass it through for an additional file', async () => {
+      upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: 'existing-case-id', isCreator: false })
+      getOnlineSubmissionActivityId.mockResolvedValue({ onlineSubmissionActivityId: '84c190b8-5d96-f111-8076-000d3ada3978', error: null })
+      createMetadataForOnlineSubmission.mockResolvedValue({ metadataId: 'meta-1', error: null })
+
+      await createCase(validPayload)
+
+      expect(resolveDocumentTypeOrThrow).toHaveBeenCalledWith('mock-token', 'Document Upload')
+      expect(createMetadataForOnlineSubmission).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({ documentTypeId: 'doc-type-guid' })
+        })
+      )
+    })
+
+    test('should not create metadata when the document type cannot be resolved', async () => {
+      const docTypeErr = new Error('No document type metadata found for caseType: Document Upload')
+      docTypeErr.retryable = false
+      upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: 'existing-case-id', isCreator: false })
+      getOnlineSubmissionActivityId.mockResolvedValue({ onlineSubmissionActivityId: '84c190b8-5d96-f111-8076-000d3ada3978', error: null })
+      resolveDocumentTypeOrThrow.mockRejectedValueOnce(docTypeErr)
+
+      const thrown = await createCase(validPayload).catch(e => e)
+
+      expect(thrown.retryable).toBe(false)
+      expect(createMetadataForOnlineSubmission).not.toHaveBeenCalled()
       expect(markFileProcessed).not.toHaveBeenCalled()
     })
 

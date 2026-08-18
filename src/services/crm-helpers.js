@@ -76,7 +76,7 @@ export async function ensureContactAndAccount (authToken, crn, sbi) {
   return { contactId, accountId }
 }
 
-export async function fetchOnlineSubmissionActivityIdOrThrow (authToken, caseId) {
+export async function fetchOnlineSubmissionActivityIdOrThrow (authToken, caseId, { fileId } = {}) {
   const { onlineSubmissionActivityId, error } = await getOnlineSubmissionActivityId(authToken, caseId)
 
   if (error) {
@@ -86,16 +86,33 @@ export async function fetchOnlineSubmissionActivityIdOrThrow (authToken, caseId)
       retryableErr.retryMetadata = error.retryMetadata
       throw retryableErr
     }
-    logger.error({ event: { reference: caseId }, error }, messages.SUBMISSION_ID_FAILURE)
+    logger.error({
+      error,
+      event: {
+        reference: caseId,
+        category: error.retryMetadata?.category ?? 'online_submission_lookup_failed',
+        reason: error.crmError ?? error.message
+      },
+      fileId
+    }, messages.SUBMISSION_ID_FAILURE)
     const err = new Error(messages.SUBMISSION_ID_FAILURE)
     err.retryable = false
+    err.retryMetadata = error.retryMetadata ?? null
     throw err
   }
 
   if (!onlineSubmissionActivityId) {
-    logger.error({ event: { reference: caseId } }, 'Online submission id not found')
+    // The online submission is created in the same request as the case, but is
+    // not always immediately queryable afterwards. A miss here is ordinarily
+    // that transient window rather than a genuine absence, so it is retried up
+    // to the queue's receive limit instead of going straight to the DLQ.
+    logger.warn({
+      event: { reference: caseId, category: 'retryable', reason: 'online_submission_not_yet_queryable' },
+      fileId
+    }, 'Online submission not yet queryable, will retry')
     const err = new Error(messages.SUBMISSION_ID_FAILURE)
-    err.retryable = false
+    err.retryable = true
+    err.retryMetadata = { category: 'retryable', terminalReason: 'online_submission_not_yet_queryable' }
     throw err
   }
 

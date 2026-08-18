@@ -1,6 +1,6 @@
 import { createLogger } from '../logging/logger.js'
 import { getCrmAuthToken } from '../auth/get-crm-auth-token.js'
-import { createCaseWithOnlineSubmissionInCrm } from './create-case-with-online-submission-in-crm.js'
+import { createCaseWithOnlineSubmissionInCrm, resolveDocumentTypeOrThrow } from './create-case-with-online-submission-in-crm.js'
 import { upsertCase, updateCaseId, markFileProcessed } from '../repos/cases.js'
 import { createMetadataForOnlineSubmission } from '../repos/crm.js'
 import { fetchOnlineSubmissionActivityIdOrThrow } from './crm-helpers.js'
@@ -87,7 +87,14 @@ export async function createCase (payload) {
     return createNewCase({ authToken, transformedPayload, correlationId, fileId })
   }
 
-  return addMetadataToExistingCase({ authToken, caseId: prep.caseId, correlationId, file, fileId })
+  return addMetadataToExistingCase({
+    authToken,
+    caseId: prep.caseId,
+    correlationId,
+    file,
+    fileId,
+    caseType: transformedPayload.caseType
+  })
 }
 
 async function prepareCase ({ correlationId, fileId }) {
@@ -119,6 +126,7 @@ async function createNewCase ({ authToken, transformedPayload, correlationId, fi
 
   logger.info({
     event: { action: 'case-created', outcome: 'success', reference: response.caseId },
+    fileId,
     rpaOnlinesubmissionid: response.rpaOnlinesubmissionid,
     contactId: response.contactId,
     accountId: response.accountId
@@ -126,13 +134,17 @@ async function createNewCase ({ authToken, transformedPayload, correlationId, fi
   return response
 }
 
-async function addMetadataToExistingCase ({ authToken, caseId, correlationId, file, fileId }) {
-  const onlineSubmissionActivityId = await fetchOnlineSubmissionActivityIdOrThrow(authToken, caseId, { correlationId })
+async function addMetadataToExistingCase ({ authToken, caseId, correlationId, file, fileId, caseType }) {
+  const onlineSubmissionActivityId = await fetchOnlineSubmissionActivityIdOrThrow(authToken, caseId, { fileId })
+
+  // Additional files must be labelled with the same document type as the first
+  // file in the submission, which is resolved from the case type at creation.
+  const documentTypeMetadata = await resolveDocumentTypeOrThrow(authToken, caseType)
 
   const metadata = {
     name: file?.fileName || 'unknown',
     blobFileId: file?.fileId || null,
-    documentTypeId: null,
+    documentTypeId: documentTypeMetadata.documentTypesId,
     mimeType: file?.contentType || null
   }
 
@@ -149,7 +161,15 @@ async function addMetadataToExistingCase ({ authToken, caseId, correlationId, fi
       retryableErr.retryMetadata = metadataError.retryMetadata
       throw retryableErr
     }
-    logger.error({ event: { reference: caseId }, fileId, error: metadataError }, messages.METADATA_FAILURE)
+    logger.error({
+      error: metadataError,
+      event: {
+        reference: caseId,
+        category: metadataError.retryMetadata?.category ?? 'crm_metadata_create_failed',
+        reason: metadataError.crmError ?? metadataError.message
+      },
+      fileId
+    }, messages.METADATA_FAILURE)
     const error = new Error(messages.METADATA_FAILURE)
     error.retryable = false
     throw error
