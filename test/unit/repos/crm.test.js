@@ -24,7 +24,7 @@ vi.mock('../../../src/config/index.js', () => ({
 }))
 
 // Import after mocks
-const { getContactIdFromCrn, getAccountIdFromSbi, createCaseWithOnlineSubmission, getDocumentTypeMetadata, deriveMetadataRecordId } = await import('../../../src/repos/crm.js')
+const { getContactIdFromCrn, getAccountIdFromSbi, createCaseWithOnlineSubmission, getDocumentTypeMetadata, deriveMetadataRecordId, deriveCaseRecordId, deriveOnlineSubmissionRecordId } = await import('../../../src/repos/crm.js')
 
 const DOC_TYPE_ID = '4e88916b-aae2-ee11-904c-000d3adc1ec9'
 const ACTIVITY_ID = '84c190b8-5d96-f111-8076-000d3ada3978'
@@ -167,118 +167,157 @@ describe('CRM repository', () => {
   })
 
   describe('createCaseWithOnlineSubmission', () => {
-    test('should create case with online submission activity using correct payload and return caseId', async () => {
-      const mockResponse = {
-        ok: true,
-        json: vi.fn().mockResolvedValue({
-          incidentid: '8bb8b45b-aba2-f011-bbd2-7ced8d4645a2'
-        })
-      }
+    const CASE_CORRELATION_ID = '77777777-8888-4999-8aaa-bbbbbbbbbbbb'
+    const CASE_FILE_ID = 'cccccccc-dddd-4eee-8fff-000000000000'
 
-      mockHttpClient.mockResolvedValue(mockResponse)
+    // vi.clearAllMocks() in the outer beforeEach clears call history but not a
+    // still-queued mockResolvedValueOnce/mockRejectedValueOnce chain from a
+    // previous test, which silently leaks a queued response into this suite's
+    // multi-call (412-then-fallback) tests. Reset fully, scoped to this block.
+    beforeEach(() => {
+      mockHttpClient.mockReset()
+    })
 
-      const request = {
-        authToken: 'Bearer token',
-        case: {
-          title: 'Test case title',
-          caseDescription: 'Test case description',
-          contactId: 'contact-123',
-          accountId: 'account-456',
-          documentTypeMetadata: {
-            schemeValue: 'scheme-abc',
-            subjectValue: 'subject-def',
-            teamRoutingValue: 'team-ghi',
-            documentTypesId: 'doctype-789'
-          }
-        },
-        onlineSubmissionActivity: {
-          subject: 'Test submission subject',
-          description: 'Test submission description',
-          scheduledStart: '2026-01-01T10:00:00Z',
-          scheduledEnd: '2026-01-01T11:00:00Z',
-          stateCode: 0,
-          statusCode: 1,
-          metadata: {
-            name: 'test-document.pdf',
-            documentType: 'doc-type-789',
-            blobFileId: 'blob-file-id-123',
-            mimeType: 'application/pdf'
-          }
-        }
-      }
-
-      const { caseId, rpaOnlinesubmissionid, error } = await createCaseWithOnlineSubmission(request)
-
-      expect(mockHttpClient).toHaveBeenCalledWith(
-        'https://crm.example.com/api/incidents',
-        {
-          method: 'POST',
-          headers: {
-            Authorization: 'Bearer token',
-            'Content-Type': 'application/json',
-            Prefer: 'return=representation'
-          },
-          body: expect.any(String)
-        }
-      )
-
-      const payload = JSON.parse(mockHttpClient.mock.calls[0][1].body)
-
-      expect(payload).toMatchObject({
+    const buildRequest = (overrides = {}) => ({
+      authToken: 'Bearer token',
+      correlationId: CASE_CORRELATION_ID,
+      fileId: CASE_FILE_ID,
+      case: {
         title: 'Test case title',
-        description: 'Test case description',
-        caseorigincode: 3,
-        prioritycode: 2,
-        'customerid_contact@odata.bind': '/contacts(contact-123)',
-        'rpa_Contact@odata.bind': '/contacts(contact-123)',
-        'rpa_Organisation@odata.bind': '/accounts(account-456)',
-        'rpa_Scheme@odata.bind': '/rpa_schemes(scheme-abc)',
-        'subjectid@odata.bind': '/subjects(subject-def)',
-        'ownerid@odata.bind': '/teams(team-ghi)',
-        rpa_isunknowncontact: false,
-        rpa_isunknownorganisation: false
-      })
-
-      expect(payload.incident_rpa_onlinesubmissions).toHaveLength(1)
-
-      const submission = payload.incident_rpa_onlinesubmissions[0]
-
-      expect(submission).toMatchObject({
+        caseDescription: 'Test case description',
+        contactId: 'contact-123',
+        accountId: 'account-456',
+        documentTypeMetadata: {
+          schemeValue: 'scheme-abc',
+          subjectValue: 'subject-def',
+          teamRoutingValue: 'team-ghi',
+          documentTypesId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+        }
+      },
+      onlineSubmissionActivity: {
         subject: 'Test submission subject',
         description: 'Test submission description',
-        scheduledstart: '2026-01-01T10:00:00Z',
-        scheduledend: '2026-01-01T11:00:00Z',
-        rpa_onlinesubmissionid: expect.any(String),
-        statecode: 0,
-        statuscode: 1,
-        'rpa_SubmissionType_rpa_onlinesubmission@odata.bind': '/rpa_documenttypeses(doctype-789)'
-      })
+        scheduledStart: '2026-01-01T10:00:00Z',
+        scheduledEnd: '2026-01-01T11:00:00Z',
+        stateCode: 0,
+        statusCode: 1,
+        metadata: {
+          name: 'test-document.pdf',
+          documentType: 'doc-type-789',
+          blobFileId: 'blob-file-id-123',
+          mimeType: 'application/pdf'
+        }
+      },
+      ...overrides
+    })
 
-      expect(submission.rpa_onlinesubmissionid).toHaveLength(20)
+    // Mirrors the shape a real Dataverse $batch response uses for three
+    // successful (204) conditional upserts. Hand-built rather than produced
+    // via buildChangesetRequest/parseBatchResponse, so this test does not
+    // merely check the implementation against itself.
+    const successfulBatchResponseText = () => [
+      '--batchresponse_deadbeef',
+      'Content-Type: multipart/mixed; boundary=changesetresponse_deadbeef',
+      '',
+      '--changesetresponse_deadbeef',
+      'Content-Type: application/http',
+      'Content-Transfer-Encoding: binary',
+      'Content-ID: 1',
+      '',
+      'HTTP/1.1 204 No Content',
+      'OData-Version: 4.0',
+      '',
+      '',
+      '--changesetresponse_deadbeef',
+      'Content-Type: application/http',
+      'Content-Transfer-Encoding: binary',
+      'Content-ID: 2',
+      '',
+      'HTTP/1.1 204 No Content',
+      'OData-Version: 4.0',
+      '',
+      '',
+      '--changesetresponse_deadbeef',
+      'Content-Type: application/http',
+      'Content-Transfer-Encoding: binary',
+      'Content-ID: 3',
+      '',
+      'HTTP/1.1 204 No Content',
+      'OData-Version: 4.0',
+      '',
+      '',
+      '--changesetresponse_deadbeef--',
+      '--batchresponse_deadbeef--'
+    ].join('\r\n')
 
-      expect(submission.rpa_onlinesubmission_rpa_activitymetadata[0]).toEqual({
-        rpa_name: 'test-document.pdf',
-        rpa_blobfileid: 'blob-file-id-123',
-        'rpa_DocumentTypeMetaId@odata.bind': '/rpa_documenttypeses(doctype-789)',
-        rpa_filemimetype: 'application/pdf'
-      })
+    const suppressedHttpError = () => new HttpError('HTTP error: 412 Precondition Failed', {
+      status: 412,
+      text: vi.fn().mockResolvedValue('')
+    })
 
-      expect(caseId).toBe('8bb8b45b-aba2-f011-bbd2-7ced8d4645a2')
+    test('should issue one POST to $batch, never a POST to a record collection, and return the derived caseId', async () => {
+      mockHttpClient.mockResolvedValue({ text: vi.fn().mockResolvedValue(successfulBatchResponseText()) })
+
+      const { caseId, rpaOnlinesubmissionid, error } = await createCaseWithOnlineSubmission(buildRequest())
+
+      expect(mockHttpClient).toHaveBeenCalledTimes(1)
+      const [url, options] = mockHttpClient.mock.calls[0]
+      expect(url).toBe('https://crm.example.com/api/$batch')
+      expect(options.method).toBe('POST')
+      expect(options.headers.Authorization).toBe('Bearer token')
+      expect(options.headers['Content-Type']).toMatch(/^multipart\/mixed;boundary=batch_/)
+
+      expect(caseId).toBe(deriveCaseRecordId(CASE_CORRELATION_ID))
       expect(rpaOnlinesubmissionid).toHaveLength(20)
-      expect(submission.rpa_onlinesubmissionid).toBe(rpaOnlinesubmissionid)
       expect(error).toBeNull()
     })
 
-    test('should omit rpa_filemimetype when mimeType not provided in createCaseWithOnlineSubmission', async () => {
-      const mockResponse = {
-        ok: true,
-        json: vi.fn().mockResolvedValue({ incidentid: '8bb8b45b-aba2-f011-bbd2-7ced8d4645a2' })
-      }
+    test('should carry exactly three CRLF-framed PATCH parts, each conditional and none carrying Prefer', async () => {
+      mockHttpClient.mockResolvedValue({ text: vi.fn().mockResolvedValue(successfulBatchResponseText()) })
 
-      mockHttpClient.mockResolvedValue(mockResponse)
+      await createCaseWithOnlineSubmission(buildRequest())
 
-      const request = {
-        authToken: 'Bearer token',
+      const body = mockHttpClient.mock.calls[0][1].body
+      expect(body.split('\n').every((line, i, arr) => i === arr.length - 1 || line.endsWith('\r'))).toBe(true)
+
+      const patchCount = (body.match(/^PATCH /gm) ?? []).length
+      expect(patchCount).toBe(3)
+      const ifNoneMatchCount = (body.match(/If-None-Match: \*/g) ?? []).length
+      expect(ifNoneMatchCount).toBe(3)
+      expect(body).not.toContain('Prefer:')
+
+      const caseId = deriveCaseRecordId(CASE_CORRELATION_ID)
+      const onlineSubmissionId = deriveOnlineSubmissionRecordId(CASE_CORRELATION_ID)
+      const metadataId = deriveMetadataRecordId(CASE_CORRELATION_ID, CASE_FILE_ID)
+      expect(body).toContain(`PATCH https://crm.example.com/api/incidents(${caseId}) HTTP/1.1`)
+      expect(body).toContain(`PATCH https://crm.example.com/api/rpa_onlinesubmissions(${onlineSubmissionId}) HTTP/1.1`)
+      expect(body).toContain(`PATCH https://crm.example.com/api/rpa_activitymetadatas(${metadataId}) HTTP/1.1`)
+    })
+
+    test('should bind the online submission to the case via the verified regardingobjectid navigation property', async () => {
+      mockHttpClient.mockResolvedValue({ text: vi.fn().mockResolvedValue(successfulBatchResponseText()) })
+
+      await createCaseWithOnlineSubmission(buildRequest())
+
+      const body = mockHttpClient.mock.calls[0][1].body
+      const caseId = deriveCaseRecordId(CASE_CORRELATION_ID)
+      expect(body).toContain(`"regardingobjectid_incident_rpa_onlinesubmission@odata.bind":"/incidents(${caseId})"`)
+    })
+
+    test('should never send a nested navigation property, the mistake 0x80060888 punishes', async () => {
+      mockHttpClient.mockResolvedValue({ text: vi.fn().mockResolvedValue(successfulBatchResponseText()) })
+
+      await createCaseWithOnlineSubmission(buildRequest())
+
+      const body = mockHttpClient.mock.calls[0][1].body
+      expect(body).not.toContain('incident_rpa_onlinesubmissions')
+      expect(body).not.toContain('rpa_onlinesubmission_rpa_activitymetadata')
+    })
+
+    test('should omit rpa_filemimetype and ownerid@odata.bind when not provided', async () => {
+      mockHttpClient.mockResolvedValue({ text: vi.fn().mockResolvedValue(successfulBatchResponseText()) })
+
+      await createCaseWithOnlineSubmission(buildRequest({
         case: {
           title: 'Test case title',
           caseDescription: 'Test case description',
@@ -287,7 +326,7 @@ describe('CRM repository', () => {
           documentTypeMetadata: {
             schemeValue: 'scheme-abc',
             subjectValue: 'subject-def',
-            documentTypesId: 'doctype-789'
+            documentTypesId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
           }
         },
         onlineSubmissionActivity: {
@@ -303,193 +342,116 @@ describe('CRM repository', () => {
             blobFileId: 'blob-file-id-123'
           }
         }
-      }
+      }))
 
-      await createCaseWithOnlineSubmission(request)
-
-      const payload = JSON.parse(mockHttpClient.mock.calls[0][1].body)
-      const submission = payload.incident_rpa_onlinesubmissions[0]
-      const meta = submission.rpa_onlinesubmission_rpa_activitymetadata[0]
-      expect(meta.rpa_filemimetype).toBeUndefined()
-      expect(payload['ownerid@odata.bind']).toBeUndefined()
+      const body = mockHttpClient.mock.calls[0][1].body
+      expect(body).not.toContain('rpa_filemimetype')
+      expect(body).not.toContain('ownerid@odata.bind')
     })
 
-    test('should return error when fetch throws', async () => {
-      mockHttpClient.mockRejectedValue(new Error('Network error'))
+    test('should treat a 412 on the changeset as success, log the suppression, and write only the current file\'s metadata', async () => {
+      mockHttpClient
+        .mockRejectedValueOnce(suppressedHttpError())
+        .mockResolvedValueOnce({ ok: true, status: 204 })
 
-      const { caseId, error } = await createCaseWithOnlineSubmission({
-        authToken: 'Bearer token',
-        case: {
-          title: 'Test',
-          caseDescription: 'Test',
-          contactId: 'contact-123',
-          accountId: 'account-456',
-          documentTypeMetadata: {
-            schemeValue: 'scheme-abc',
-            subjectValue: 'subject-def',
-            documentTypesId: 'doctype-789'
-          }
-        },
-        onlineSubmissionActivity: {
-          subject: 'Subject',
-          description: 'Description',
-          scheduledStart: '2026-01-01T10:00:00Z',
-          scheduledEnd: '2026-01-01T11:00:00Z',
-          stateCode: 0,
-          statusCode: 1,
-          metadata: {
-            name: 'file.pdf',
-            documentType: 'doc-type',
-            blobFileId: 'blob-1'
-          }
-        }
+      const { caseId, rpaOnlinesubmissionid, error } = await createCaseWithOnlineSubmission(buildRequest())
+
+      expect(caseId).toBe(deriveCaseRecordId(CASE_CORRELATION_ID))
+      expect(rpaOnlinesubmissionid).toHaveLength(20)
+      expect(error).toBeNull()
+
+      expect(mockHttpClient).toHaveBeenCalledTimes(2)
+      const [metadataUrl, metadataOptions] = mockHttpClient.mock.calls[1]
+      const metadataId = deriveMetadataRecordId(CASE_CORRELATION_ID, CASE_FILE_ID)
+      expect(metadataUrl).toBe(`https://crm.example.com/api/rpa_activitymetadatas(${metadataId})`)
+      expect(metadataOptions.method).toBe('PATCH')
+      expect(metadataOptions.headers['If-None-Match']).toBe('*')
+
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: expect.objectContaining({
+            type: 'crm.case.create_suppressed',
+            outcome: 'success',
+            reference: deriveCaseRecordId(CASE_CORRELATION_ID)
+          })
+        }),
+        'Case already exists, duplicate creation suppressed'
+      )
+    })
+
+    test('should still write a genuinely new metadata record on takeover — a different fileId after a 412', async () => {
+      const takeoverFileId = 'ffffffff-1111-4222-8333-444444444444'
+      mockHttpClient
+        .mockRejectedValueOnce(suppressedHttpError())
+        .mockResolvedValueOnce({ ok: true, status: 204 })
+
+      const { caseId, error } = await createCaseWithOnlineSubmission(buildRequest({ fileId: takeoverFileId }))
+
+      expect(error).toBeNull()
+      expect(caseId).toBe(deriveCaseRecordId(CASE_CORRELATION_ID))
+      const [metadataUrl] = mockHttpClient.mock.calls[1]
+      expect(metadataUrl).toBe(`https://crm.example.com/api/rpa_activitymetadatas(${deriveMetadataRecordId(CASE_CORRELATION_ID, takeoverFileId)})`)
+    })
+
+    test('should still fail as an error for a non-412 4xx or 5xx response on the changeset', async () => {
+      const httpError = new HttpError('HTTP error: 500 Internal Server Error', {
+        status: 500,
+        text: vi.fn().mockResolvedValue('{"error":{"message":"server error"}}')
       })
+      mockHttpClient.mockRejectedValue(httpError)
+
+      const { caseId, error } = await createCaseWithOnlineSubmission(buildRequest())
+
+      expect(caseId).toBeNull()
+      expect(error).toBe(httpError)
+      expect(error.crmError).toBe('{"error":{"message":"server error"}}')
+    })
+
+    test('should treat a 200 batch response with no parts as a failure, not a silent success', async () => {
+      mockHttpClient.mockResolvedValue({ text: vi.fn().mockResolvedValue('--batchresponse_empty\r\n--batchresponse_empty--\r\n') })
+
+      const { caseId, error } = await createCaseWithOnlineSubmission(buildRequest())
 
       expect(caseId).toBeNull()
       expect(error).toBeInstanceOf(Error)
-      expect(error.message).toBe('Network error')
+      expect(error.message).toMatch(/Malformed \$batch response/)
     })
 
-    test('should attach CRM error body when thrown error carries a response cause', async () => {
-      const httpError = new Error('HTTP error: 400 Bad Request')
-      httpError.cause = {
-        text: vi.fn().mockResolvedValue('{"error":{"code":"0x80040265","message":"Cannot find record to be updated"}}')
-      }
-      mockHttpClient.mockRejectedValue(httpError)
+    test('should treat a batch response with fewer parts than sent as a failure', async () => {
+      const twoOfThreeParts = [
+        '--batchresponse_deadbeef',
+        'Content-Type: multipart/mixed; boundary=changesetresponse_deadbeef',
+        '',
+        '--changesetresponse_deadbeef',
+        'Content-Type: application/http',
+        'Content-Transfer-Encoding: binary',
+        'Content-ID: 1',
+        '',
+        'HTTP/1.1 204 No Content',
+        '',
+        '',
+        '--changesetresponse_deadbeef--',
+        '--batchresponse_deadbeef--'
+      ].join('\r\n')
+      mockHttpClient.mockResolvedValue({ text: vi.fn().mockResolvedValue(twoOfThreeParts) })
 
-      const { caseId, error } = await createCaseWithOnlineSubmission({
-        authToken: '******',
-        case: {
-          title: 'Test',
-          caseDescription: 'Test',
-          contactId: 'contact-123',
-          accountId: 'account-456',
-          documentTypeMetadata: {
-            schemeValue: 'scheme-abc',
-            subjectValue: 'subject-def',
-            documentTypesId: 'doctype-789'
-          }
-        },
-        onlineSubmissionActivity: {
-          subject: 'Subject',
-          description: 'Description',
-          scheduledStart: '2026-01-01T10:00:00Z',
-          scheduledEnd: '2026-01-01T11:00:00Z',
-          stateCode: 0,
-          statusCode: 1,
-          metadata: { name: 'file.pdf', documentType: 'doc-type', blobFileId: 'blob-1' }
-        }
-      })
+      const { caseId, error } = await createCaseWithOnlineSubmission(buildRequest())
 
       expect(caseId).toBeNull()
-      expect(error.crmError).toBe('{"error":{"code":"0x80040265","message":"Cannot find record to be updated"}}')
+      expect(error.message).toMatch(/Malformed \$batch response/)
     })
 
-    test('should cap truncated CRM error body at the configured max length', async () => {
-      const CRM_ERROR_BODY_MAX_LENGTH = 2000
-      const httpError = new Error('HTTP error: 400 Bad Request')
-      httpError.cause = { text: vi.fn().mockResolvedValue('a'.repeat(CRM_ERROR_BODY_MAX_LENGTH + 500)) }
-      mockHttpClient.mockRejectedValue(httpError)
-
-      const { caseId, error } = await createCaseWithOnlineSubmission({
-        authToken: '******',
-        case: {
-          title: 'Test',
-          caseDescription: 'Test',
-          contactId: 'contact-123',
-          accountId: 'account-456',
-          documentTypeMetadata: {
-            schemeValue: 'scheme-abc',
-            subjectValue: 'subject-def',
-            documentTypesId: 'doctype-789'
-          }
-        },
-        onlineSubmissionActivity: {
-          subject: 'Subject',
-          description: 'Description',
-          scheduledStart: '2026-01-01T10:00:00Z',
-          scheduledEnd: '2026-01-01T11:00:00Z',
-          stateCode: 0,
-          statusCode: 1,
-          metadata: { name: 'file.pdf', documentType: 'doc-type', blobFileId: 'blob-1' }
-        }
-      })
-
-      expect(caseId).toBeNull()
-      expect(error.crmError.length).toBe(CRM_ERROR_BODY_MAX_LENGTH)
-      expect(error.crmError.endsWith('... (truncated)')).toBe(true)
-    })
-
-    test('should swallow body read failures when attaching CRM error body', async () => {
-      const httpError = new Error('HTTP error: 400 Bad Request')
-      httpError.cause = { text: vi.fn().mockRejectedValue(new Error('already consumed')) }
-      mockHttpClient.mockRejectedValue(httpError)
-
-      const { caseId, error } = await createCaseWithOnlineSubmission({
-        authToken: '******',
-        case: {
-          title: 'Test',
-          caseDescription: 'Test',
-          contactId: 'contact-123',
-          accountId: 'account-456',
-          documentTypeMetadata: {
-            schemeValue: 'scheme-abc',
-            subjectValue: 'subject-def',
-            documentTypesId: 'doctype-789'
-          }
-        },
-        onlineSubmissionActivity: {
-          subject: 'Subject',
-          description: 'Description',
-          scheduledStart: '2026-01-01T10:00:00Z',
-          scheduledEnd: '2026-01-01T11:00:00Z',
-          stateCode: 0,
-          statusCode: 1,
-          metadata: { name: 'file.pdf', documentType: 'doc-type', blobFileId: 'blob-1' }
-        }
-      })
-
-      expect(caseId).toBeNull()
-      expect(error.crmError).toBeUndefined()
-    })
-
-    test('should return error when response json parsing fails', async () => {
-      mockHttpClient.mockResolvedValue({
-        ok: true,
-        json: vi.fn().mockRejectedValue(new Error('Invalid JSON'))
-      })
-
-      const { caseId, error } = await createCaseWithOnlineSubmission({
-        authToken: 'Bearer token',
-        case: {
-          title: 'Test',
-          caseDescription: 'Test',
-          contactId: 'contact-123',
-          accountId: 'account-456',
-          documentTypeMetadata: {
-            schemeValue: 'scheme-abc',
-            subjectValue: 'subject-def',
-            documentTypesId: 'doctype-789'
-          }
-        },
-        onlineSubmissionActivity: {
-          subject: 'Subject',
-          description: 'Description',
-          scheduledStart: '2026-01-01T10:00:00Z',
-          scheduledEnd: '2026-01-01T11:00:00Z',
-          stateCode: 0,
-          statusCode: 1,
-          metadata: {
-            name: 'file.pdf',
-            documentType: 'doc-type',
-            blobFileId: 'blob-1'
-          }
-        }
-      })
+    test.each([
+      ['correlationId', { correlationId: undefined }],
+      ['fileId', { fileId: undefined }],
+      ['both identifiers', { correlationId: undefined, fileId: undefined }]
+    ])('should refuse to derive record keys when %s is missing, without calling the CRM API', async (_label, overrides) => {
+      const { caseId, error } = await createCaseWithOnlineSubmission(buildRequest(overrides))
 
       expect(caseId).toBeNull()
       expect(error).toBeInstanceOf(Error)
-      expect(error.message).toBe('Invalid JSON')
+      expect(error.message).toContain('Cannot derive stable record keys')
+      expect(mockHttpClient).not.toHaveBeenCalled()
     })
   })
 
@@ -569,6 +531,45 @@ describe('CRM repository', () => {
       expect(differentFile).not.toBe(first)
       expect(differentCorrelation).not.toBe(first)
       expect(first).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+    })
+
+    // Pinned regression: this literal value must never change. Records already
+    // exist in both Dataverse organisations under this exact derivation, and a
+    // silent change to deriveMetadataRecordId's input shape would orphan them.
+    test('should derive a specific literal id for a specific literal input pair (pinned regression)', () => {
+      expect(deriveMetadataRecordId(CORRELATION_ID, FILE_ID)).toBe('a835c318-0b29-4127-890b-39c48fd74cd1')
+    })
+  })
+
+  describe('deriveCaseRecordId and deriveOnlineSubmissionRecordId', () => {
+    test('should derive a stable id across repeated calls for the same correlationId', () => {
+      expect(deriveCaseRecordId(CORRELATION_ID)).toBe(deriveCaseRecordId(CORRELATION_ID))
+      expect(deriveOnlineSubmissionRecordId(CORRELATION_ID)).toBe(deriveOnlineSubmissionRecordId(CORRELATION_ID))
+    })
+
+    test('should derive a different id for a different correlationId', () => {
+      expect(deriveCaseRecordId(CORRELATION_ID)).not.toBe(deriveCaseRecordId('correlation-xyz'))
+      expect(deriveOnlineSubmissionRecordId(CORRELATION_ID)).not.toBe(deriveOnlineSubmissionRecordId('correlation-xyz'))
+    })
+
+    test('should match the GUID shape required by guidSchema', () => {
+      const guidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+      expect(deriveCaseRecordId(CORRELATION_ID)).toMatch(guidPattern)
+      expect(deriveOnlineSubmissionRecordId(CORRELATION_ID)).toMatch(guidPattern)
+    })
+
+    test('should derive different ids for the case and the online submission from the same correlationId', () => {
+      expect(deriveCaseRecordId(CORRELATION_ID)).not.toBe(deriveOnlineSubmissionRecordId(CORRELATION_ID))
+    })
+
+    test('should derive different ids from the case/online-submission namespaces than the metadata derivation for related inputs', () => {
+      expect(deriveCaseRecordId(CORRELATION_ID)).not.toBe(deriveMetadataRecordId(CORRELATION_ID, FILE_ID))
+      expect(deriveOnlineSubmissionRecordId(CORRELATION_ID)).not.toBe(deriveMetadataRecordId(CORRELATION_ID, FILE_ID))
+    })
+
+    test('should derive specific literal ids for a specific literal correlationId (pinned regression)', () => {
+      expect(deriveCaseRecordId(CORRELATION_ID)).toBe('a3af1549-2c7e-48cb-bac2-1242ba7f8c14')
+      expect(deriveOnlineSubmissionRecordId(CORRELATION_ID)).toBe('8ff76226-d8ef-4416-92f8-dd4eaf04c928')
     })
 
     test('should omit rpa_filemimetype when mimeType not provided in createMetadataForOnlineSubmission', async () => {

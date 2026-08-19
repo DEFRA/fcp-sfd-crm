@@ -23,6 +23,8 @@ const { createCaseWithOnlineSubmissionInCrm } = await import('../../../src/servi
 const { getContactIdFromCrn, getAccountIdFromSbi, createCaseWithOnlineSubmission, getCaseIdByOnlineSubmissionId, getDocumentTypeMetadata } = await import('../../../src/repos/crm.js')
 const { publishReceivedEvent } = await import('../../../src/messaging/outbound/received-event/publish-received-event.js')
 
+const FILE_ID = 'a1a1a1a1-b2b2-4c3c-8d4d-e5e5e5e5e5e5'
+
 describe('createCaseWithOnlineSubmissionInCrm service', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -42,6 +44,7 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     const request = {
       authToken: 'mock-bearer-token',
       correlationId: 'mock-correlation-id',
+      fileId: FILE_ID,
       caseType: 'CS_Agreement_Evidence',
       crn: 'mock-crn',
       sbi: 'mock-sbi',
@@ -57,6 +60,8 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
 
     expect(createCaseWithOnlineSubmission).toHaveBeenCalledWith({
       authToken: 'mock-bearer-token',
+      correlationId: 'mock-correlation-id',
+      fileId: FILE_ID,
       case: { ...request.caseData, contactId: 'mock-contact-id', accountId: 'mock-account-id', documentTypeMetadata: mockDocTypeMetadata },
       onlineSubmissionActivity: request.onlineSubmissionActivity
     })
@@ -78,6 +83,7 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     const request = {
       authToken: 'mock-bearer-token',
       correlationId: 'mock-correlation-id',
+      fileId: FILE_ID,
       caseType: 'CS_Agreement_Evidence',
       crn: '1050000001',
       sbi: '105000001',
@@ -102,6 +108,7 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     await expect(createCaseWithOnlineSubmissionInCrm({
       authToken: null,
       correlationId: null,
+      fileId: null,
       caseType: null,
       crn: null,
       sbi: null,
@@ -112,6 +119,19 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     expect(mockLogger.error).toHaveBeenCalledWith('Missing required parameter: authToken')
   })
 
+  test('throws error if fileId is missing', async () => {
+    await expect(createCaseWithOnlineSubmissionInCrm({
+      authToken: 'mock-bearer-token',
+      correlationId: 'mock-correlation-id',
+      fileId: null,
+      caseType: 'CS_Agreement_Evidence',
+      crn: 'mock-crn',
+      sbi: 'mock-sbi',
+      caseData: {},
+      onlineSubmissionActivity: {}
+    })).rejects.toThrow('Missing required parameter: fileId')
+  })
+
   test('throws error if contact not found', async () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: null, error: 'Not found' })
 
@@ -119,6 +139,7 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
       createCaseWithOnlineSubmissionInCrm({
         authToken: 'mock-bearer-token',
         correlationId: 'mock-correlation-id',
+        fileId: FILE_ID,
         caseType: 'CS_Agreement_Evidence',
         crn: 'mock-crn',
         sbi: 'mock-sbi',
@@ -142,6 +163,7 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
       createCaseWithOnlineSubmissionInCrm({
         authToken: 'mock-bearer-token',
         correlationId: 'mock-correlation-id',
+        fileId: FILE_ID,
         caseType: 'CS_Agreement_Evidence',
         crn: 'mock-crn',
         sbi: 'mock-sbi',
@@ -168,6 +190,7 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     await expect(createCaseWithOnlineSubmissionInCrm({
       authToken: 'mock-bearer-token',
       correlationId: 'mock-correlation-id',
+      fileId: FILE_ID,
       caseType: 'CS_Agreement_Evidence',
       crn: 'mock-crn',
       sbi: 'mock-sbi',
@@ -187,60 +210,71 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     )
   })
 
-  test('falls back to lookup by online submission ID when CRM POST response lacks caseId', async () => {
-    getContactIdFromCrn.mockResolvedValue({ contactId: 'mock-contact-id' })
-    getAccountIdFromSbi.mockResolvedValue({ accountId: 'mock-account-id' })
-    getDocumentTypeMetadata.mockResolvedValue({ documentTypeMetadata: { schemeValue: 's', subjectValue: 'sub', documentTypesId: 'd' }, error: null })
-    createCaseWithOnlineSubmission.mockResolvedValue({ caseId: undefined, rpaOnlinesubmissionid: 'mock-ols-id', error: null })
-    getCaseIdByOnlineSubmissionId.mockResolvedValue({ caseId: 'fallback-case-id', error: null })
+  // The idempotent createCaseWithOnlineSubmission always derives its caseId
+  // from correlationId and never reads it from a Dataverse response body, so
+  // it never resolves with a falsy caseId on success. This fallback path is
+  // therefore unreachable in production now — kept as a dead-code safety net
+  // pending its planned removal (once observed working in EXT-TEST) rather
+  // than deleted alongside the idempotency fix itself. These tests exercise
+  // it directly since nothing else can reach it.
+  describe('fallback lookup (unreachable via createCaseWithOnlineSubmission since the idempotency fix, retained pending removal)', () => {
+    test('falls back to lookup by online submission ID when caseId is falsy', async () => {
+      getContactIdFromCrn.mockResolvedValue({ contactId: 'mock-contact-id' })
+      getAccountIdFromSbi.mockResolvedValue({ accountId: 'mock-account-id' })
+      getDocumentTypeMetadata.mockResolvedValue({ documentTypeMetadata: { schemeValue: 's', subjectValue: 'sub', documentTypesId: 'd' }, error: null })
+      createCaseWithOnlineSubmission.mockResolvedValue({ caseId: undefined, rpaOnlinesubmissionid: 'mock-ols-id', error: null })
+      getCaseIdByOnlineSubmissionId.mockResolvedValue({ caseId: 'fallback-case-id', error: null })
 
-    const result = await createCaseWithOnlineSubmissionInCrm({
-      authToken: 'mock-bearer-token',
-      correlationId: 'mock-correlation-id',
-      caseType: 'CS_Agreement_Evidence',
-      crn: 'mock-crn',
-      sbi: 'mock-sbi',
-      caseData: {},
-      onlineSubmissionActivity: {}
+      const result = await createCaseWithOnlineSubmissionInCrm({
+        authToken: 'mock-bearer-token',
+        correlationId: 'mock-correlation-id',
+        fileId: FILE_ID,
+        caseType: 'CS_Agreement_Evidence',
+        crn: 'mock-crn',
+        sbi: 'mock-sbi',
+        caseData: {},
+        onlineSubmissionActivity: {}
+      })
+
+      expect(getCaseIdByOnlineSubmissionId).toHaveBeenCalledWith('mock-bearer-token', 'mock-ols-id')
+      expect(result.caseId).toBe('fallback-case-id')
+      expect(result.rpaOnlinesubmissionid).toBe('mock-ols-id')
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        { rpaOnlinesubmissionid: 'mock-ols-id' },
+        'CRM POST response missing incidentid, falling back to lookup by online submission'
+      )
     })
 
-    expect(getCaseIdByOnlineSubmissionId).toHaveBeenCalledWith('mock-bearer-token', 'mock-ols-id')
-    expect(result.caseId).toBe('fallback-case-id')
-    expect(result.rpaOnlinesubmissionid).toBe('mock-ols-id')
-    expect(mockLogger.warn).toHaveBeenCalledWith(
-      { rpaOnlinesubmissionid: 'mock-ols-id' },
-      'CRM POST response missing incidentid, falling back to lookup by online submission'
-    )
-  })
+    test('throws retryable error when fallback lookup also fails', async () => {
+      getContactIdFromCrn.mockResolvedValue({ contactId: 'mock-contact-id' })
+      getAccountIdFromSbi.mockResolvedValue({ accountId: 'mock-account-id' })
+      getDocumentTypeMetadata.mockResolvedValue({ documentTypeMetadata: { schemeValue: 's', subjectValue: 'sub', documentTypesId: 'd' }, error: null })
+      createCaseWithOnlineSubmission.mockResolvedValue({ caseId: undefined, rpaOnlinesubmissionid: 'mock-ols-id', error: null })
+      getCaseIdByOnlineSubmissionId.mockResolvedValue({ caseId: null, error: new Error('Lookup failed') })
 
-  test('throws retryable error when fallback lookup also fails', async () => {
-    getContactIdFromCrn.mockResolvedValue({ contactId: 'mock-contact-id' })
-    getAccountIdFromSbi.mockResolvedValue({ accountId: 'mock-account-id' })
-    getDocumentTypeMetadata.mockResolvedValue({ documentTypeMetadata: { schemeValue: 's', subjectValue: 'sub', documentTypesId: 'd' }, error: null })
-    createCaseWithOnlineSubmission.mockResolvedValue({ caseId: undefined, rpaOnlinesubmissionid: 'mock-ols-id', error: null })
-    getCaseIdByOnlineSubmissionId.mockResolvedValue({ caseId: null, error: new Error('Lookup failed') })
+      await expect(createCaseWithOnlineSubmissionInCrm({
+        authToken: 'mock-bearer-token',
+        correlationId: 'mock-correlation-id',
+        fileId: FILE_ID,
+        caseType: 'CS_Agreement_Evidence',
+        crn: 'mock-crn',
+        sbi: 'mock-sbi',
+        caseData: {},
+        onlineSubmissionActivity: {}
+      })).rejects.toMatchObject({ message: 'CRM did not return a case ID and fallback lookup failed', retryable: true })
 
-    await expect(createCaseWithOnlineSubmissionInCrm({
-      authToken: 'mock-bearer-token',
-      correlationId: 'mock-correlation-id',
-      caseType: 'CS_Agreement_Evidence',
-      crn: 'mock-crn',
-      sbi: 'mock-sbi',
-      caseData: {},
-      onlineSubmissionActivity: {}
-    })).rejects.toMatchObject({ message: 'CRM did not return a case ID and fallback lookup failed', retryable: true })
-
-    expect(mockLogger.error).toHaveBeenCalledWith(
-      expect.objectContaining({
-        error: expect.any(Error),
-        event: expect.objectContaining({
-          reference: 'mock-ols-id',
-          category: 'fallback_case_lookup_failed',
-          reason: 'Lookup failed'
-        })
-      }),
-      'Fallback lookup for caseId failed'
-    )
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: expect.any(Error),
+          event: expect.objectContaining({
+            reference: 'mock-ols-id',
+            category: 'fallback_case_lookup_failed',
+            reason: 'Lookup failed'
+          })
+        }),
+        'Fallback lookup for caseId failed'
+      )
+    })
   })
 
   test('throws retryable error when document type lookup returns HTTP error', async () => {
@@ -253,6 +287,7 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     await expect(createCaseWithOnlineSubmissionInCrm({
       authToken: 'mock-bearer-token',
       correlationId: 'mock-correlation-id',
+      fileId: FILE_ID,
       caseType: 'CS_Agreement_Evidence',
       crn: 'mock-crn',
       sbi: 'mock-sbi',
@@ -280,6 +315,7 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     await expect(createCaseWithOnlineSubmissionInCrm({
       authToken: 'mock-bearer-token',
       correlationId: 'mock-correlation-id',
+      fileId: FILE_ID,
       caseType: 'CS_Agreement_Evidence',
       crn: 'mock-crn',
       sbi: 'mock-sbi',
@@ -301,6 +337,7 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     await expect(createCaseWithOnlineSubmissionInCrm({
       authToken: 'mock-bearer-token',
       correlationId: 'mock-correlation-id',
+      fileId: FILE_ID,
       caseType: 'NonExistent_Type',
       crn: 'mock-crn',
       sbi: 'mock-sbi',
@@ -329,6 +366,7 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     await expect(createCaseWithOnlineSubmissionInCrm({
       authToken: 'mock-bearer-token',
       correlationId: 'mock-correlation-id',
+      fileId: FILE_ID,
       caseType: 'NonExistent_Type',
       crn: 'mock-crn',
       sbi: 'mock-sbi',
@@ -377,7 +415,7 @@ test('re-throws original retryable CRM error when createCaseWithOnlineSubmission
   const { createCaseWithOnlineSubmissionInCrm } = await import('../../../src/services/create-case-with-online-submission-in-crm.js')
 
   await expect(createCaseWithOnlineSubmissionInCrm({
-    authToken: 't', crn: '123', sbi: '456', caseType: 'SomeType', caseData: {}, onlineSubmissionActivity: {}, correlationId: 'cid'
+    authToken: 't', crn: '123', sbi: '456', caseType: 'SomeType', caseData: {}, onlineSubmissionActivity: {}, correlationId: 'cid', fileId: FILE_ID
   })).rejects.toMatchObject({ message: 'CRM transient', retryable: true })
 
   // logger should have been called with the original case error

@@ -115,9 +115,11 @@ async function fallbackLookupCaseIdOrThrow (authToken, rpaOnlinesubmissionid) {
   return fallbackCaseId
 }
 
-async function createCrmCaseOrThrow (authToken, contactId, accountId, caseData, onlineSubmissionActivity, documentTypeMetadata) {
+async function createCrmCaseOrThrow ({ authToken, correlationId, fileId, contactId, accountId, caseData, onlineSubmissionActivity, documentTypeMetadata }) {
   const { caseId, rpaOnlinesubmissionid, error: caseError } = await createCaseWithOnlineSubmission({
     authToken,
+    correlationId,
+    fileId,
     case: { ...caseData, contactId, accountId, documentTypeMetadata },
     onlineSubmissionActivity
   })
@@ -134,12 +136,12 @@ async function createCrmCaseOrThrow (authToken, contactId, accountId, caseData, 
   return { caseId, rpaOnlinesubmissionid }
 }
 
-export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi, caseType, caseData, onlineSubmissionActivity, correlationId }) => {
-  assertRequiredParams({ authToken, crn, sbi, caseType, caseData, onlineSubmissionActivity, correlationId })
+export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi, caseType, caseData, onlineSubmissionActivity, correlationId, fileId }) => {
+  assertRequiredParams({ authToken, crn, sbi, caseType, caseData, onlineSubmissionActivity, correlationId, fileId })
 
   const { contactId, accountId } = await ensureContactAndAccount(authToken, crn, sbi)
   const documentTypeMetadata = await resolveDocumentTypeOrThrow(authToken, caseType)
-  const { caseId, rpaOnlinesubmissionid } = await createCrmCaseOrThrow(authToken, contactId, accountId, caseData, onlineSubmissionActivity, documentTypeMetadata)
+  const { caseId, rpaOnlinesubmissionid } = await createCrmCaseOrThrow({ authToken, correlationId, fileId, contactId, accountId, caseData, onlineSubmissionActivity, documentTypeMetadata })
 
   const eventData = { correlationId, caseId, crn: Number(crn), sbi: Number(sbi) }
   try {

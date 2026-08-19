@@ -129,7 +129,8 @@ describe('case service', () => {
           authToken: 'mock-token',
           crn: 'crn1',
           sbi: 'sbi1',
-          correlationId: 'corr-1'
+          correlationId: 'corr-1',
+          fileId: 'file-1'
         })
       )
       expect(updateCaseId).toHaveBeenCalledWith('corr-1', 'mock-case-id')

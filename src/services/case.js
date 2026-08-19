@@ -119,7 +119,7 @@ async function prepareCase ({ correlationId, fileId }) {
 }
 
 async function createNewCase ({ authToken, transformedPayload, correlationId, fileId }) {
-  const response = await createCaseWithOnlineSubmissionInCrm({ authToken, ...transformedPayload })
+  const response = await createCaseWithOnlineSubmissionInCrm({ authToken, fileId, ...transformedPayload })
 
   await updateCaseId(correlationId, response.caseId)
   await markFileProcessed(correlationId, fileId)
