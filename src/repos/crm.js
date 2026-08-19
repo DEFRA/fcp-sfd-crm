@@ -1,7 +1,11 @@
-import { randomBytes } from 'node:crypto'
+import { randomBytes, createHash } from 'node:crypto'
 import Joi from 'joi'
+import { HttpError } from '@fetchkit/ffetch'
 import { config } from '../config/index.js'
 import { httpClient } from '../http/client.js'
+import { createLogger } from '../logging/logger.js'
+
+const logger = createLogger()
 
 const baseUrl = config.get('crm.baseUrl')
 const caseOriginCode = config.get('crm.caseOriginCode')
@@ -14,9 +18,35 @@ const guidSchema = Joi.string().guid().required()
 const CRM_ERROR_BODY_MAX_LENGTH = 2000
 const TRUNCATION_SUFFIX = '... (truncated)'
 
+const HTTP_PRECONDITION_FAILED = 412
+
+// Nibble positions and masks used to shape a hash digest into an RFC 4122
+// version 4 GUID, as required by deriveMetadataRecordId.
+const GUID_VERSION_NIBBLE_INDEX = 12
+const GUID_VARIANT_NIBBLE_INDEX = 16
+const GUID_VARIANT_MASK = 0x3
+const GUID_VARIANT_RFC4122 = 0x8
+const GUID_NIBBLE_COUNT = 32
+const HEX_RADIX = 16
+
+// RFC 4122 GUID segment lengths (in hex characters). Format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+const GUID_TIME_LOW_LENGTH = 8
+const GUID_TIME_MID_LENGTH = 4
+const GUID_TIME_HI_VERSION_LENGTH = 4
+const GUID_CLOCK_SEQ_LENGTH = 4
+const GUID_NODE_LENGTH = 12
+
 const baseHeaders = {
   'Content-Type': 'application/json',
   Prefer: 'return=representation'
+}
+
+// The metadata upsert never reads its response body, so return=representation
+// is deliberately omitted: it would only make Dataverse serialise a payload
+// that is immediately discarded.
+const upsertHeaders = {
+  'Content-Type': 'application/json',
+  'If-None-Match': '*'
 }
 
 const attachCrmErrorBody = async (err) => {
@@ -210,9 +240,90 @@ const getOnlineSubmissionActivityId = async (authToken, caseId) => {
   }
 }
 
-const createMetadataForOnlineSubmission = async (request) => {
+/**
+ * Derives a stable GUID-formatted key from a (correlationId, fileId) pair so
+ * that every attempt at writing a given file's metadata — including retries
+ * within a single process and SQS redeliveries after a restart — addresses
+ * the same Dataverse record. This makes the write safe to upsert instead of
+ * always creating a new record.
+ *
+ * The key is a one-way digest rather than a random value. Both inputs are
+ * themselves GUIDs, so the key carries no personal data and nothing
+ * meaningful can be recovered from it where it appears in CRM telemetry.
+ * Any future change to the inputs must preserve that property: a low entropy
+ * input would be recoverable from the digest by brute force.
+ *
+ * @param {string} correlationId - GUID identifying the submission.
+ * @param {string} fileId - GUID identifying the file within that submission.
+ * @returns {string} A deterministic RFC 4122 version 4 formatted GUID.
+ */
+const deriveMetadataRecordId = (correlationId, fileId) => {
+  const hash = createHash('sha256').update(`${correlationId}:${fileId}`).digest('hex')
+  const hex = hash.slice(0, GUID_NIBBLE_COUNT).split('')
+  hex[GUID_VERSION_NIBBLE_INDEX] = '4'
+  hex[GUID_VARIANT_NIBBLE_INDEX] = (
+    (parseInt(hex[GUID_VARIANT_NIBBLE_INDEX], HEX_RADIX) & GUID_VARIANT_MASK) | GUID_VARIANT_RFC4122
+  ).toString(HEX_RADIX)
+  const guid = hex.join('')
+
+  const timeLowEnd = GUID_TIME_LOW_LENGTH
+  const timeMidEnd = timeLowEnd + GUID_TIME_MID_LENGTH
+  const timeHiVersionEnd = timeMidEnd + GUID_TIME_HI_VERSION_LENGTH
+  const clockSeqEnd = timeHiVersionEnd + GUID_CLOCK_SEQ_LENGTH
+  const nodeEnd = clockSeqEnd + GUID_NODE_LENGTH
+
+  return `${guid.slice(0, timeLowEnd)}-${guid.slice(timeLowEnd, timeMidEnd)}-${guid.slice(timeMidEnd, timeHiVersionEnd)}-${guid.slice(timeHiVersionEnd, clockSeqEnd)}-${guid.slice(clockSeqEnd, nodeEnd)}`
+}
+
+/**
+ * Writes the metadata record as a conditional upsert.
+ *
+ * The record is addressed on its own entity set rather than the parent's
+ * navigation property collection, which does not support PATCH. If-None-Match
+ * makes the write create-only: Dataverse answers any subsequent attempt with
+ * 412 rather than duplicating the record.
+ *
+ * Note that this is first-write-wins. A later write carrying the same derived
+ * key but different content (a corrected name or mime type, say) is discarded
+ * rather than applied, which is the intended behaviour for retries of a single
+ * logical write.
+ *
+ * @returns {Promise<boolean>} true when the record was created, false when an
+ * identical write had already created it.
+ */
+const upsertMetadataRecord = async (endpoint, authToken, payload) => {
   try {
-    const { authToken, onlineSubmissionActivityId, metadata } = request
+    await httpClient(endpoint, {
+      method: 'PATCH',
+      headers: {
+        Authorization: authToken,
+        ...upsertHeaders
+      },
+      body: JSON.stringify(payload)
+    })
+    return true
+  } catch (err) {
+    if (err instanceof HttpError && err.cause?.status === HTTP_PRECONDITION_FAILED) {
+      return false
+    }
+    throw err
+  }
+}
+
+const createMetadataForOnlineSubmission = async (request) => {
+  const { authToken, onlineSubmissionActivityId, metadata, correlationId, fileId } = request
+
+  try {
+    // Without both identifiers the derived key would be stable but meaningless,
+    // and two files could collide onto one record — the second of which would
+    // be answered with 412 and silently reported as a success.
+    if (!correlationId || !fileId) {
+      throw new Error(`Cannot derive a stable metadata key: correlationId and fileId are both required, got '${correlationId}' and '${fileId}'`)
+    }
+
+    // Derived before the write so every attempt at this file — including HTTP
+    // client retries and SQS redeliveries — addresses the same record.
+    const metadataId = deriveMetadataRecordId(correlationId, fileId)
 
     if (guidSchema.validate(onlineSubmissionActivityId).error) {
       throw new Error(`Invalid onlineSubmissionActivityId: expected a GUID, got '${onlineSubmissionActivityId}'`)
@@ -230,28 +341,25 @@ const createMetadataForOnlineSubmission = async (request) => {
     const payload = {
       rpa_name: name,
       rpa_blobfileid: blobFileId,
-      'rpa_DocumentTypeMetaId@odata.bind': `/rpa_documenttypeses(${documentTypeId})`
+      'rpa_DocumentTypeMetaId@odata.bind': `/rpa_documenttypeses(${documentTypeId})`,
+      'rpa_RelatedOnlineSubmissionId@odata.bind': `/rpa_onlinesubmissions(${onlineSubmissionActivityId})`
     }
 
     if (mimeType) {
       payload.rpa_filemimetype = mimeType
     }
 
-    const endpoint = `${baseUrl}/rpa_onlinesubmissions(${onlineSubmissionActivityId})/rpa_onlinesubmission_rpa_activitymetadata`
+    const endpoint = `${baseUrl}/rpa_activitymetadatas(${metadataId})`
+    const created = await upsertMetadataRecord(endpoint, authToken, payload)
 
-    const response = await httpClient(endpoint, {
-      method: 'POST',
-      headers: {
-        Authorization: authToken,
-        ...baseHeaders
-      },
-      body: JSON.stringify(payload)
-    })
-
-    const data = await response.json()
+    if (!created) {
+      // A prior attempt's write succeeded but its response was lost, delayed
+      // or throttled. Logged so a rising count of suppressions stays visible.
+      logger.info({ fileId, metadataId }, 'Metadata record already exists, duplicate write suppressed')
+    }
 
     return {
-      metadataId: data?.rpa_activitymetadataid || null,
+      metadataId,
       error: null
     }
   } catch (err) {
@@ -344,5 +452,6 @@ export {
   getOnlineSubmissionActivityId,
   getCaseIdByOnlineSubmissionId,
   createMetadataForOnlineSubmission,
-  getDocumentTypeMetadata
+  getDocumentTypeMetadata,
+  deriveMetadataRecordId
 }

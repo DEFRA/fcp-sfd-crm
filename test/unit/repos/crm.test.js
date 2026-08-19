@@ -1,9 +1,15 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
+import { HttpError } from '@fetchkit/ffetch'
 
 const mockHttpClient = vi.fn()
+const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
 
 vi.mock('../../../src/http/client.js', () => ({
   httpClient: mockHttpClient
+}))
+
+vi.mock('../../../src/logging/logger.js', () => ({
+  createLogger: () => mockLogger
 }))
 
 // Mock config
@@ -18,10 +24,12 @@ vi.mock('../../../src/config/index.js', () => ({
 }))
 
 // Import after mocks
-const { getContactIdFromCrn, getAccountIdFromSbi, createCaseWithOnlineSubmission, getDocumentTypeMetadata } = await import('../../../src/repos/crm.js')
+const { getContactIdFromCrn, getAccountIdFromSbi, createCaseWithOnlineSubmission, getDocumentTypeMetadata, deriveMetadataRecordId } = await import('../../../src/repos/crm.js')
 
 const DOC_TYPE_ID = '4e88916b-aae2-ee11-904c-000d3adc1ec9'
 const ACTIVITY_ID = '84c190b8-5d96-f111-8076-000d3ada3978'
+const CORRELATION_ID = 'correlation-abc'
+const FILE_ID = 'file-1'
 
 describe('CRM repository', () => {
   beforeEach(() => {
@@ -527,77 +535,179 @@ describe('CRM repository', () => {
   })
 
   describe('createMetadataForOnlineSubmission', () => {
-    test('should post metadata to online submission and return metadataId', async () => {
-      const mockResponse = {
-        ok: true,
-        json: vi.fn().mockResolvedValue({ rpa_activitymetadataid: 'meta-123' })
-      }
-      mockHttpClient.mockResolvedValue(mockResponse)
+    test('should upsert metadata by its derived key and return metadataId without reading the response body', async () => {
+      mockHttpClient.mockResolvedValue({ ok: true, status: 204 })
 
       const { createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
+      const expectedId = deriveMetadataRecordId(CORRELATION_ID, FILE_ID)
 
       const result = await createMetadataForOnlineSubmission({
         authToken: '******',
-        onlineSubmissionActivityId: '84c190b8-5d96-f111-8076-000d3ada3978',
-        metadata: { name: 'file.pdf', blobFileId: 'blob-1', documentTypeId: DOC_TYPE_ID, mimeType: 'application/pdf' }
+        onlineSubmissionActivityId: ACTIVITY_ID,
+        metadata: { name: 'file.pdf', blobFileId: 'blob-1', documentTypeId: DOC_TYPE_ID, mimeType: 'application/pdf' },
+        correlationId: CORRELATION_ID,
+        fileId: FILE_ID
       })
 
-      expect(result).toEqual({ metadataId: 'meta-123', error: null })
+      expect(result).toEqual({ metadataId: expectedId, error: null })
       const lastCall = mockHttpClient.mock.calls[0]
-      expect(lastCall[0]).toBe('https://crm.example.com/api/rpa_onlinesubmissions(84c190b8-5d96-f111-8076-000d3ada3978)/rpa_onlinesubmission_rpa_activitymetadata')
+      expect(lastCall[0]).toBe(`https://crm.example.com/api/rpa_activitymetadatas(${expectedId})`)
+      expect(lastCall[1].method).toBe('PATCH')
+      expect(lastCall[1].headers['If-None-Match']).toBe('*')
       const body = JSON.parse(lastCall[1].body)
       expect(body.rpa_filemimetype).toBe('application/pdf')
+      expect(body['rpa_RelatedOnlineSubmissionId@odata.bind']).toBe(`/rpa_onlinesubmissions(${ACTIVITY_ID})`)
+    })
+
+    test('should derive the same record id for the same correlationId and fileId, and a different one when either changes', () => {
+      const first = deriveMetadataRecordId(CORRELATION_ID, FILE_ID)
+      const repeat = deriveMetadataRecordId(CORRELATION_ID, FILE_ID)
+      const differentFile = deriveMetadataRecordId(CORRELATION_ID, 'file-2')
+      const differentCorrelation = deriveMetadataRecordId('correlation-xyz', FILE_ID)
+
+      expect(repeat).toBe(first)
+      expect(differentFile).not.toBe(first)
+      expect(differentCorrelation).not.toBe(first)
+      expect(first).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
     })
 
     test('should omit rpa_filemimetype when mimeType not provided in createMetadataForOnlineSubmission', async () => {
-      const mockResponse = {
-        ok: true,
-        json: vi.fn().mockResolvedValue({ rpa_activitymetadataid: 'meta-124' })
-      }
-      mockHttpClient.mockResolvedValue(mockResponse)
+      mockHttpClient.mockResolvedValue({ ok: true, status: 204 })
       const { createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
 
       const result = await createMetadataForOnlineSubmission({
         authToken: '******',
-        onlineSubmissionActivityId: '84c190b8-5d96-f111-8076-000d3ada3978',
-        metadata: { name: 'file.pdf', blobFileId: 'blob-1', documentTypeId: DOC_TYPE_ID }
+        onlineSubmissionActivityId: ACTIVITY_ID,
+        metadata: { name: 'file.pdf', blobFileId: 'blob-1', documentTypeId: DOC_TYPE_ID },
+        correlationId: CORRELATION_ID,
+        fileId: FILE_ID
       })
 
-      expect(result).toEqual({ metadataId: 'meta-124', error: null })
+      expect(result.error).toBeNull()
       const lastCall = mockHttpClient.mock.calls[0]
       const body = JSON.parse(lastCall[1].body)
       expect(body.rpa_filemimetype).toBeUndefined()
     })
 
-    test('should return error when fetch fails', async () => {
+    test('should return error when the request fails with a non-412 error', async () => {
       mockHttpClient.mockRejectedValue(new Error('Network error'))
       const { createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
-      const result = await createMetadataForOnlineSubmission({ authToken: '******', onlineSubmissionActivityId: '84c190b8-5d96-f111-8076-000d3ada3978', metadata: { documentTypeId: DOC_TYPE_ID } })
+      const result = await createMetadataForOnlineSubmission({
+        authToken: '******',
+        onlineSubmissionActivityId: ACTIVITY_ID,
+        metadata: { documentTypeId: DOC_TYPE_ID },
+        correlationId: CORRELATION_ID,
+        fileId: FILE_ID
+      })
       expect(result.metadataId).toBeNull()
       expect(result.error).toBeInstanceOf(Error)
       expect(result.error.message).toBe('Network error')
     })
 
-    test('should handle response without metadata id', async () => {
-      const mockResponse = { ok: true, json: vi.fn().mockResolvedValue({}) }
-      mockHttpClient.mockResolvedValue(mockResponse)
+    test('should treat a 412 response as success and log the suppressed duplicate', async () => {
+      const httpError = new HttpError('HTTP error: 412 Precondition Failed', {
+        status: 412,
+        text: vi.fn().mockResolvedValue('')
+      })
+      mockHttpClient.mockRejectedValue(httpError)
+
       const { createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
-      const result = await createMetadataForOnlineSubmission({ authToken: '******', onlineSubmissionActivityId: '84c190b8-5d96-f111-8076-000d3ada3978', metadata: { name: 'a', documentTypeId: DOC_TYPE_ID } })
-      expect(result).toEqual({ metadataId: null, error: null })
+      const expectedId = deriveMetadataRecordId(CORRELATION_ID, FILE_ID)
+
+      const result = await createMetadataForOnlineSubmission({
+        authToken: '******',
+        onlineSubmissionActivityId: ACTIVITY_ID,
+        metadata: { name: 'file.pdf', blobFileId: 'blob-1', documentTypeId: DOC_TYPE_ID },
+        correlationId: CORRELATION_ID,
+        fileId: FILE_ID
+      })
+
+      expect(result).toEqual({ metadataId: expectedId, error: null })
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        { fileId: FILE_ID, metadataId: expectedId },
+        'Metadata record already exists, duplicate write suppressed'
+      )
     })
 
-    test('should include provided documentTypeId in payload', async () => {
-      const mockResponse = { ok: true, json: vi.fn().mockResolvedValue({ rpa_activitymetadataid: 'meta-456' }) }
-      mockHttpClient.mockResolvedValue(mockResponse)
+    test('should still fail as a non-retryable error for a 409 or other 4xx response', async () => {
+      const httpError = new HttpError('HTTP error: 409 Conflict', {
+        status: 409,
+        text: vi.fn().mockResolvedValue('{"error":{"message":"conflict"}}')
+      })
+      mockHttpClient.mockRejectedValue(httpError)
+
       const { createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
 
       const result = await createMetadataForOnlineSubmission({
         authToken: '******',
-        onlineSubmissionActivityId: '84c190b8-5d96-f111-8076-000d3ada3978',
-        metadata: { name: 'file.pdf', blobFileId: 'blob-1', documentTypeId: DOC_TYPE_ID }
+        onlineSubmissionActivityId: ACTIVITY_ID,
+        metadata: { name: 'file.pdf', blobFileId: 'blob-1', documentTypeId: DOC_TYPE_ID },
+        correlationId: CORRELATION_ID,
+        fileId: FILE_ID
       })
 
-      expect(result).toEqual({ metadataId: 'meta-456', error: null })
+      expect(result.metadataId).toBeNull()
+      expect(result.error).toBe(httpError)
+      expect(mockLogger.info).not.toHaveBeenCalled()
+    })
+
+    test('should not suppress a 412 carried by an error that is not an HttpError', async () => {
+      // Guards the narrowness of the suppression: only a genuine HTTP 412 from
+      // the client counts. An unrelated error that happens to carry a similar
+      // shape must still be reported. The real 500-then-412 retry sequence is
+      // exercised against the unmocked client in crm-metadata-upsert-seam.test.js.
+      const lookalike = new Error('not an HTTP error')
+      lookalike.cause = { status: 412, text: vi.fn().mockResolvedValue('') }
+      mockHttpClient.mockRejectedValue(lookalike)
+
+      const { createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
+
+      const result = await createMetadataForOnlineSubmission({
+        authToken: '******',
+        onlineSubmissionActivityId: ACTIVITY_ID,
+        metadata: { name: 'file.pdf', blobFileId: 'blob-1', documentTypeId: DOC_TYPE_ID },
+        correlationId: CORRELATION_ID,
+        fileId: FILE_ID
+      })
+
+      expect(result.metadataId).toBeNull()
+      expect(result.error).toBe(lookalike)
+      expect(mockLogger.info).not.toHaveBeenCalled()
+    })
+
+    test.each([
+      ['correlationId', { correlationId: undefined, fileId: FILE_ID }],
+      ['fileId', { correlationId: CORRELATION_ID, fileId: null }],
+      ['both identifiers', { correlationId: undefined, fileId: undefined }]
+    ])('should refuse to derive a key when %s is missing, without calling the CRM API', async (_label, ids) => {
+      const { createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
+
+      const result = await createMetadataForOnlineSubmission({
+        authToken: '******',
+        onlineSubmissionActivityId: ACTIVITY_ID,
+        metadata: { name: 'file.pdf', blobFileId: 'blob-1', documentTypeId: DOC_TYPE_ID },
+        ...ids
+      })
+
+      expect(result.metadataId).toBeNull()
+      expect(result.error).toBeInstanceOf(Error)
+      expect(result.error.message).toContain('Cannot derive a stable metadata key')
+      expect(mockHttpClient).not.toHaveBeenCalled()
+    })
+
+    test('should include provided documentTypeId in payload', async () => {
+      mockHttpClient.mockResolvedValue({ ok: true, status: 204 })
+      const { createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
+
+      const result = await createMetadataForOnlineSubmission({
+        authToken: '******',
+        onlineSubmissionActivityId: ACTIVITY_ID,
+        metadata: { name: 'file.pdf', blobFileId: 'blob-1', documentTypeId: DOC_TYPE_ID },
+        correlationId: CORRELATION_ID,
+        fileId: FILE_ID
+      })
+
+      expect(result.error).toBeNull()
       const lastCall = mockHttpClient.mock.calls[0]
       const body = JSON.parse(lastCall[1].body)
       expect(body['rpa_DocumentTypeMetaId@odata.bind']).toBe(`/rpa_documenttypeses(${DOC_TYPE_ID})`)
@@ -609,7 +719,9 @@ describe('CRM repository', () => {
       const result = await createMetadataForOnlineSubmission({
         authToken: '******',
         onlineSubmissionActivityId: ACTIVITY_ID,
-        metadata: { name: 'file.pdf', blobFileId: 'blob-1', documentTypeId: null }
+        metadata: { name: 'file.pdf', blobFileId: 'blob-1', documentTypeId: null },
+        correlationId: CORRELATION_ID,
+        fileId: FILE_ID
       })
 
       expect(result.metadataId).toBeNull()
@@ -624,7 +736,9 @@ describe('CRM repository', () => {
       const result = await createMetadataForOnlineSubmission({
         authToken: '******',
         onlineSubmissionActivityId: ACTIVITY_ID,
-        metadata: { name: 'file.pdf', blobFileId: 'blob-1', documentTypeId: 'not-a-guid' }
+        metadata: { name: 'file.pdf', blobFileId: 'blob-1', documentTypeId: 'not-a-guid' },
+        correlationId: CORRELATION_ID,
+        fileId: FILE_ID
       })
 
       expect(result.metadataId).toBeNull()
@@ -639,7 +753,9 @@ describe('CRM repository', () => {
       const result = await createMetadataForOnlineSubmission({
         authToken: '******',
         onlineSubmissionActivityId: '45f08e57040f77977a63',
-        metadata: { name: 'file.pdf', blobFileId: 'blob-1', documentTypeId: DOC_TYPE_ID }
+        metadata: { name: 'file.pdf', blobFileId: 'blob-1', documentTypeId: DOC_TYPE_ID },
+        correlationId: CORRELATION_ID,
+        fileId: FILE_ID
       })
 
       expect(result.metadataId).toBeNull()
@@ -654,7 +770,9 @@ describe('CRM repository', () => {
       const result = await createMetadataForOnlineSubmission({
         authToken: '******',
         onlineSubmissionActivityId: null,
-        metadata: { name: 'file.pdf', blobFileId: 'blob-1', documentTypeId: DOC_TYPE_ID }
+        metadata: { name: 'file.pdf', blobFileId: 'blob-1', documentTypeId: DOC_TYPE_ID },
+        correlationId: CORRELATION_ID,
+        fileId: FILE_ID
       })
 
       expect(result.metadataId).toBeNull()
