@@ -7,6 +7,15 @@ import { createCase } from '../../services/case.js'
 import { inboundCloudEventSchema, validationOptions } from '../../api/schemas/index.js'
 import { logInboundValidationFailure } from '../../utils/validation-logger.js'
 import { runWithCorrelationId } from '../../logging/correlation-id-store.js'
+import { messages } from '../../constants/messages.js'
+import {
+  messagingEventTypes,
+  messagingActions,
+  messagingCategories,
+  messagingOutcomes,
+  messagingLogMessages,
+  messagingErrorClassifications
+} from '../../constants/messaging-events.js'
 
 // Allow injection of logger for testing
 let logger = createLogger()
@@ -14,7 +23,14 @@ const setLogger = (customLogger) => {
   logger = customLogger
 }
 
-const sendToDlq = async (sqsClient, dlqUrl, message, logContext) => {
+// CDP only indexes a fixed subset of ECS fields, so any additional context is
+// carried in tenant.message rather than emitted as bespoke top-level keys.
+const toTenantMessage = (context) => {
+  const entries = Object.entries(context).filter(([, value]) => value !== null && value !== undefined)
+  return entries.length ? entries.map(([key, value]) => `${key}=${value}`).join(' ') : null
+}
+
+const sendToDlq = async (sqsClient, dlqUrl, message, { error, tenant } = {}) => {
   try {
     await sqsClient.send(new SendMessageCommand({
       QueueUrl: dlqUrl,
@@ -28,7 +44,8 @@ const sendToDlq = async (sqsClient, dlqUrl, message, logContext) => {
         outcome: 'failure',
         reference: message.MessageId
       },
-      error: logContext
+      error,
+      tenant
     }, 'Message routed to DLQ')
   } catch (dlqErr) {
     logger.fatal({
@@ -47,49 +64,71 @@ const sendToDlq = async (sqsClient, dlqUrl, message, logContext) => {
 let crmRequestConsumer
 
 const getRetryDetails = (err) => ({
-  metadata: err.retryMetadata ?? null,
   status: err.retryMetadata?.status ?? null,
-  category: err.retryMetadata?.category ?? null
+  category: err.retryMetadata?.category ?? null,
+  attempts: err.retryMetadata?.attempts ?? null
 })
 
 const logRetryableFailure = (err) => {
-  const { metadata } = getRetryDetails(err)
+  const { status, category, attempts } = getRetryDetails(err)
   logger.info({
     event: {
-      type: 'crm_case_creation_retryable',
-      action: 'leave_on_queue',
-      category: 'messaging',
-      outcome: 'unknown',
-      reason: err.message
-    },
-    retry: metadata
-  }, 'Retryable error, leaving message on queue')
-}
-
-const discardFailedMessage = async (sqsClient, dlqUrl, payload, message, err) => {
-  const { metadata, status, category } = getRetryDetails(err)
-
-  await sendToDlq(sqsClient, dlqUrl, message, {
-    errorClassification: category ?? 'non-retryable',
-    fileId: payload?.data?.file?.fileId ?? null,
-    status
-  })
-
-  logger.error({
-    event: {
-      type: 'crm_case_creation_failed',
-      action: 'discard_message',
-      category: 'messaging',
-      outcome: 'failure',
+      type: messagingEventTypes.CASE_CREATION_RETRYABLE,
+      action: messagingActions.LEAVE_ON_QUEUE,
+      category: messagingCategories.MESSAGING,
+      outcome: messagingOutcomes.UNKNOWN,
       reason: err.message
     },
     error: {
       message: err.message,
-      status,
-      category
+      code: status,
+      type: category ?? messagingErrorClassifications.RETRYABLE
     },
-    retry: metadata
-  }, 'Failed to create case via CRM API')
+    tenant: {
+      message: toTenantMessage({ attempts, cause: err.cause?.message })
+    }
+  }, messagingLogMessages.RETRYABLE_ERROR)
+}
+
+const discardFailedMessage = async (sqsClient, dlqUrl, payload, message, err) => {
+  const { status, category, attempts } = getRetryDetails(err)
+
+  const fileId = payload?.data?.file?.fileId ?? null
+  const isMetadataFailure = err.message === messages.METADATA_FAILURE
+  const errorType = isMetadataFailure
+    ? messagingEventTypes.METADATA_ATTACHMENT_FAILED
+    : messagingEventTypes.CASE_CREATION_FAILED
+  const errorMsg = isMetadataFailure
+    ? messagingLogMessages.ATTACH_METADATA_FOR_ADDITIONAL_FILE
+    : messagingLogMessages.CREATE_CASE_VIA_CRM_API
+
+  const errorContext = {
+    message: err.message,
+    code: status,
+    type: category ?? messagingErrorClassifications.NON_RETRYABLE,
+    stack_trace: err.stack ?? null
+  }
+  const tenantContext = toTenantMessage({ fileId, attempts, cause: err.cause?.message })
+
+  await sendToDlq(sqsClient, dlqUrl, message, {
+    error: errorContext,
+    tenant: { message: tenantContext }
+  })
+
+  logger.error({
+    event: {
+      type: errorType,
+      action: messagingActions.DISCARD_MESSAGE,
+      category: messagingCategories.MESSAGING,
+      outcome: messagingOutcomes.FAILURE,
+      reason: err.message,
+      reference: fileId
+    },
+    error: errorContext,
+    tenant: {
+      message: tenantContext
+    }
+  }, errorMsg)
 }
 
 const processValidatedMessage = async (sqsClient, dlqUrl, payload, message) => {
@@ -111,7 +150,11 @@ const startCRMListener = (sqsClient) => {
   const queueUrl = config.get('messaging.crmRequest.queueUrl')
   const dlqUrl = config.get('messaging.crmRequest.deadLetterUrl')
 
-  logger.info({ queueUrl, endpoint: sqsClient.config.endpoint }, 'Starting CRM request consumer')
+  logger.info({
+    tenant: {
+      message: toTenantMessage({ queueUrl, endpoint: sqsClient.config.endpoint })
+    }
+  }, 'Starting CRM request consumer')
 
   crmRequestConsumer = Consumer.create({
     queueUrl,
@@ -125,7 +168,12 @@ const startCRMListener = (sqsClient) => {
         payload = JSON.parse(message.Body)
       } catch (err) {
         return runWithCorrelationId(message.MessageId, async () => {
-          await sendToDlq(sqsClient, dlqUrl, message, { errorClassification: 'invalid_json', message: err.message })
+          await sendToDlq(sqsClient, dlqUrl, message, {
+            error: {
+              message: err.message,
+              type: messagingErrorClassifications.INVALID_JSON
+            }
+          })
           return message
         })
       }
@@ -147,7 +195,12 @@ const startCRMListener = (sqsClient) => {
         const { error } = inboundCloudEventSchema.validate(payload, validationOptions)
         if (error) {
           logInboundValidationFailure(logger, error, payload)
-          await sendToDlq(sqsClient, dlqUrl, message, { errorClassification: 'schema_invalid' })
+          await sendToDlq(sqsClient, dlqUrl, message, {
+            error: {
+              message: error.message,
+              type: messagingErrorClassifications.SCHEMA_INVALID
+            }
+          })
           return message
         }
 

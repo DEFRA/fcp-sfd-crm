@@ -155,13 +155,16 @@ describe('CRM request sqs consumer', () => {
       expect(logger.info).toHaveBeenCalledWith('CRM request consumer stopped')
     })
 
-    test('should log starting consumer with queueUrl and endpoint', async () => {
+    test('should log starting consumer with queueUrl and endpoint in tenant context', async () => {
       const { startCRMListener: start, logger } = await setupAndImportConsumer()
       const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
       start(mockSqsClient)
-      expect(logger.info).toHaveBeenCalled()
-      const calls = logger.info.mock.calls
-      expect(calls.some(call => call.some(arg => arg === 'Starting CRM request consumer' || (typeof arg === 'string' && arg.includes('Starting CRM request consumer'))))).toBeTruthy()
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tenant: { message: expect.stringContaining('endpoint=mock-endpoint') }
+        }),
+        'Starting CRM request consumer'
+      )
     })
 
     test('should log consumer error', async () => {
@@ -289,7 +292,7 @@ describe('CRM request sqs consumer', () => {
       expect(logger.error).toHaveBeenCalledWith(
         expect.objectContaining({
           event: expect.objectContaining({ type: 'crm.dlq.message_received' }),
-          error: expect.objectContaining({ errorClassification: 'invalid_json' })
+          error: expect.objectContaining({ type: 'invalid_json' })
         }),
         'Message routed to DLQ'
       )
@@ -311,7 +314,7 @@ describe('CRM request sqs consumer', () => {
       expect(opts.sqs).toBe(mockSqsClient)
     })
 
-    test('retryable true without retryMetadata leaves message on queue with null retry', async () => {
+    test('retryable true without retryMetadata leaves message on queue with a null error code', async () => {
       const { startCRMListener: start, logger, createCase } = await setupAndImportConsumer()
       const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
       start(mockSqsClient)
@@ -334,7 +337,10 @@ describe('CRM request sqs consumer', () => {
       const result = await capturedHandleMessage(message)
 
       const calls = logger.info.mock.calls
-      const found = calls.some(call => call[1] === 'Retryable error, leaving message on queue' && call[0] && call[0].retry === null)
+      const found = calls.some(call => call[1] === 'Retryable error, leaving message on queue' &&
+        call[0]?.error?.code === null &&
+        call[0]?.error?.type === 'retryable' &&
+        call[0]?.tenant?.message === null)
       expect(createCase).toHaveBeenCalled()
       // debug output
 
@@ -345,7 +351,7 @@ describe('CRM request sqs consumer', () => {
       expect(result).toBeUndefined()
     })
 
-    test('retryable with empty retryMetadata logs provided object', async () => {
+    test('retryable with empty retryMetadata falls back to the default classification', async () => {
       const { startCRMListener: start, logger, createCase } = await setupAndImportConsumer()
       const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
       start(mockSqsClient)
@@ -368,7 +374,10 @@ describe('CRM request sqs consumer', () => {
       const result = await capturedHandleMessage(message)
 
       const calls = logger.info.mock.calls
-      const found = calls.some(call => call[1] === 'Retryable error, leaving message on queue' && call[0] && typeof call[0].retry === 'object')
+      const found = calls.some(call => call[1] === 'Retryable error, leaving message on queue' &&
+        call[0]?.error?.message === 'Retryable empty metadata' &&
+        call[0]?.error?.code === null &&
+        call[0]?.error?.type === 'retryable')
       expect(createCase).toHaveBeenCalled()
       // debug output
 
@@ -406,7 +415,7 @@ describe('CRM request sqs consumer', () => {
       console.debug('logger.info.calls:', JSON.stringify(logger.info.mock.calls, null, 2))
 
       console.debug('logger.error.calls:', JSON.stringify(logger.error.mock.calls, null, 2))
-      expect(logger.error).toHaveBeenCalledWith(expect.objectContaining({ error: expect.objectContaining({ message: 'Generic failure', status: null, category: null }), retry: null }), 'Failed to create case via CRM API')
+      expect(logger.error).toHaveBeenCalledWith(expect.objectContaining({ error: expect.objectContaining({ message: 'Generic failure', code: null, type: 'non-retryable' }) }), 'Failed to create case via CRM API')
       expect(result).toEqual(message)
     })
 
@@ -438,7 +447,7 @@ describe('CRM request sqs consumer', () => {
       console.debug('logger.info.calls:', JSON.stringify(logger.info.mock.calls, null, 2))
 
       console.debug('logger.error.calls:', JSON.stringify(logger.error.mock.calls, null, 2))
-      expect(logger.error).toHaveBeenCalledWith(expect.objectContaining({ error: expect.objectContaining({ category: 'unknown', status: 520 }), retry: expect.objectContaining({ category: 'unknown', status: 520 }) }), 'Failed to create case via CRM API')
+      expect(logger.error).toHaveBeenCalledWith(expect.objectContaining({ error: expect.objectContaining({ type: 'unknown', code: 520 }) }), 'Failed to create case via CRM API')
       expect(result).toEqual(message)
     })
 
@@ -475,7 +484,8 @@ describe('CRM request sqs consumer', () => {
         expect(logger.error).toHaveBeenCalledWith(
           expect.objectContaining({
             event: expect.objectContaining({ type: 'crm.dlq.message_received', reference: 'msg-dlq-1' }),
-            error: expect.objectContaining({ errorClassification: 'non-retryable', fileId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479' })
+            error: expect.objectContaining({ type: 'non-retryable' }),
+            tenant: { message: expect.stringContaining('fileId=f47ac10b-58cc-4372-a567-0e02b2c3d479') }
           }),
           'Message routed to DLQ'
         )
@@ -585,9 +595,9 @@ describe('CRM request sqs consumer', () => {
       const { startCRMListener: start, logger } = await setupAndImportConsumer()
       const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
       start(mockSqsClient)
-      const retryableError = new Error('CRM API retryable failure')
+      const retryableError = new Error('CRM API retryable failure', { cause: new Error('CRM gateway timeout') })
       retryableError.retryable = true
-      retryableError.retryMetadata = { category: 'retryable', status: 503 }
+      retryableError.retryMetadata = { category: 'retryable', status: 503, attempts: 2 }
       createCase.mockRejectedValueOnce(retryableError)
       const message = {
         Body: JSON.stringify({
@@ -610,7 +620,16 @@ describe('CRM request sqs consumer', () => {
             action: 'leave_on_queue',
             outcome: 'unknown'
           }),
-          retry: expect.objectContaining({ category: 'retryable', status: 503 })
+          error: expect.objectContaining({ type: 'retryable', code: 503 }),
+          tenant: {
+            message: expect.stringContaining('attempts=2')
+          }
+        }),
+        'Retryable error, leaving message on queue'
+      )
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tenant: { message: expect.stringContaining('cause=CRM gateway timeout') }
         }),
         'Retryable error, leaving message on queue'
       )
@@ -645,8 +664,10 @@ describe('CRM request sqs consumer', () => {
             action: 'discard_message',
             outcome: 'failure'
           }),
-          error: expect.objectContaining({ message: 'CRM API failed', status: 400, category: 'non-retryable' }),
-          retry: expect.objectContaining({ category: 'non-retryable', status: 400 })
+          error: expect.objectContaining({ message: 'CRM API failed', code: 400, type: 'non-retryable' }),
+          tenant: {
+            message: expect.stringContaining('fileId=b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e')
+          }
         }),
         'Failed to create case via CRM API'
       )

@@ -158,7 +158,7 @@ async function addMetadataToExistingCase ({ authToken, caseId, correlationId, fi
 
   if (metadataError) {
     if (metadataError.retryMetadata?.category === 'retryable') {
-      const retryableErr = new Error(messages.METADATA_FAILURE)
+      const retryableErr = new Error(messages.METADATA_FAILURE, { cause: metadataError })
       retryableErr.retryable = true
       retryableErr.retryMetadata = metadataError.retryMetadata
       throw retryableErr
@@ -170,10 +170,12 @@ async function addMetadataToExistingCase ({ authToken, caseId, correlationId, fi
         category: metadataError.retryMetadata?.category ?? 'crm_metadata_create_failed',
         reason: metadataError.crmError ?? metadataError.message
       },
-      fileId
+      fileId,
+      onlineSubmissionActivityId
     }, messages.METADATA_FAILURE)
-    const error = new Error(messages.METADATA_FAILURE)
+    const error = new Error(messages.METADATA_FAILURE, { cause: metadataError })
     error.retryable = false
+    error.retryMetadata = metadataError.retryMetadata ?? null
     throw error
   }
 
