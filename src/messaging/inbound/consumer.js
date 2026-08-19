@@ -7,6 +7,7 @@ import { createCase } from '../../services/case.js'
 import { inboundCloudEventSchema, validationOptions } from '../../api/schemas/index.js'
 import { logInboundValidationFailure } from '../../utils/validation-logger.js'
 import { runWithCorrelationId } from '../../logging/correlation-id-store.js'
+import { toTenantMessage } from '../../logging/tenant-message.js'
 import { messages } from '../../constants/messages.js'
 import {
   messagingEventTypes,
@@ -21,13 +22,6 @@ import {
 let logger = createLogger()
 const setLogger = (customLogger) => {
   logger = customLogger
-}
-
-// CDP only indexes a fixed subset of ECS fields, so any additional context is
-// carried in tenant.message rather than emitted as bespoke top-level keys.
-const toTenantMessage = (context) => {
-  const entries = Object.entries(context).filter(([, value]) => value !== null && value !== undefined)
-  return entries.length ? entries.map(([key, value]) => `${key}=${value}`).join(' ') : null
 }
 
 const sendToDlq = async (sqsClient, dlqUrl, message, { error, tenant } = {}) => {

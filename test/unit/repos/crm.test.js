@@ -407,6 +407,24 @@ describe('CRM repository', () => {
       expect(error.crmError).toBe('{"error":{"message":"server error"}}')
     })
 
+    test('should attach the derived case id to the error even on failure, so callers can log which case a failure relates to', async () => {
+      const httpError = new HttpError('HTTP error: 500 Internal Server Error', {
+        status: 500,
+        text: vi.fn().mockResolvedValue('')
+      })
+      mockHttpClient.mockRejectedValue(httpError)
+
+      const { error } = await createCaseWithOnlineSubmission(buildRequest())
+
+      expect(error.derivedCaseId).toBe(deriveCaseRecordId(CASE_CORRELATION_ID))
+    })
+
+    test('should not attach a derived case id when correlationId itself was missing', async () => {
+      const { error } = await createCaseWithOnlineSubmission(buildRequest({ correlationId: undefined }))
+
+      expect(error.derivedCaseId).toBeUndefined()
+    })
+
     test('should treat a 200 batch response with no parts as a failure, not a silent success', async () => {
       mockHttpClient.mockResolvedValue({ text: vi.fn().mockResolvedValue('--batchresponse_empty\r\n--batchresponse_empty--\r\n') })
 

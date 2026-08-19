@@ -153,10 +153,7 @@ describe('case service', () => {
       expect(mockLogger.info).toHaveBeenCalledWith(
         {
           event: { action: 'case-created', outcome: 'success', reference: 'mock-case-id' },
-          fileId: 'file-1',
-          rpaOnlinesubmissionid: 'mock-ols-id',
-          contactId: 'c1',
-          accountId: 'a1'
+          tenant: { message: 'fileId=file-1 rpaOnlinesubmissionid=mock-ols-id contactId=c1 accountId=a1' }
         },
         'Case created'
       )
@@ -183,7 +180,7 @@ describe('case service', () => {
       expect(getCrmAuthToken).not.toHaveBeenCalled()
       expect(createCaseWithOnlineSubmissionInCrm).not.toHaveBeenCalled()
       expect(mockLogger.info).toHaveBeenCalledWith(
-        { fileId: 'file-1' },
+        { tenant: { message: 'fileId=file-1' } },
         'Skipped: duplicate message'
       )
     })
@@ -199,7 +196,7 @@ describe('case service', () => {
       expect(getCrmAuthToken).not.toHaveBeenCalled()
       expect(createCaseWithOnlineSubmissionInCrm).not.toHaveBeenCalled()
       expect(mockLogger.info).toHaveBeenCalledWith(
-        { fileId: 'file-1' },
+        { tenant: { message: 'fileId=file-1' } },
         'Case creation in progress, will retry'
       )
     })
@@ -282,6 +279,39 @@ describe('case service', () => {
           correlationId: 'corr-1',
           fileId: 'file-1'
         })
+      )
+    })
+
+    test('should log the metadata write with event.reference set to metadataId, not caseId', async () => {
+      upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: 'existing-case-id', isCreator: false })
+      getOnlineSubmissionActivityId.mockResolvedValue({ onlineSubmissionActivityId: '84c190b8-5d96-f111-8076-000d3ada3978', error: null })
+      createMetadataForOnlineSubmission.mockResolvedValue({ metadataId: 'meta-1', error: null })
+
+      await createCase(validPayload)
+
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        {
+          event: { reference: 'meta-1' },
+          tenant: { message: 'fileId=file-1 caseId=existing-case-id' }
+        },
+        'Metadata added to existing case'
+      )
+    })
+
+    test('should log a non-retryable metadata failure with fileId and onlineSubmissionActivityId in tenant.message', async () => {
+      const nonRetryErr = new Error('Bad request')
+      nonRetryErr.retryMetadata = { category: 'non-retryable', terminalReason: 'http_400', status: 400 }
+      upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: 'existing-case-id', isCreator: false })
+      getOnlineSubmissionActivityId.mockResolvedValue({ onlineSubmissionActivityId: '84c190b8-5d96-f111-8076-000d3ada3978', error: null })
+      createMetadataForOnlineSubmission.mockResolvedValue({ metadataId: null, error: nonRetryErr })
+
+      await createCase(validPayload).catch(() => {})
+
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tenant: { message: 'fileId=file-1 onlineSubmissionActivityId=84c190b8-5d96-f111-8076-000d3ada3978' }
+        }),
+        expect.any(String)
       )
     })
 
