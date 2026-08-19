@@ -534,6 +534,12 @@ const createCaseWithOnlineSubmission = async (request) => {
     })
   } catch (err) {
     await attachCrmErrorBody(err)
+    // Known even when the write itself failed, since it is derived rather
+    // than read from a response. Lets the caller log which case a failure
+    // relates to without waiting for a successful attempt.
+    if (correlationId) {
+      err.derivedCaseId = deriveCaseRecordId(correlationId)
+    }
     return {
       caseId: null,
       error: err

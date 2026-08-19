@@ -1,4 +1,5 @@
 import { createLogger } from '../logging/logger.js'
+import { toTenantMessage } from '../logging/tenant-message.js'
 import { getCrmAuthToken } from '../auth/get-crm-auth-token.js'
 import { createCaseWithOnlineSubmissionInCrm, resolveDocumentTypeOrThrow } from './create-case-with-online-submission-in-crm.js'
 import { upsertCase, updateCaseId, markFileProcessed } from '../repos/cases.js'
@@ -76,7 +77,7 @@ export async function createCase (payload) {
   const prep = await prepareCase({ correlationId, fileId })
 
   if (prep.action === 'skip') {
-    logger.info({ fileId }, 'Skipped: duplicate message')
+    logger.info({ tenant: { message: toTenantMessage({ fileId }) } }, 'Skipped: duplicate message')
     return { skipped: true, caseId: prep.caseId }
   }
 
@@ -105,7 +106,7 @@ async function prepareCase ({ correlationId, fileId }) {
   }
 
   if (!caseId && !isNew && !isCreator) {
-    logger.info({ fileId }, 'Case creation in progress, will retry')
+    logger.info({ tenant: { message: toTenantMessage({ fileId }) } }, 'Case creation in progress, will retry')
     const error = new Error('Case creation in progress for this correlationId')
     error.retryable = true
     throw error
@@ -126,10 +127,14 @@ async function createNewCase ({ authToken, transformedPayload, correlationId, fi
 
   logger.info({
     event: { action: 'case-created', outcome: 'success', reference: response.caseId },
-    fileId,
-    rpaOnlinesubmissionid: response.rpaOnlinesubmissionid,
-    contactId: response.contactId,
-    accountId: response.accountId
+    tenant: {
+      message: toTenantMessage({
+        fileId,
+        rpaOnlinesubmissionid: response.rpaOnlinesubmissionid,
+        contactId: response.contactId,
+        accountId: response.accountId
+      })
+    }
   }, 'Case created')
   return response
 }
@@ -170,8 +175,7 @@ async function addMetadataToExistingCase ({ authToken, caseId, correlationId, fi
         category: metadataError.retryMetadata?.category ?? 'crm_metadata_create_failed',
         reason: metadataError.crmError ?? metadataError.message
       },
-      fileId,
-      onlineSubmissionActivityId
+      tenant: { message: toTenantMessage({ fileId, onlineSubmissionActivityId }) }
     }, messages.METADATA_FAILURE)
     const error = new Error(messages.METADATA_FAILURE, { cause: metadataError })
     error.retryable = false
@@ -181,6 +185,13 @@ async function addMetadataToExistingCase ({ authToken, caseId, correlationId, fi
 
   await markFileProcessed(correlationId, fileId)
 
-  logger.info({ event: { reference: caseId }, fileId, metadataId }, 'Metadata added to existing case')
+  // event.reference carries metadataId rather than caseId: caseId is already
+  // recoverable from the earlier "Case created" line, while metadataId is a
+  // one-way digest that lets a reader query Dataverse for this exact record
+  // directly — the check that answers "was this file actually written".
+  logger.info({
+    event: { reference: metadataId },
+    tenant: { message: toTenantMessage({ fileId, caseId }) }
+  }, 'Metadata added to existing case')
   return { caseId }
 }

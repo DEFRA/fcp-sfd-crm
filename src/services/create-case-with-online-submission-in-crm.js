@@ -1,5 +1,6 @@
 import Boom from '@hapi/boom'
 import { createLogger } from '../logging/logger.js'
+import { toTenantMessage } from '../logging/tenant-message.js'
 import {
   createCaseWithOnlineSubmission,
   getCaseIdByOnlineSubmissionId,
@@ -76,15 +77,43 @@ export async function resolveDocumentTypeOrThrow (authToken, caseType) {
   return documentTypeMetadata
 }
 
-function throwCaseCreationError (caseError) {
+// A retryable case-creation failure — a timeout, a 5xx, a network error — is
+// ambiguous: Dataverse may have committed the write despite the client never
+// seeing a response. This distinct marker makes that ambiguity observable
+// and countable, rather than indistinguishable from an ordinary retry, so it
+// can be watched for the duplicate-case condition ahead
+// of any given submission actually producing one.
+function logCaseCreationOutcomeUnknown (caseError, { correlationId, fileId }) {
+  logger.warn({
+    event: {
+      type: 'crm.case.create_outcome_unknown',
+      action: 'create_case',
+      category: 'crm',
+      outcome: 'unknown',
+      reason: caseError?.retryMetadata?.terminalReason ?? caseError?.message,
+      reference: caseError?.derivedCaseId ?? null
+    },
+    tenant: { message: toTenantMessage({ correlationId, fileId, attempts: caseError?.retryMetadata?.attempts }) }
+  }, 'Case creation outcome could not be confirmed — Dataverse may have committed it')
+}
+
+function throwCaseCreationError (caseError, { correlationId, fileId }) {
+  const isRetryable = caseError?.retryMetadata?.category === 'retryable'
+
   logger.error({
     error: caseError,
     event: {
+      type: 'crm.case.create_failed',
+      action: 'create_case',
       category: caseError?.retryMetadata?.category ?? 'crm_case_create_failed',
-      reason: caseError?.crmError ?? caseError?.message
+      outcome: 'failure',
+      reason: caseError?.crmError ?? caseError?.message,
+      reference: caseError?.derivedCaseId ?? null
     }
   }, 'Error creating case with online submission activity')
-  if (caseError?.retryMetadata?.category === 'retryable') {
+
+  if (isRetryable) {
+    logCaseCreationOutcomeUnknown(caseError, { correlationId, fileId })
     caseError.retryable = true
     throw caseError
   }
@@ -125,7 +154,7 @@ async function createCrmCaseOrThrow ({ authToken, correlationId, fileId, contact
   })
 
   if (caseError) {
-    throwCaseCreationError(caseError)
+    throwCaseCreationError(caseError, { correlationId, fileId })
   }
 
   if (!caseId) {
