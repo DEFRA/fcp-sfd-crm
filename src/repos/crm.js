@@ -600,33 +600,11 @@ const getDocumentTypeMetadata = async (authToken, caseType) => {
   }
 }
 
-const getCaseIdByOnlineSubmissionId = async (authToken, rpaOnlinesubmissionid) => {
-  try {
-    const query = `/rpa_onlinesubmissions?${buildQuery({
-      $select: '_regardingobjectid_value',
-      $filter: `rpa_onlinesubmissionid eq '${rpaOnlinesubmissionid}'`
-    })}`
-
-    const response = await httpClient(`${baseUrl}${query}`, {
-      method: 'GET',
-      headers: { Authorization: authToken, ...baseHeaders }
-    })
-
-    const data = await response.json()
-    const caseId = data?.value?.[0]?._regardingobjectid_value || null
-
-    return { caseId, error: null }
-  } catch (err) {
-    return { caseId: null, error: err }
-  }
-}
-
 export {
   getContactIdFromCrn,
   getAccountIdFromSbi,
   createCaseWithOnlineSubmission,
   getOnlineSubmissionActivityId,
-  getCaseIdByOnlineSubmissionId,
   createMetadataForOnlineSubmission,
   getDocumentTypeMetadata,
   deriveMetadataRecordId,
