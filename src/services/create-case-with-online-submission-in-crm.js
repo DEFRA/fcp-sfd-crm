@@ -3,7 +3,6 @@ import { createLogger } from '../logging/logger.js'
 import { toTenantMessage } from '../logging/tenant-message.js'
 import {
   createCaseWithOnlineSubmission,
-  getCaseIdByOnlineSubmissionId,
   getDocumentTypeMetadata
 } from '../repos/crm.js'
 import { assertRequiredParams, ensureContactAndAccount } from './crm-helpers.js'
@@ -123,27 +122,6 @@ function throwCaseCreationError (caseError, { correlationId, fileId }) {
   throw err
 }
 
-async function fallbackLookupCaseIdOrThrow (authToken, rpaOnlinesubmissionid) {
-  logger.warn({ rpaOnlinesubmissionid }, 'CRM POST response missing incidentid, falling back to lookup by online submission')
-  const { caseId: fallbackCaseId, error: lookupError } = await getCaseIdByOnlineSubmissionId(authToken, rpaOnlinesubmissionid)
-
-  if (lookupError || !fallbackCaseId) {
-    logger.error({
-      error: lookupError,
-      event: {
-        reference: rpaOnlinesubmissionid,
-        category: lookupError?.retryMetadata?.category ?? 'fallback_case_lookup_failed',
-        reason: lookupError?.crmError ?? lookupError?.message
-      }
-    }, 'Fallback lookup for caseId failed')
-    const err = internal('CRM did not return a case ID and fallback lookup failed')
-    err.retryable = true
-    throw err
-  }
-
-  return fallbackCaseId
-}
-
 async function createCrmCaseOrThrow ({ authToken, correlationId, fileId, contactId, accountId, caseData, onlineSubmissionActivity, documentTypeMetadata }) {
   const { caseId, rpaOnlinesubmissionid, error: caseError } = await createCaseWithOnlineSubmission({
     authToken,
@@ -155,11 +133,6 @@ async function createCrmCaseOrThrow ({ authToken, correlationId, fileId, contact
 
   if (caseError) {
     throwCaseCreationError(caseError, { correlationId, fileId })
-  }
-
-  if (!caseId) {
-    const fallbackCaseId = await fallbackLookupCaseIdOrThrow(authToken, rpaOnlinesubmissionid)
-    return { caseId: fallbackCaseId, rpaOnlinesubmissionid }
   }
 
   return { caseId, rpaOnlinesubmissionid }
