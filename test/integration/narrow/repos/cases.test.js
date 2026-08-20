@@ -1,5 +1,12 @@
 import { describe, test, expect, beforeEach, afterEach } from 'vitest'
-import { setCorrelationIdIndex as ensureIndex, upsertCase, markFileProcessed, updateCaseId } from '../../../../src/repos/cases.js'
+import {
+  setCorrelationIdIndex as ensureIndex,
+  upsertCase,
+  markFileProcessed,
+  updateCaseId,
+  claimCreatorRole,
+  releaseCreator
+} from '../../../../src/repos/cases.js'
 import db from '../../../../src/data/db.js'
 
 const COLLECTION = 'cases'
@@ -120,6 +127,100 @@ describe('Cases repository - Database integration', () => {
 
       const doc = await db.collection(COLLECTION).findOne({ correlationId: 'corr-1' })
       expect(doc.caseId).toBe('case-1')
+    })
+  })
+
+  describe('claimCreatorRole', () => {
+    const expireDeadline = async (correlationId) => {
+      await db.collection(COLLECTION).updateOne(
+        { correlationId },
+        { $set: { creationDeadline: new Date(Date.now() - 1000) } }
+      )
+    }
+
+    test('should refuse a claim while the creator has a live deadline', async () => {
+      await upsertCase('corr-1', 'file-1')
+
+      const claimed = await claimCreatorRole('corr-1', 'file-2')
+
+      expect(claimed).toBe(false)
+
+      const doc = await db.collection(COLLECTION).findOne({ correlationId: 'corr-1' })
+      expect(doc.creatorFileId).toBe('file-1')
+    })
+
+    test('should allow a claim once the deadline has passed', async () => {
+      await upsertCase('corr-1', 'file-1')
+      await expireDeadline('corr-1')
+
+      const claimed = await claimCreatorRole('corr-1', 'file-2')
+
+      expect(claimed).toBe(true)
+
+      const doc = await db.collection(COLLECTION).findOne({ correlationId: 'corr-1' })
+      expect(doc.creatorFileId).toBe('file-2')
+      expect(doc.creationDeadline.getTime()).toBeGreaterThan(Date.now())
+    })
+
+    test('should refuse a claim once a case has already been created', async () => {
+      await upsertCase('corr-1', 'file-1')
+      await updateCaseId('corr-1', 'case-1')
+      await expireDeadline('corr-1')
+
+      const claimed = await claimCreatorRole('corr-1', 'file-2')
+
+      expect(claimed).toBe(false)
+    })
+
+    test('should refuse a claim for a correlationId that does not exist', async () => {
+      const claimed = await claimCreatorRole('corr-missing', 'file-2')
+
+      expect(claimed).toBe(false)
+    })
+
+    test('should allow exactly one of several concurrent claimants to win', async () => {
+      await upsertCase('corr-race', 'file-1')
+      await expireDeadline('corr-race')
+
+      const results = await Promise.all([
+        claimCreatorRole('corr-race', 'file-2'),
+        claimCreatorRole('corr-race', 'file-3'),
+        claimCreatorRole('corr-race', 'file-4')
+      ])
+
+      expect(results.filter(Boolean)).toHaveLength(1)
+    })
+  })
+
+  describe('releaseCreator', () => {
+    test('should clear creatorFileId so another file can claim it', async () => {
+      await upsertCase('corr-1', 'file-1')
+
+      const released = await releaseCreator('corr-1', 'file-1')
+      expect(released).toBe(true)
+
+      const claimed = await claimCreatorRole('corr-1', 'file-2')
+      expect(claimed).toBe(true)
+    })
+
+    test('should not release a different fileId than the current creator', async () => {
+      await upsertCase('corr-1', 'file-1')
+
+      const released = await releaseCreator('corr-1', 'file-2')
+
+      expect(released).toBe(false)
+
+      const doc = await db.collection(COLLECTION).findOne({ correlationId: 'corr-1' })
+      expect(doc.creatorFileId).toBe('file-1')
+    })
+
+    test('should not release once a case has already been created', async () => {
+      await upsertCase('corr-1', 'file-1')
+      await updateCaseId('corr-1', 'case-1')
+
+      const released = await releaseCreator('corr-1', 'file-1')
+
+      expect(released).toBe(false)
     })
   })
 })

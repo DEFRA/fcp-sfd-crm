@@ -16,7 +16,23 @@ vi.mock('../../../src/logging/logger.js', () => ({
   createLogger: () => ({ info: vi.fn(), error: vi.fn() })
 }))
 
-const { setCorrelationIdIndex: ensureIndex, upsertCase, markFileProcessed, updateCaseId } = await import('../../../src/repos/cases.js')
+vi.mock('../../../src/config/index.js', () => ({
+  config: {
+    get: vi.fn((key) => {
+      if (key === 'cases.creationDeadlineMs') return 60000
+      return undefined
+    })
+  }
+}))
+
+const {
+  setCorrelationIdIndex: ensureIndex,
+  upsertCase,
+  markFileProcessed,
+  updateCaseId,
+  claimCreatorRole,
+  releaseCreator
+} = await import('../../../src/repos/cases.js')
 
 describe('cases repository', () => {
   beforeEach(() => {
@@ -49,7 +65,8 @@ describe('cases repository', () => {
             caseId: null,
             creatorFileId: 'file-1',
             processedFileIds: [],
-            createdAt: expect.any(Date)
+            createdAt: expect.any(Date),
+            creationDeadline: expect.any(Date)
           }
         },
         { upsert: true, returnDocument: 'before' }
@@ -167,6 +184,85 @@ describe('cases repository', () => {
         { correlationId: 'corr-1' },
         { $set: { caseId: 'case-1' } }
       )
+    })
+  })
+
+  describe('claimCreatorRole', () => {
+    test('should filter on null caseId and either no creator or an expired deadline', async () => {
+      mockCollection.findOneAndUpdate.mockResolvedValue({ correlationId: 'corr-1' })
+
+      await claimCreatorRole('corr-1', 'file-2')
+
+      expect(mockCollection.findOneAndUpdate).toHaveBeenCalledWith(
+        {
+          correlationId: 'corr-1',
+          caseId: null,
+          $or: [
+            { creatorFileId: null },
+            { creationDeadline: { $lt: expect.any(Date) } }
+          ]
+        },
+        {
+          $set: {
+            creatorFileId: 'file-2',
+            creationDeadline: expect.any(Date)
+          }
+        }
+      )
+    })
+
+    test('should return true when a document matches (direct document shape)', async () => {
+      mockCollection.findOneAndUpdate.mockResolvedValue({ correlationId: 'corr-1' })
+
+      const result = await claimCreatorRole('corr-1', 'file-2')
+
+      expect(result).toBe(true)
+    })
+
+    test('should return true when a document matches (real driver {value} shape)', async () => {
+      mockCollection.findOneAndUpdate.mockResolvedValue({ value: { correlationId: 'corr-1' } })
+
+      const result = await claimCreatorRole('corr-1', 'file-2')
+
+      expect(result).toBe(true)
+    })
+
+    test('should return false when no document matches (null result)', async () => {
+      mockCollection.findOneAndUpdate.mockResolvedValue(null)
+
+      const result = await claimCreatorRole('corr-1', 'file-2')
+
+      expect(result).toBe(false)
+    })
+
+    test('should return false when no document matches (real driver {value: null} shape)', async () => {
+      mockCollection.findOneAndUpdate.mockResolvedValue({ value: null })
+
+      const result = await claimCreatorRole('corr-1', 'file-2')
+
+      expect(result).toBe(false)
+    })
+  })
+
+  describe('releaseCreator', () => {
+    test('should clear creatorFileId when it matches fileId and no case exists', async () => {
+      mockCollection.updateOne.mockResolvedValue({ modifiedCount: 1 })
+
+      const result = await releaseCreator('corr-1', 'file-1')
+
+      expect(mockCollection.updateOne).toHaveBeenCalledWith(
+        { correlationId: 'corr-1', creatorFileId: 'file-1', caseId: null },
+        { $set: { creatorFileId: null } }
+      )
+      expect(result).toBe(true)
+    })
+
+    test('should return false when nothing matched', async () => {
+      mockCollection.updateOne.mockResolvedValue({ modifiedCount: 0 })
+
+      const result = await releaseCreator('corr-1', 'file-1')
+
+      expect(result).toBe(false)
     })
   })
 })
