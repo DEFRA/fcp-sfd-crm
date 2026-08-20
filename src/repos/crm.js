@@ -382,6 +382,12 @@ const buildCaseChangeset = ({ correlationId, fileId, caseData, onlineSubmissionA
   const caseId = deriveCaseRecordId(correlationId)
   const onlineSubmissionId = deriveOnlineSubmissionRecordId(correlationId)
   const metadataId = deriveMetadataRecordId(correlationId, fileId)
+
+  // Left random rather than derived from correlationId. Unlike caseId,
+  // onlineSubmissionId and metadataId above, rpa_onlinesubmissionid is not a
+  // primary key (Dataverse primary keys are always type uniqueidentifier,
+  // with no length constraint) — it is an ordinary string attribute, and its
+  // configured MaxLength is 20, too short to hold a 36-character correlationId.
   const rpaOnlinesubmissionid = randomBytes(10).toString('hex')
 
   const casePayload = {
