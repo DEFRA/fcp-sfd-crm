@@ -4,6 +4,7 @@ import { HttpError } from '@fetchkit/ffetch'
 import { config } from '../config/index.js'
 import { httpClient } from '../http/client.js'
 import { createLogger } from '../logging/logger.js'
+import { toTenantMessage } from '../logging/tenant-message.js'
 import { buildChangesetRequest, parseBatchResponse } from './dataverse-batch.js'
 
 const logger = createLogger()
@@ -325,7 +326,12 @@ const createMetadataForOnlineSubmission = async (request) => {
     if (!created) {
       // A prior attempt's write succeeded but its response was lost, delayed
       // or throttled. Logged so a rising count of suppressions stays visible.
-      logger.info({ fileId, metadataId }, 'Metadata record already exists, duplicate write suppressed')
+      // event.reference carries metadataId, a one-way digest safe to index,
+      // so a reader can query Dataverse for this exact record directly.
+      logger.info({
+        event: { reference: metadataId },
+        tenant: { message: toTenantMessage({ fileId }) }
+      }, 'Metadata record already exists, duplicate write suppressed')
     }
 
     return {
@@ -376,6 +382,12 @@ const buildCaseChangeset = ({ correlationId, fileId, caseData, onlineSubmissionA
   const caseId = deriveCaseRecordId(correlationId)
   const onlineSubmissionId = deriveOnlineSubmissionRecordId(correlationId)
   const metadataId = deriveMetadataRecordId(correlationId, fileId)
+
+  // Left random rather than derived from correlationId. Unlike caseId,
+  // onlineSubmissionId and metadataId above, rpa_onlinesubmissionid is not a
+  // primary key (Dataverse primary keys are always type uniqueidentifier,
+  // with no length constraint) — it is an ordinary string attribute, and its
+  // configured MaxLength is 20, too short to hold a 36-character correlationId.
   const rpaOnlinesubmissionid = randomBytes(10).toString('hex')
 
   const casePayload = {
@@ -600,33 +612,11 @@ const getDocumentTypeMetadata = async (authToken, caseType) => {
   }
 }
 
-const getCaseIdByOnlineSubmissionId = async (authToken, rpaOnlinesubmissionid) => {
-  try {
-    const query = `/rpa_onlinesubmissions?${buildQuery({
-      $select: '_regardingobjectid_value',
-      $filter: `rpa_onlinesubmissionid eq '${rpaOnlinesubmissionid}'`
-    })}`
-
-    const response = await httpClient(`${baseUrl}${query}`, {
-      method: 'GET',
-      headers: { Authorization: authToken, ...baseHeaders }
-    })
-
-    const data = await response.json()
-    const caseId = data?.value?.[0]?._regardingobjectid_value || null
-
-    return { caseId, error: null }
-  } catch (err) {
-    return { caseId: null, error: err }
-  }
-}
-
 export {
   getContactIdFromCrn,
   getAccountIdFromSbi,
   createCaseWithOnlineSubmission,
   getOnlineSubmissionActivityId,
-  getCaseIdByOnlineSubmissionId,
   createMetadataForOnlineSubmission,
   getDocumentTypeMetadata,
   deriveMetadataRecordId,

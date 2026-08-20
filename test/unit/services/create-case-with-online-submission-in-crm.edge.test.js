@@ -10,7 +10,6 @@ vi.mock('../../../src/repos/crm.js', () => ({
   getContactIdFromCrn: vi.fn(),
   getAccountIdFromSbi: vi.fn(),
   createCaseWithOnlineSubmission: vi.fn(),
-  getCaseIdByOnlineSubmissionId: vi.fn(),
   getDocumentTypeMetadata: vi.fn()
 }))
 

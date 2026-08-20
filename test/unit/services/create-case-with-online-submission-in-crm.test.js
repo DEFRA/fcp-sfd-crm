@@ -11,7 +11,6 @@ vi.mock('../../../src/repos/crm.js', () => ({
   getContactIdFromCrn: vi.fn(),
   getAccountIdFromSbi: vi.fn(),
   createCaseWithOnlineSubmission: vi.fn(),
-  getCaseIdByOnlineSubmissionId: vi.fn(),
   getDocumentTypeMetadata: vi.fn()
 }))
 
@@ -20,7 +19,7 @@ vi.mock('../../../src/messaging/outbound/received-event/publish-received-event.j
 }))
 
 const { createCaseWithOnlineSubmissionInCrm } = await import('../../../src/services/create-case-with-online-submission-in-crm.js')
-const { getContactIdFromCrn, getAccountIdFromSbi, createCaseWithOnlineSubmission, getCaseIdByOnlineSubmissionId, getDocumentTypeMetadata } = await import('../../../src/repos/crm.js')
+const { getContactIdFromCrn, getAccountIdFromSbi, createCaseWithOnlineSubmission, getDocumentTypeMetadata } = await import('../../../src/repos/crm.js')
 const { publishReceivedEvent } = await import('../../../src/messaging/outbound/received-event/publish-received-event.js')
 
 const FILE_ID = 'a1a1a1a1-b2b2-4c3c-8d4d-e5e5e5e5e5e5'
@@ -218,73 +217,6 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     )
   })
 
-  // The idempotent createCaseWithOnlineSubmission always derives its caseId
-  // from correlationId and never reads it from a Dataverse response body, so
-  // it never resolves with a falsy caseId on success. This fallback path is
-  // therefore unreachable in production now — kept as a dead-code safety net
-  // pending its planned removal (once observed working in EXT-TEST) rather
-  // than deleted alongside the idempotency fix itself. These tests exercise
-  // it directly since nothing else can reach it.
-  describe('fallback lookup (unreachable via createCaseWithOnlineSubmission since the idempotency fix, retained pending removal)', () => {
-    test('falls back to lookup by online submission ID when caseId is falsy', async () => {
-      getContactIdFromCrn.mockResolvedValue({ contactId: 'mock-contact-id' })
-      getAccountIdFromSbi.mockResolvedValue({ accountId: 'mock-account-id' })
-      getDocumentTypeMetadata.mockResolvedValue({ documentTypeMetadata: { schemeValue: 's', subjectValue: 'sub', documentTypesId: 'd' }, error: null })
-      createCaseWithOnlineSubmission.mockResolvedValue({ caseId: undefined, rpaOnlinesubmissionid: 'mock-ols-id', error: null })
-      getCaseIdByOnlineSubmissionId.mockResolvedValue({ caseId: 'fallback-case-id', error: null })
-
-      const result = await createCaseWithOnlineSubmissionInCrm({
-        authToken: 'mock-bearer-token',
-        correlationId: 'mock-correlation-id',
-        fileId: FILE_ID,
-        caseType: 'CS_Agreement_Evidence',
-        crn: 'mock-crn',
-        sbi: 'mock-sbi',
-        caseData: {},
-        onlineSubmissionActivity: {}
-      })
-
-      expect(getCaseIdByOnlineSubmissionId).toHaveBeenCalledWith('mock-bearer-token', 'mock-ols-id')
-      expect(result.caseId).toBe('fallback-case-id')
-      expect(result.rpaOnlinesubmissionid).toBe('mock-ols-id')
-      expect(mockLogger.warn).toHaveBeenCalledWith(
-        { rpaOnlinesubmissionid: 'mock-ols-id' },
-        'CRM POST response missing incidentid, falling back to lookup by online submission'
-      )
-    })
-
-    test('throws retryable error when fallback lookup also fails', async () => {
-      getContactIdFromCrn.mockResolvedValue({ contactId: 'mock-contact-id' })
-      getAccountIdFromSbi.mockResolvedValue({ accountId: 'mock-account-id' })
-      getDocumentTypeMetadata.mockResolvedValue({ documentTypeMetadata: { schemeValue: 's', subjectValue: 'sub', documentTypesId: 'd' }, error: null })
-      createCaseWithOnlineSubmission.mockResolvedValue({ caseId: undefined, rpaOnlinesubmissionid: 'mock-ols-id', error: null })
-      getCaseIdByOnlineSubmissionId.mockResolvedValue({ caseId: null, error: new Error('Lookup failed') })
-
-      await expect(createCaseWithOnlineSubmissionInCrm({
-        authToken: 'mock-bearer-token',
-        correlationId: 'mock-correlation-id',
-        fileId: FILE_ID,
-        caseType: 'CS_Agreement_Evidence',
-        crn: 'mock-crn',
-        sbi: 'mock-sbi',
-        caseData: {},
-        onlineSubmissionActivity: {}
-      })).rejects.toMatchObject({ message: 'CRM did not return a case ID and fallback lookup failed', retryable: true })
-
-      expect(mockLogger.error).toHaveBeenCalledWith(
-        expect.objectContaining({
-          error: expect.any(Error),
-          event: expect.objectContaining({
-            reference: 'mock-ols-id',
-            category: 'fallback_case_lookup_failed',
-            reason: 'Lookup failed'
-          })
-        }),
-        'Fallback lookup for caseId failed'
-      )
-    })
-  })
-
   test('throws retryable error when document type lookup returns HTTP error', async () => {
     const lookupErr = new Error('CRM unavailable')
     lookupErr.retryMetadata = { category: 'retryable', status: 503 }
@@ -414,8 +346,7 @@ test('re-throws original retryable CRM error when createCaseWithOnlineSubmission
     getContactIdFromCrn: vi.fn().mockResolvedValue({ contactId: 'c1' }),
     getAccountIdFromSbi: vi.fn().mockResolvedValue({ accountId: 'a1' }),
     getDocumentTypeMetadata: vi.fn().mockResolvedValue({ documentTypeMetadata: { schemeValue: 's', subjectValue: 'sub', documentTypesId: 'd' }, error: null }),
-    createCaseWithOnlineSubmission: vi.fn().mockResolvedValue({ caseId: null, error: retryErr }),
-    getCaseIdByOnlineSubmissionId: vi.fn()
+    createCaseWithOnlineSubmission: vi.fn().mockResolvedValue({ caseId: null, error: retryErr })
   }))
 
   vi.doMock('../../../src/messaging/outbound/received-event/publish-received-event.js', () => ({ publishReceivedEvent: vi.fn() }))
