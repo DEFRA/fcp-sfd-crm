@@ -643,7 +643,10 @@ describe('CRM repository', () => {
 
       expect(result).toEqual({ metadataId: expectedId, error: null })
       expect(mockLogger.info).toHaveBeenCalledWith(
-        { fileId: FILE_ID, metadataId: expectedId },
+        {
+          event: { reference: expectedId },
+          tenant: { message: `fileId=${FILE_ID}` }
+        },
         'Metadata record already exists, duplicate write suppressed'
       )
     })

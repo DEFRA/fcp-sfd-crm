@@ -4,6 +4,7 @@ import { HttpError } from '@fetchkit/ffetch'
 import { config } from '../config/index.js'
 import { httpClient } from '../http/client.js'
 import { createLogger } from '../logging/logger.js'
+import { toTenantMessage } from '../logging/tenant-message.js'
 import { buildChangesetRequest, parseBatchResponse } from './dataverse-batch.js'
 
 const logger = createLogger()
@@ -325,7 +326,12 @@ const createMetadataForOnlineSubmission = async (request) => {
     if (!created) {
       // A prior attempt's write succeeded but its response was lost, delayed
       // or throttled. Logged so a rising count of suppressions stays visible.
-      logger.info({ fileId, metadataId }, 'Metadata record already exists, duplicate write suppressed')
+      // event.reference carries metadataId, a one-way digest safe to index,
+      // so a reader can query Dataverse for this exact record directly.
+      logger.info({
+        event: { reference: metadataId },
+        tenant: { message: toTenantMessage({ fileId }) }
+      }, 'Metadata record already exists, duplicate write suppressed')
     }
 
     return {

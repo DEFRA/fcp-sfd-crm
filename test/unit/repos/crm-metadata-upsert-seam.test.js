@@ -85,7 +85,10 @@ describe('createMetadataForOnlineSubmission — real HTTP client seam', () => {
       error: null
     })
     expect(mockLogger.info).toHaveBeenCalledWith(
-      expect.objectContaining({ fileId: FILE_ID }),
+      expect.objectContaining({
+        event: { reference: deriveMetadataRecordId(CORRELATION_ID, FILE_ID) },
+        tenant: { message: `fileId=${FILE_ID}` }
+      }),
       'Metadata record already exists, duplicate write suppressed'
     )
   })
