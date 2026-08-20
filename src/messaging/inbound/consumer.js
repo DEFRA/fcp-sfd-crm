@@ -6,6 +6,7 @@ import { config } from '../../config/index.js'
 import { createCase } from '../../services/case.js'
 import { inboundCloudEventSchema, validationOptions } from '../../api/schemas/index.js'
 import { logInboundValidationFailure } from '../../utils/validation-logger.js'
+import { isTerminalFailure } from '../../utils/is-terminal-failure.js'
 import { runWithCorrelationId } from '../../logging/correlation-id-store.js'
 import { toTenantMessage } from '../../logging/tenant-message.js'
 import { messages } from '../../constants/messages.js'
@@ -130,13 +131,13 @@ const processValidatedMessage = async (sqsClient, dlqUrl, payload, message) => {
     await createCase(payload)
     return message
   } catch (err) {
-    if (err.retryable) {
-      logRetryableFailure(err)
-      return undefined
+    if (isTerminalFailure(err)) {
+      await discardFailedMessage(sqsClient, dlqUrl, payload, message, err)
+      return message
     }
 
-    await discardFailedMessage(sqsClient, dlqUrl, payload, message, err)
-    return message
+    logRetryableFailure(err)
+    return undefined
   }
 }
 
