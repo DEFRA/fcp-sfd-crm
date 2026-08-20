@@ -22,7 +22,7 @@ const setCorrelationIdIndex = async () => {
  * @returns Promise<{{ isNew: boolean, isDuplicateFile: boolean, caseId: string|null, isCreator: boolean }}>
  */
 const upsertCase = async (correlationId, fileId) => {
-  const result = await db.collection(COLLECTION).findOneAndUpdate(
+  const prevDoc = await db.collection(COLLECTION).findOneAndUpdate(
     { correlationId },
     {
       $setOnInsert: {
@@ -36,21 +36,6 @@ const upsertCase = async (correlationId, fileId) => {
     },
     { upsert: true, returnDocument: 'before' }
   )
-
-  // result may be null (mocked tests), an object with `value` (real driver),
-  // or the document itself (some mocks). Normalize to `prevDoc`.
-  let prevDoc = null
-
-  if (result === null) {
-    // Mocked unit test indicates insert
-    return { isNew: true, isDuplicateFile: false, caseId: null, isCreator: true }
-  }
-
-  if (Object.hasOwn(result, 'value')) {
-    prevDoc = result.value
-  } else {
-    prevDoc = result
-  }
 
   if (prevDoc === null) {
     return { isNew: true, isDuplicateFile: false, caseId: null, isCreator: true }
@@ -96,6 +81,12 @@ const updateCaseId = async (correlationId, caseId) => {
  * created for one submission. Extending creationDeadline on a successful
  * claim stops a second sibling displacing the new creator moments later.
  *
+ * Deadlines are set and compared using each instance's own clock rather than
+ * a server-authoritative one, so under clock skew between instances a
+ * waiting file could consider a live creator expired slightly early or late.
+ * Dataverse's own idempotent writes are the backstop that keeps this
+ * ultimately safe even if that happens.
+ *
  * @returns {Promise<boolean>} true when this fileId now owns the creator role.
  */
 const claimCreatorRole = async (correlationId, fileId) => {
@@ -118,14 +109,11 @@ const claimCreatorRole = async (correlationId, fileId) => {
         creatorFileId: fileId,
         creationDeadline: new Date(Date.now() + creationDeadlineMs)
       }
-    }
+    },
+    { returnDocument: 'before' }
   )
 
-  if (result === null) {
-    return false
-  }
-
-  return Object.hasOwn(result, 'value') ? result.value !== null : true
+  return result !== null
 }
 
 /**

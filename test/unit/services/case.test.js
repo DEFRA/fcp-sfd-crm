@@ -238,7 +238,7 @@ describe('case service', () => {
 
       expect(mockLogger.info).toHaveBeenCalledWith(
         {
-          event: { type: 'crm.case.creator_reassigned', action: 'claim_creator_role', category: 'crm', outcome: 'success', reference: 'corr-1' },
+          event: { type: 'crm.case.creator_role_claimed', action: 'claim_creator_role', category: 'crm', outcome: 'success', reference: 'corr-1' },
           tenant: { message: 'fileId=file-1' }
         },
         'Creator role reassigned to this file'
@@ -286,7 +286,7 @@ describe('case service', () => {
       expect(metricsCounter).toHaveBeenCalledWith(caseCreationMetrics.CREATOR_ROLE_RELEASED)
       expect(mockLogger.info).toHaveBeenCalledWith(
         {
-          event: { type: 'crm.case.creator_released', action: 'release_creator_role', category: 'crm', outcome: 'success', reference: 'corr-1' },
+          event: { type: 'crm.case.creator_role_released', action: 'release_creator_role', category: 'crm', outcome: 'success', reference: 'corr-1' },
           tenant: { message: 'fileId=file-1' }
         },
         'Creator role released after non-retryable failure'
@@ -312,7 +312,10 @@ describe('case service', () => {
       expect(releaseCreator).toHaveBeenCalledWith('corr-1', 'file-1')
     })
 
-    test('should release the creator role when contact lookup fails with a Boom 422 carrying no retryable flag', async () => {
+    test('should release the creator role when contact/account lookup fails with a Boom error carrying no retryable flag', async () => {
+      // Mirrors the real Boom 422 thrown by ensureContactAndAccount ("Contact
+      // ID not found" / "Account ID not found"), which the consumer treats as
+      // terminal (discardFailedMessage) despite never setting err.retryable.
       const contactErr = Boom.boomify(new Error('Contact ID not found'), { statusCode: 422 })
       createCaseWithOnlineSubmissionInCrm.mockRejectedValue(contactErr)
 
@@ -350,23 +353,7 @@ describe('case service', () => {
       expect(releaseCreator).toHaveBeenCalledWith('corr-1', 'file-1')
       expect(metricsCounter).not.toHaveBeenCalledWith(caseCreationMetrics.CREATOR_ROLE_RELEASED)
       expect(mockLogger.info).not.toHaveBeenCalledWith(
-        expect.objectContaining({ event: expect.objectContaining({ type: 'crm.case.creator_released' }) }),
-        expect.any(String)
-      )
-    })
-
-    test('should not log or count a release when releaseCreator finds nothing to release', async () => {
-      const nonRetryableErr = new Error('Unable to create case with online submission activity in CRM')
-      nonRetryableErr.retryable = false
-      createCaseWithOnlineSubmissionInCrm.mockRejectedValue(nonRetryableErr)
-      releaseCreator.mockResolvedValue(false)
-
-      await createCase(validPayload).catch(e => e)
-
-      expect(releaseCreator).toHaveBeenCalledWith('corr-1', 'file-1')
-      expect(metricsCounter).not.toHaveBeenCalledWith(caseCreationMetrics.CREATOR_ROLE_RELEASED)
-      expect(mockLogger.info).not.toHaveBeenCalledWith(
-        expect.objectContaining({ event: expect.objectContaining({ type: 'crm.case.creator_released' }) }),
+        expect.objectContaining({ event: expect.objectContaining({ type: 'crm.case.creator_role_released' }) }),
         expect.any(String)
       )
     })

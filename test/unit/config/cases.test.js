@@ -30,4 +30,20 @@ describe('src/config/cases.js', () => {
 
     expect(config.get('cases.creationDeadlineMs')).toBe(90000)
   })
+
+  test('rejects a value below the minimum', () => {
+    process.env.CASE_CREATION_DEADLINE_MS = '999'
+
+    const config = convict(casesConfig)
+
+    expect(() => config.validate()).toThrow(/must be an integer >= 1000/)
+  })
+
+  test('rejects a non-integer value', () => {
+    process.env.CASE_CREATION_DEADLINE_MS = '1000.5'
+
+    const config = convict(casesConfig)
+
+    expect(() => config.validate()).toThrow(/must be an integer >= 1000/)
+  })
 })
