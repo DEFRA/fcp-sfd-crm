@@ -2,7 +2,7 @@ import { createLogger } from '../logging/logger.js'
 import { toTenantMessage } from '../logging/tenant-message.js'
 import { getCrmAuthToken } from '../auth/get-crm-auth-token.js'
 import { createCaseWithOnlineSubmissionInCrm, resolveDocumentTypeOrThrow } from './create-case-with-online-submission-in-crm.js'
-import { upsertCase, updateCaseId, markFileProcessed } from '../repos/cases.js'
+import { upsertCase, updateCaseId, markFileProcessed, claimCreatorRole } from '../repos/cases.js'
 import { createMetadataForOnlineSubmission } from '../repos/crm.js'
 import { fetchOnlineSubmissionActivityIdOrThrow } from './crm-helpers.js'
 import { messages } from '../constants/messages.js'
@@ -106,6 +106,10 @@ async function prepareCase ({ correlationId, fileId }) {
   }
 
   if (!caseId && !isNew && !isCreator) {
+    if (await claimCreatorRole(correlationId, fileId)) {
+      return { action: 'create' }
+    }
+
     logger.info({ tenant: { message: toTenantMessage({ fileId }) } }, 'Case creation in progress, will retry')
     const error = new Error('Case creation in progress for this correlationId')
     error.retryable = true
