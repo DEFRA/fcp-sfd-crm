@@ -6,6 +6,8 @@ import { upsertCase, updateCaseId, markFileProcessed, claimCreatorRole, releaseC
 import { createMetadataForOnlineSubmission } from '../repos/crm.js'
 import { fetchOnlineSubmissionActivityIdOrThrow } from './crm-helpers.js'
 import { messages } from '../constants/messages.js'
+import { metricsCounter } from '../api/common/helpers/metrics.js'
+import { caseCreationMetrics } from '../constants/case-creation-metrics.js'
 
 const logger = createLogger()
 
@@ -107,9 +109,15 @@ async function prepareCase ({ correlationId, fileId }) {
 
   if (!caseId && !isNew && !isCreator) {
     if (await claimCreatorRole(correlationId, fileId)) {
+      await metricsCounter(caseCreationMetrics.CREATOR_ROLE_CLAIMED)
+      logger.info({
+        event: { type: 'crm.case.creator_reassigned', action: 'claim_creator_role', category: 'crm', outcome: 'success', reference: correlationId },
+        tenant: { message: toTenantMessage({ fileId }) }
+      }, 'Creator role reassigned to this file')
       return { action: 'create' }
     }
 
+    await metricsCounter(caseCreationMetrics.WAITING_FOR_CASE)
     logger.info({ tenant: { message: toTenantMessage({ fileId }) } }, 'Case creation in progress, will retry')
     const error = new Error('Case creation in progress for this correlationId')
     error.retryable = true
@@ -158,8 +166,12 @@ async function createNewCase ({ authToken, transformedPayload, correlationId, fi
     // the flag reach here — Boom 400 from assertRequiredParams, Boom 422 from
     // ensureContactAndAccount — and would otherwise be dead-lettered while
     // still holding the role, stranding siblings until the deadline expires.
-    if (!err.retryable) {
-      await releaseCreatorRole(correlationId, fileId)
+    if (!err.retryable && await releaseCreatorRole(correlationId, fileId)) {
+      await metricsCounter(caseCreationMetrics.CREATOR_ROLE_RELEASED)
+      logger.info({
+        event: { type: 'crm.case.creator_released', action: 'release_creator_role', category: 'crm', outcome: 'success', reference: correlationId },
+        tenant: { message: toTenantMessage({ fileId }) }
+      }, 'Creator role released after non-retryable failure')
     }
     throw err
   }
