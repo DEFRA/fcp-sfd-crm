@@ -123,13 +123,43 @@ async function prepareCase ({ correlationId, fileId }) {
   return { action: 'addMetadata', caseId }
 }
 
+/**
+ * Releases the creator role, reporting rather than propagating its own
+ * failure.
+ *
+ * A failed release must never replace the error that triggered it: the
+ * dead letter record needs to explain the case-creation failure, not a
+ * transient Mongo fault on the way out. The submission still recovers
+ * through the creation deadline in that case, just more slowly.
+ *
+ * @returns {Promise<boolean>} true when the role was actually released.
+ */
+async function releaseCreatorRole (correlationId, fileId) {
+  try {
+    return await releaseCreator(correlationId, fileId)
+  } catch (releaseError) {
+    logger.error({
+      error: releaseError,
+      event: { category: 'crm', reason: 'creator_release_failed' },
+      tenant: { message: toTenantMessage({ fileId }) }
+    }, 'Failed to release creator role; submission will rely on the creation deadline')
+    return false
+  }
+}
+
 async function createNewCase ({ authToken, transformedPayload, correlationId, fileId }) {
   let response
   try {
     response = await createCaseWithOnlineSubmissionInCrm({ authToken, fileId, ...transformedPayload })
   } catch (err) {
-    if (err.retryable === false) {
-      await releaseCreator(correlationId, fileId)
+    // Mirror the consumer's own terminal test (`if (err.retryable)` in
+    // processValidatedMessage): release whenever it would dead-letter this
+    // message, not only on an explicit retryable:false. Errors that never set
+    // the flag reach here — Boom 400 from assertRequiredParams, Boom 422 from
+    // ensureContactAndAccount — and would otherwise be dead-lettered while
+    // still holding the role, stranding siblings until the deadline expires.
+    if (!err.retryable) {
+      await releaseCreatorRole(correlationId, fileId)
     }
     throw err
   }

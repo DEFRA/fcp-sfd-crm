@@ -1,4 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
+import Boom from '@hapi/boom'
 
 const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
 
@@ -271,12 +272,39 @@ describe('case service', () => {
       expect(releaseCreator).not.toHaveBeenCalled()
     })
 
-    test('should not release the creator role when an error carries no retryable flag', async () => {
+    test('should release the creator role when an error carries no retryable flag, since the consumer dead-letters it', async () => {
       createCaseWithOnlineSubmissionInCrm.mockRejectedValue(new Error('unexpected'))
 
       await createCase(validPayload).catch(e => e)
 
-      expect(releaseCreator).not.toHaveBeenCalled()
+      expect(releaseCreator).toHaveBeenCalledWith('corr-1', 'file-1')
+    })
+
+    test('should release the creator role when contact lookup fails with a Boom 422 carrying no retryable flag', async () => {
+      const contactErr = Boom.boomify(new Error('Contact ID not found'), { statusCode: 422 })
+      createCaseWithOnlineSubmissionInCrm.mockRejectedValue(contactErr)
+
+      const thrown = await createCase(validPayload).catch(e => e)
+
+      expect(thrown.retryable).toBeUndefined()
+      expect(releaseCreator).toHaveBeenCalledWith('corr-1', 'file-1')
+    })
+
+    test('should rethrow the original failure even when releasing the creator role itself fails', async () => {
+      const nonRetryableErr = new Error('Unable to create case with online submission activity in CRM')
+      nonRetryableErr.retryable = false
+      createCaseWithOnlineSubmissionInCrm.mockRejectedValue(nonRetryableErr)
+      releaseCreator.mockRejectedValue(new Error('MongoNetworkError: connection timed out'))
+
+      const thrown = await createCase(validPayload).catch(e => e)
+
+      expect(thrown).toBe(nonRetryableErr)
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: expect.objectContaining({ reason: 'creator_release_failed' })
+        }),
+        expect.stringContaining('Failed to release creator role')
+      )
     })
 
     test('should release the creator role when document type resolution fails non-retryably before any write', async () => {

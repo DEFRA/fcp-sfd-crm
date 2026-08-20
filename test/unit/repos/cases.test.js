@@ -188,7 +188,7 @@ describe('cases repository', () => {
   })
 
   describe('claimCreatorRole', () => {
-    test('should filter on null caseId and either no creator or an expired deadline', async () => {
+    test('should filter on null caseId and either no creator, an expired deadline, or no deadline at all', async () => {
       mockCollection.findOneAndUpdate.mockResolvedValue({ correlationId: 'corr-1' })
 
       await claimCreatorRole('corr-1', 'file-2')
@@ -199,7 +199,8 @@ describe('cases repository', () => {
           caseId: null,
           $or: [
             { creatorFileId: null },
-            { creationDeadline: { $lt: expect.any(Date) } }
+            { creationDeadline: { $lt: expect.any(Date) } },
+            { creationDeadline: { $exists: false } }
           ]
         },
         {
