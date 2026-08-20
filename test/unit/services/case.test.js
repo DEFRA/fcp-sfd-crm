@@ -18,7 +18,8 @@ vi.mock('../../../src/services/create-case-with-online-submission-in-crm.js', ()
 vi.mock('../../../src/repos/cases.js', () => ({
   upsertCase: vi.fn(),
   updateCaseId: vi.fn(),
-  markFileProcessed: vi.fn()
+  markFileProcessed: vi.fn(),
+  claimCreatorRole: vi.fn()
 }))
 
 vi.mock('../../../src/repos/crm.js', () => ({
@@ -29,7 +30,7 @@ vi.mock('../../../src/repos/crm.js', () => ({
 const { createCase, transformPayload } = await import('../../../src/services/case.js')
 const { getCrmAuthToken } = await import('../../../src/auth/get-crm-auth-token.js')
 const { createCaseWithOnlineSubmissionInCrm, resolveDocumentTypeOrThrow } = await import('../../../src/services/create-case-with-online-submission-in-crm.js')
-const { upsertCase, updateCaseId, markFileProcessed } = await import('../../../src/repos/cases.js')
+const { upsertCase, updateCaseId, markFileProcessed, claimCreatorRole } = await import('../../../src/repos/cases.js')
 const { getOnlineSubmissionActivityId, createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
 
 const validPayload = {
@@ -48,6 +49,7 @@ describe('case service', () => {
     upsertCase.mockResolvedValue({ isNew: true, isDuplicateFile: false, caseId: null, isCreator: true })
     updateCaseId.mockResolvedValue({ modifiedCount: 1 })
     markFileProcessed.mockResolvedValue({ modifiedCount: 1 })
+    claimCreatorRole.mockResolvedValue(false)
     createCaseWithOnlineSubmissionInCrm.mockResolvedValue({ caseId: 'mock-case-id', contactId: 'c1', accountId: 'a1', rpaOnlinesubmissionid: 'mock-ols-id' })
     // mocks for additional-file flow
     getOnlineSubmissionActivityId.mockResolvedValue({ onlineSubmissionActivityId: '84c190b8-5d96-f111-8076-000d3ada3978', error: null })
@@ -185,20 +187,44 @@ describe('case service', () => {
       )
     })
 
-    test('should throw retryable error when case creation is in progress by another message', async () => {
+    test('should throw retryable error when case creation is in progress and the claim is refused', async () => {
       upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: null, isCreator: false })
+      claimCreatorRole.mockResolvedValue(false)
 
       await expect(createCase(validPayload)).rejects.toThrow('Case creation in progress for this correlationId')
 
       const thrownError = await createCase(validPayload).catch(e => e)
       expect(thrownError.retryable).toBe(true)
 
+      expect(claimCreatorRole).toHaveBeenCalledWith('corr-1', 'file-1')
       expect(getCrmAuthToken).not.toHaveBeenCalled()
       expect(createCaseWithOnlineSubmissionInCrm).not.toHaveBeenCalled()
       expect(mockLogger.info).toHaveBeenCalledWith(
         { tenant: { message: 'fileId=file-1' } },
         'Case creation in progress, will retry'
       )
+    })
+
+    test('should create the case when a waiting file successfully claims the creator role', async () => {
+      upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: null, isCreator: false })
+      claimCreatorRole.mockResolvedValue(true)
+
+      const response = await createCase(validPayload)
+
+      expect(claimCreatorRole).toHaveBeenCalledWith('corr-1', 'file-1')
+      expect(getCrmAuthToken).toHaveBeenCalled()
+      expect(createCaseWithOnlineSubmissionInCrm).toHaveBeenCalled()
+      expect(updateCaseId).toHaveBeenCalledWith('corr-1', 'mock-case-id')
+      expect(markFileProcessed).toHaveBeenCalledWith('corr-1', 'file-1')
+      expect(response.caseId).toBe('mock-case-id')
+    })
+
+    test('should not attempt a claim when the creator itself is retrying (isCreator, caseId null)', async () => {
+      upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: null, isCreator: true })
+
+      await createCase(validPayload)
+
+      expect(claimCreatorRole).not.toHaveBeenCalled()
     })
 
     test('should propagate retryable error when fallback lookup fails (race condition scenario)', async () => {
