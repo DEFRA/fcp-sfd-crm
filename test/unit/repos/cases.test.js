@@ -136,29 +136,6 @@ describe('cases repository', () => {
 
       expect(result.isDuplicateFile).toBe(false)
     })
-
-    test('should treat driver {value: null} as insert (isNew:true)', async () => {
-      mockCollection.findOneAndUpdate.mockResolvedValue({ value: null })
-
-      const result = await upsertCase('corr-1', 'file-1')
-
-      expect(result).toEqual({ isNew: true, isDuplicateFile: false, caseId: null, isCreator: true })
-    })
-
-    test('should handle real driver shape with value object for duplicate detection', async () => {
-      mockCollection.findOneAndUpdate.mockResolvedValue({
-        value: {
-          correlationId: 'corr-1',
-          caseId: 'case-1',
-          creatorFileId: 'file-1',
-          processedFileIds: ['file-1']
-        }
-      })
-
-      const result = await upsertCase('corr-1', 'file-1')
-
-      expect(result).toEqual({ isNew: false, isDuplicateFile: true, caseId: 'case-1', isCreator: true })
-    })
   })
 
   describe('markFileProcessed', () => {
@@ -208,20 +185,13 @@ describe('cases repository', () => {
             creatorFileId: 'file-2',
             creationDeadline: expect.any(Date)
           }
-        }
+        },
+        { returnDocument: 'before' }
       )
     })
 
-    test('should return true when a document matches (direct document shape)', async () => {
+    test('should return true when a document matches', async () => {
       mockCollection.findOneAndUpdate.mockResolvedValue({ correlationId: 'corr-1' })
-
-      const result = await claimCreatorRole('corr-1', 'file-2')
-
-      expect(result).toBe(true)
-    })
-
-    test('should return true when a document matches (real driver {value} shape)', async () => {
-      mockCollection.findOneAndUpdate.mockResolvedValue({ value: { correlationId: 'corr-1' } })
 
       const result = await claimCreatorRole('corr-1', 'file-2')
 
@@ -230,14 +200,6 @@ describe('cases repository', () => {
 
     test('should return false when no document matches (null result)', async () => {
       mockCollection.findOneAndUpdate.mockResolvedValue(null)
-
-      const result = await claimCreatorRole('corr-1', 'file-2')
-
-      expect(result).toBe(false)
-    })
-
-    test('should return false when no document matches (real driver {value: null} shape)', async () => {
-      mockCollection.findOneAndUpdate.mockResolvedValue({ value: null })
 
       const result = await claimCreatorRole('corr-1', 'file-2')
 

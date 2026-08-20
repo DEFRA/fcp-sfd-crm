@@ -357,7 +357,9 @@ describe('CRM repository', () => {
       const { caseId, rpaOnlinesubmissionid, error } = await createCaseWithOnlineSubmission(buildRequest())
 
       expect(caseId).toBe(deriveCaseRecordId(CASE_CORRELATION_ID))
-      expect(rpaOnlinesubmissionid).toHaveLength(20)
+      // Never persisted for this attempt (an earlier attempt's changeset
+      // already committed a different value), so it must not be reported.
+      expect(rpaOnlinesubmissionid).toBeNull()
       expect(error).toBeNull()
 
       expect(mockHttpClient).toHaveBeenCalledTimes(2)
