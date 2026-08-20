@@ -7,6 +7,7 @@ import { queueConfig } from './queue.js'
 import { awsConfig } from './aws.js'
 import { messagingConfig } from './messaging.js'
 import { retryConfig } from './retry.js'
+import { casesConfig } from './cases.js'
 
 convict.addFormats(convictFormatWithValidator)
 
@@ -17,7 +18,8 @@ const config = convict({
   ...queueConfig,
   ...awsConfig,
   ...messagingConfig,
-  ...retryConfig
+  ...retryConfig,
+  ...casesConfig
 })
 
 config.validate({ allowed: 'strict' })
