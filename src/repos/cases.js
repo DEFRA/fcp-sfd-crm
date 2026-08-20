@@ -108,7 +108,12 @@ const claimCreatorRole = async (correlationId, fileId) => {
       caseId: null,
       $or: [
         { creatorFileId: null },
-        { creationDeadline: { $lt: new Date() } }
+        { creationDeadline: { $lt: new Date() } },
+        // Submissions already in flight when creationDeadline was introduced
+        // carry no such field, and a $lt comparison never matches a missing
+        // field. Without this they could never be taken over at all, which is
+        // the very defect the deadline exists to close.
+        { creationDeadline: { $exists: false } }
       ]
     },
     {
