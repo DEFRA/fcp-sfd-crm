@@ -364,7 +364,7 @@ const logCaseCreationSuppressed = ({ caseId, correlationId, fileId }) => {
       reason: 'case_already_exists',
       reference: caseId
     },
-    tenant: { message: `correlationId=${correlationId} fileId=${fileId}` }
+    tenant: { message: toTenantMessage({ correlationId, fileId }) }
   }, 'Case already exists, duplicate creation suppressed')
 }
 
@@ -520,7 +520,11 @@ const writeCaseChangesetOrSuppress = async ({ authToken, correlationId, fileId, 
     throw metadataError
   }
 
-  return { caseId, rpaOnlinesubmissionid, error: null }
+  // rpaOnlinesubmissionid was freshly generated for this attempt but never
+  // written — the 412 means an earlier attempt's changeset already persisted
+  // (a different) value. Returning null avoids advertising an identifier
+  // that does not exist in Dataverse.
+  return { caseId, rpaOnlinesubmissionid: null, error: null }
 }
 
 /**

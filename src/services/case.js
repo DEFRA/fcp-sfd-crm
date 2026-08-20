@@ -7,7 +7,7 @@ import { createMetadataForOnlineSubmission } from '../repos/crm.js'
 import { fetchOnlineSubmissionActivityIdOrThrow } from './crm-helpers.js'
 import { messages } from '../constants/messages.js'
 import { metricsCounter } from '../api/common/helpers/metrics.js'
-import { caseCreationMetrics } from '../constants/case-creation-metrics.js'
+import { caseCreationMetrics, caseCreationEvents, caseActions } from '../constants/case-creation-metrics.js'
 
 const logger = createLogger()
 
@@ -78,7 +78,7 @@ export async function createCase (payload) {
 
   const prep = await prepareCase({ correlationId, fileId })
 
-  if (prep.action === 'skip') {
+  if (prep.action === caseActions.SKIP) {
     logger.info({ tenant: { message: toTenantMessage({ fileId }) } }, 'Skipped: duplicate message')
     return { skipped: true, caseId: prep.caseId }
   }
@@ -86,7 +86,7 @@ export async function createCase (payload) {
   const authToken = await getCrmAuthToken()
   const transformedPayload = transformPayload(payload)
 
-  if (prep.action === 'create') {
+  if (prep.action === caseActions.CREATE) {
     return createNewCase({ authToken, transformedPayload, correlationId, fileId })
   }
 
@@ -104,17 +104,20 @@ async function prepareCase ({ correlationId, fileId }) {
   const { isNew, isDuplicateFile, caseId, isCreator } = await upsertCase(correlationId, fileId)
 
   if (isDuplicateFile) {
-    return { action: 'skip', caseId }
+    return { action: caseActions.SKIP, caseId }
   }
 
-  if (!caseId && !isNew && !isCreator) {
+  const isWaitingForAnotherFilesCase = !isNew && !isCreator && !caseId
+  const isThisFilesCaseToCreate = isNew || (isCreator && !caseId)
+
+  if (isWaitingForAnotherFilesCase) {
     if (await claimCreatorRole(correlationId, fileId)) {
       await metricsCounter(caseCreationMetrics.CREATOR_ROLE_CLAIMED)
       logger.info({
-        event: { type: 'crm.case.creator_reassigned', action: 'claim_creator_role', category: 'crm', outcome: 'success', reference: correlationId },
+        event: { type: caseCreationEvents.CREATOR_ROLE_CLAIMED, action: 'claim_creator_role', category: 'crm', outcome: 'success', reference: correlationId },
         tenant: { message: toTenantMessage({ fileId }) }
       }, 'Creator role reassigned to this file')
-      return { action: 'create' }
+      return { action: caseActions.CREATE }
     }
 
     await metricsCounter(caseCreationMetrics.WAITING_FOR_CASE)
@@ -124,11 +127,11 @@ async function prepareCase ({ correlationId, fileId }) {
     throw error
   }
 
-  if (isNew || (!caseId && isCreator)) {
-    return { action: 'create' }
+  if (isThisFilesCaseToCreate) {
+    return { action: caseActions.CREATE }
   }
 
-  return { action: 'addMetadata', caseId }
+  return { action: caseActions.ADD_METADATA, caseId }
 }
 
 /**
@@ -169,7 +172,7 @@ async function createNewCase ({ authToken, transformedPayload, correlationId, fi
     if (!err.retryable && await releaseCreatorRole(correlationId, fileId)) {
       await metricsCounter(caseCreationMetrics.CREATOR_ROLE_RELEASED)
       logger.info({
-        event: { type: 'crm.case.creator_released', action: 'release_creator_role', category: 'crm', outcome: 'success', reference: correlationId },
+        event: { type: caseCreationEvents.CREATOR_ROLE_RELEASED, action: 'release_creator_role', category: 'crm', outcome: 'success', reference: correlationId },
         tenant: { message: toTenantMessage({ fileId }) }
       }, 'Creator role released after non-retryable failure')
     }

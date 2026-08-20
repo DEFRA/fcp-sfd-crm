@@ -116,7 +116,10 @@ describe('createCaseWithOnlineSubmission — real HTTP client seam', () => {
     expect(calls).toBe(3)
     expect(result).toEqual({
       caseId: deriveCaseRecordId(CORRELATION_ID),
-      rpaOnlinesubmissionid: expect.any(String),
+      // The identifier generated for this suppressed attempt was never
+      // persisted — an earlier attempt's changeset already committed a
+      // different value — so it must not be reported as if it were real.
+      rpaOnlinesubmissionid: null,
       error: null
     })
     expect(mockLogger.info).toHaveBeenCalledWith(
