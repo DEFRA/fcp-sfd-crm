@@ -202,11 +202,19 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
       {
         error: caseErr,
         event: {
+          type: 'crm.case.create_failed',
+          action: 'create_case',
           category: 'crm_case_create_failed',
-          reason: '{"error":{"code":"0x80040265","message":"Cannot find record to be updated"}}'
+          outcome: 'failure',
+          reason: '{"error":{"code":"0x80040265","message":"Cannot find record to be updated"}}',
+          reference: null
         }
       },
       'Error creating case with online submission activity'
+    )
+    expect(mockLogger.warn).not.toHaveBeenCalledWith(
+      expect.objectContaining({ event: expect.objectContaining({ type: 'crm.case.create_outcome_unknown' }) }),
+      expect.any(String)
     )
   })
 
@@ -399,7 +407,7 @@ test('re-throws original retryable CRM error when createCaseWithOnlineSubmission
   vi.doMock('../../../src/logging/logger.js', () => ({ createLogger: () => mockLogger }))
 
   const retryErr = new Error('CRM transient')
-  retryErr.retryMetadata = { category: 'retryable', status: 503 }
+  retryErr.retryMetadata = { category: 'retryable', status: 503, terminalReason: 'http_503', attempts: 2 }
   retryErr.crmError = '{"error":{"code":"0x80060891"}}'
 
   vi.doMock('../../../src/repos/crm.js', () => ({
@@ -421,6 +429,28 @@ test('re-throws original retryable CRM error when createCaseWithOnlineSubmission
   // logger should have been called with the original case error
   expect(mockLogger.error).toHaveBeenCalledWith({
     error: retryErr,
-    event: { category: 'retryable', reason: '{"error":{"code":"0x80060891"}}' }
+    event: {
+      type: 'crm.case.create_failed',
+      action: 'create_case',
+      category: 'retryable',
+      outcome: 'failure',
+      reason: '{"error":{"code":"0x80060891"}}',
+      reference: null
+    }
   }, 'Error creating case with online submission activity')
+
+  expect(mockLogger.warn).toHaveBeenCalledWith(
+    {
+      event: {
+        type: 'crm.case.create_outcome_unknown',
+        action: 'create_case',
+        category: 'crm',
+        outcome: 'unknown',
+        reason: 'http_503',
+        reference: null
+      },
+      tenant: { message: `correlationId=cid fileId=${FILE_ID} attempts=2` }
+    },
+    'Case creation outcome could not be confirmed — Dataverse may have committed it'
+  )
 })

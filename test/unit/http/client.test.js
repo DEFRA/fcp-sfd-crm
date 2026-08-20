@@ -80,11 +80,7 @@ describe('httpClient — successful requests', () => {
           action: 'retry_decision',
           reason: 'http_404'
         }),
-        retry: expect.objectContaining({
-          attempts: 1,
-          category: 'non-retryable',
-          willRetry: false
-        })
+        tenant: { message: expect.stringMatching(/attempts=1.*category=non-retryable.*willRetry=false/) }
       }),
       expect.any(String)
     )
@@ -117,11 +113,7 @@ describe('httpClient — retryable errors (5xx / 429)', () => {
           action: 'request_succeeded',
           outcome: 'success'
         }),
-        retry: expect.objectContaining({
-          attempts: 2,
-          category: 'retryable',
-          terminalReason: 'http_500'
-        })
+        tenant: { message: 'attempts=2 category=retryable' }
       }),
       expect.any(String)
     )
@@ -194,11 +186,7 @@ describe('httpClient — network errors (retryable)', () => {
           action: 'request_failed',
           outcome: 'failure'
         }),
-        retry: expect.objectContaining({
-          attempts: 3,
-          category: 'retryable',
-          terminalReason: 'ECONNREFUSED'
-        })
+        tenant: { message: 'attempts=3 category=retryable' }
       }),
       expect.any(String)
     )
@@ -277,10 +265,7 @@ describe('httpClient — unknown errors', () => {
           outcome: 'unknown',
           reason: 'mystery failure'
         }),
-        retry: expect.objectContaining({
-          category: 'unknown',
-          willRetry: true
-        })
+        tenant: { message: expect.stringMatching(/category=unknown.*willRetry=true/) }
       }),
       expect.any(String)
     )
@@ -297,11 +282,7 @@ describe('httpClient — unknown errors', () => {
           outcome: 'failure',
           reason: 'mystery failure'
         }),
-        retry: expect.objectContaining({
-          attempts: 2,
-          category: 'unknown',
-          terminalReason: 'mystery failure'
-        })
+        tenant: { message: 'attempts=2 category=unknown' }
       }),
       expect.any(String)
     )
@@ -343,10 +324,7 @@ describe('httpClient — unknown errors', () => {
           action: 'request_succeeded',
           outcome: 'success'
         }),
-        retry: expect.objectContaining({
-          attempts: 2,
-          category: 'retryable'
-        })
+        tenant: { message: 'attempts=2 category=retryable' }
       }),
       expect.stringContaining('recovered')
     )
@@ -595,9 +573,7 @@ describe('retryMetadata.status field', () => {
 
     expect(mockLogger.warn).toHaveBeenCalledWith(
       expect.objectContaining({
-        retry: expect.objectContaining({
-          terminalReason: 'http_503'
-        })
+        event: expect.objectContaining({ reason: 'http_503' })
       }),
       'HTTP retry policy decision'
     )

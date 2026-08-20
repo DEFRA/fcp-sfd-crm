@@ -1,6 +1,7 @@
 import { createClient, NetworkError, TimeoutError, AbortError } from '@fetchkit/ffetch'
 import { config } from '../config/index.js'
 import { createLogger } from '../logging/logger.js'
+import { toTenantMessage } from '../logging/tenant-message.js'
 
 const logger = createLogger()
 
@@ -139,12 +140,8 @@ const logRetryDecision = ({ ctx, category, willRetry, limit, terminalReason, sta
       reference: ctx.request.url,
       duration: retryDurationNs(startedAtMs)
     },
-    retry: {
-      attempts: ctx.attempt,
-      category,
-      terminalReason,
-      maxAttempts: limit,
-      willRetry
+    tenant: {
+      message: toTenantMessage({ attempts: ctx.attempt, category, maxAttempts: limit, willRetry })
     }
   }, 'HTTP retry policy decision')
 }
@@ -186,7 +183,9 @@ const onCompleteHook = (request, response, error, retryStateByRequest) => {
       error: {
         message: errorMessage(error)
       },
-      retry: metadata
+      tenant: {
+        message: toTenantMessage({ attempts: metadata.attempts, category: metadata.category, status: metadata.status })
+      }
     }, 'HTTP request failed after retry policy evaluation')
     return
   }
@@ -202,7 +201,9 @@ const onCompleteHook = (request, response, error, retryStateByRequest) => {
         reference: request.url,
         duration: retryDurationNs(state.startedAtMs)
       },
-      retry: metadata,
+      tenant: {
+        message: toTenantMessage({ attempts: metadata.attempts, category: metadata.category })
+      },
       http: {
         response: {
           status_code: response?.status
