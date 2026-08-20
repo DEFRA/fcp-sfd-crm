@@ -178,6 +178,25 @@ describe('Cases repository - Database integration', () => {
       expect(claimed).toBe(false)
     })
 
+    test('should allow a claim on a document predating creationDeadline, which has no such field', async () => {
+      // Shaped as upsertCase wrote documents before creationDeadline existed.
+      await db.collection(COLLECTION).insertOne({
+        correlationId: 'corr-legacy',
+        caseId: null,
+        creatorFileId: 'file-1',
+        processedFileIds: [],
+        createdAt: new Date()
+      })
+
+      const claimed = await claimCreatorRole('corr-legacy', 'file-2')
+
+      expect(claimed).toBe(true)
+
+      const doc = await db.collection(COLLECTION).findOne({ correlationId: 'corr-legacy' })
+      expect(doc.creatorFileId).toBe('file-2')
+      expect(doc.creationDeadline).toBeInstanceOf(Date)
+    })
+
     test('should allow exactly one of several concurrent claimants to win', async () => {
       await upsertCase('corr-race', 'file-1')
       await expireDeadline('corr-race')
