@@ -1,4 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
+import Boom from '@hapi/boom'
 
 const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
 
@@ -19,7 +20,8 @@ vi.mock('../../../src/repos/cases.js', () => ({
   upsertCase: vi.fn(),
   updateCaseId: vi.fn(),
   markFileProcessed: vi.fn(),
-  claimCreatorRole: vi.fn()
+  claimCreatorRole: vi.fn(),
+  releaseCreator: vi.fn()
 }))
 
 vi.mock('../../../src/repos/crm.js', () => ({
@@ -30,7 +32,7 @@ vi.mock('../../../src/repos/crm.js', () => ({
 const { createCase, transformPayload } = await import('../../../src/services/case.js')
 const { getCrmAuthToken } = await import('../../../src/auth/get-crm-auth-token.js')
 const { createCaseWithOnlineSubmissionInCrm, resolveDocumentTypeOrThrow } = await import('../../../src/services/create-case-with-online-submission-in-crm.js')
-const { upsertCase, updateCaseId, markFileProcessed, claimCreatorRole } = await import('../../../src/repos/cases.js')
+const { upsertCase, updateCaseId, markFileProcessed, claimCreatorRole, releaseCreator } = await import('../../../src/repos/cases.js')
 const { getOnlineSubmissionActivityId, createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
 
 const validPayload = {
@@ -50,6 +52,7 @@ describe('case service', () => {
     updateCaseId.mockResolvedValue({ modifiedCount: 1 })
     markFileProcessed.mockResolvedValue({ modifiedCount: 1 })
     claimCreatorRole.mockResolvedValue(false)
+    releaseCreator.mockResolvedValue(true)
     createCaseWithOnlineSubmissionInCrm.mockResolvedValue({ caseId: 'mock-case-id', contactId: 'c1', accountId: 'a1', rpaOnlinesubmissionid: 'mock-ols-id' })
     // mocks for additional-file flow
     getOnlineSubmissionActivityId.mockResolvedValue({ onlineSubmissionActivityId: '84c190b8-5d96-f111-8076-000d3ada3978', error: null })
@@ -244,6 +247,96 @@ describe('case service', () => {
       createCaseWithOnlineSubmissionInCrm.mockRejectedValue(error)
 
       await expect(createCase(validPayload)).rejects.toThrow('CRM unavailable')
+    })
+
+    test('should release the creator role and rethrow when case creation fails non-retryably', async () => {
+      const nonRetryableErr = new Error('Unable to create case with online submission activity in CRM')
+      nonRetryableErr.retryable = false
+      createCaseWithOnlineSubmissionInCrm.mockRejectedValue(nonRetryableErr)
+
+      const thrown = await createCase(validPayload).catch(e => e)
+
+      expect(thrown).toBe(nonRetryableErr)
+      expect(releaseCreator).toHaveBeenCalledWith('corr-1', 'file-1')
+      expect(updateCaseId).not.toHaveBeenCalled()
+      expect(markFileProcessed).not.toHaveBeenCalled()
+    })
+
+    test('should not release the creator role when case creation fails retryably', async () => {
+      const retryableErr = new Error('CRM unavailable, will retry')
+      retryableErr.retryable = true
+      createCaseWithOnlineSubmissionInCrm.mockRejectedValue(retryableErr)
+
+      await createCase(validPayload).catch(e => e)
+
+      expect(releaseCreator).not.toHaveBeenCalled()
+    })
+
+    test('should release the creator role when an error carries no retryable flag, since the consumer dead-letters it', async () => {
+      createCaseWithOnlineSubmissionInCrm.mockRejectedValue(new Error('unexpected'))
+
+      await createCase(validPayload).catch(e => e)
+
+      expect(releaseCreator).toHaveBeenCalledWith('corr-1', 'file-1')
+    })
+
+    test('should release the creator role when contact lookup fails with a Boom 422 carrying no retryable flag', async () => {
+      const contactErr = Boom.boomify(new Error('Contact ID not found'), { statusCode: 422 })
+      createCaseWithOnlineSubmissionInCrm.mockRejectedValue(contactErr)
+
+      const thrown = await createCase(validPayload).catch(e => e)
+
+      expect(thrown.retryable).toBeUndefined()
+      expect(releaseCreator).toHaveBeenCalledWith('corr-1', 'file-1')
+    })
+
+    test('should rethrow the original failure even when releasing the creator role itself fails', async () => {
+      const nonRetryableErr = new Error('Unable to create case with online submission activity in CRM')
+      nonRetryableErr.retryable = false
+      createCaseWithOnlineSubmissionInCrm.mockRejectedValue(nonRetryableErr)
+      releaseCreator.mockRejectedValue(new Error('MongoNetworkError: connection timed out'))
+
+      const thrown = await createCase(validPayload).catch(e => e)
+
+      expect(thrown).toBe(nonRetryableErr)
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: expect.objectContaining({ reason: 'creator_release_failed' })
+        }),
+        expect.stringContaining('Failed to release creator role')
+      )
+    })
+
+    test('should release the creator role when document type resolution fails non-retryably before any write', async () => {
+      const docTypeErr = new Error('No document type metadata found for caseType: Document Upload')
+      docTypeErr.retryable = false
+      createCaseWithOnlineSubmissionInCrm.mockRejectedValue(docTypeErr)
+
+      await createCase(validPayload).catch(e => e)
+
+      expect(releaseCreator).toHaveBeenCalledWith('corr-1', 'file-1')
+    })
+
+    test('should let a released creator role be reclaimed and create the case', async () => {
+      const nonRetryableErr = new Error('Unable to create case with online submission activity in CRM')
+      nonRetryableErr.retryable = false
+      upsertCase.mockResolvedValueOnce({ isNew: true, isDuplicateFile: false, caseId: null, isCreator: true })
+      createCaseWithOnlineSubmissionInCrm.mockRejectedValueOnce(nonRetryableErr)
+
+      await createCase(validPayload).catch(e => e)
+      expect(releaseCreator).toHaveBeenCalledWith('corr-1', 'file-1')
+
+      upsertCase.mockResolvedValueOnce({ isNew: false, isDuplicateFile: false, caseId: null, isCreator: false })
+      claimCreatorRole.mockResolvedValueOnce(true)
+      createCaseWithOnlineSubmissionInCrm.mockResolvedValueOnce({ caseId: 'mock-case-id', contactId: 'c1', accountId: 'a1', rpaOnlinesubmissionid: 'mock-ols-id' })
+
+      const secondFilePayload = {
+        data: { ...validPayload.data, file: { ...validPayload.data.file, fileId: 'file-2' } }
+      }
+      const response = await createCase(secondFilePayload)
+
+      expect(claimCreatorRole).toHaveBeenCalledWith('corr-1', 'file-2')
+      expect(response.caseId).toBe('mock-case-id')
     })
 
     test('should propagate MongoDB errors from upsertCase', async () => {

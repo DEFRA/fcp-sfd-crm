@@ -2,10 +2,11 @@ import { createLogger } from '../logging/logger.js'
 import { toTenantMessage } from '../logging/tenant-message.js'
 import { getCrmAuthToken } from '../auth/get-crm-auth-token.js'
 import { createCaseWithOnlineSubmissionInCrm, resolveDocumentTypeOrThrow } from './create-case-with-online-submission-in-crm.js'
-import { upsertCase, updateCaseId, markFileProcessed, claimCreatorRole } from '../repos/cases.js'
+import { upsertCase, updateCaseId, markFileProcessed, claimCreatorRole, releaseCreator } from '../repos/cases.js'
 import { createMetadataForOnlineSubmission } from '../repos/crm.js'
 import { fetchOnlineSubmissionActivityIdOrThrow } from './crm-helpers.js'
 import { messages } from '../constants/messages.js'
+import { isTerminalFailure } from '../utils/is-terminal-failure.js'
 
 const logger = createLogger()
 
@@ -123,8 +124,42 @@ async function prepareCase ({ correlationId, fileId }) {
   return { action: 'addMetadata', caseId }
 }
 
+/**
+ * Releases the creator role, reporting rather than propagating its own
+ * failure.
+ *
+ * A failed release must never replace the error that triggered it: the
+ * dead letter record needs to explain the case-creation failure, not a
+ * transient Mongo fault on the way out. The submission still recovers
+ * through the creation deadline in that case, just more slowly.
+ *
+ * @returns {Promise<boolean>} true when the role was actually released.
+ */
+async function releaseCreatorRole (correlationId, fileId) {
+  try {
+    return await releaseCreator(correlationId, fileId)
+  } catch (releaseError) {
+    logger.error({
+      error: releaseError,
+      event: { category: 'crm', reason: 'creator_release_failed' },
+      tenant: { message: toTenantMessage({ fileId }) }
+    }, 'Failed to release creator role; submission will rely on the creation deadline')
+    return false
+  }
+}
+
 async function createNewCase ({ authToken, transformedPayload, correlationId, fileId }) {
-  const response = await createCaseWithOnlineSubmissionInCrm({ authToken, fileId, ...transformedPayload })
+  let response
+  try {
+    response = await createCaseWithOnlineSubmissionInCrm({ authToken, fileId, ...transformedPayload })
+  } catch (err) {
+    // A message about to dead-letter must not take the creator role with it,
+    // or its siblings wait for the deadline instead of proceeding at once.
+    if (isTerminalFailure(err)) {
+      await releaseCreatorRole(correlationId, fileId)
+    }
+    throw err
+  }
 
   await updateCaseId(correlationId, response.caseId)
   await markFileProcessed(correlationId, fileId)
