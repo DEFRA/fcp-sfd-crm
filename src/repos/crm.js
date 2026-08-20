@@ -4,6 +4,7 @@ import { HttpError } from '@fetchkit/ffetch'
 import { config } from '../config/index.js'
 import { httpClient } from '../http/client.js'
 import { createLogger } from '../logging/logger.js'
+import { buildChangesetRequest, parseBatchResponse } from './dataverse-batch.js'
 
 const logger = createLogger()
 
@@ -19,6 +20,10 @@ const CRM_ERROR_BODY_MAX_LENGTH = 2000
 const TRUNCATION_SUFFIX = '... (truncated)'
 
 const HTTP_PRECONDITION_FAILED = 412
+// A successful conditional upsert with no Prefer: return=representation
+// answers 204. Anything else on a $batch part — including a 2xx that is not
+// 204 — is treated as unexpected rather than assumed benign.
+const HTTP_NO_CONTENT = 204
 
 // Nibble positions and masks used to shape a hash digest into an RFC 4122
 // version 4 GUID, as required by deriveMetadataRecordId.
@@ -125,84 +130,6 @@ const getAccountIdFromSbi = async (authToken, sbi) => {
   }
 }
 
-const createCaseWithOnlineSubmission = async (request) => {
-  try {
-    const { authToken, case: caseData, onlineSubmissionActivity } = request
-    const { title, caseDescription, contactId, accountId, documentTypeMetadata } = caseData
-    const { subject, description, scheduledStart, scheduledEnd, stateCode, statusCode, metadata } = onlineSubmissionActivity
-    const { name, blobFileId, mimeType } = metadata
-
-    const { schemeValue, subjectValue, teamRoutingValue, documentTypesId } = documentTypeMetadata
-
-    const activityMetadataItem = {
-      rpa_name: name,
-      rpa_blobfileid: blobFileId,
-      'rpa_DocumentTypeMetaId@odata.bind': `/rpa_documenttypeses(${documentTypesId})`
-    }
-
-    if (mimeType) {
-      activityMetadataItem.rpa_filemimetype = mimeType
-    }
-
-    const rpaOnlinesubmissionid = randomBytes(10).toString('hex')
-
-    const payload = {
-      title,
-      description: caseDescription,
-      caseorigincode: caseOriginCode,
-      prioritycode: 2,
-      'customerid_contact@odata.bind': `/contacts(${contactId})`,
-      'rpa_Contact@odata.bind': `/contacts(${contactId})`,
-      'rpa_Organisation@odata.bind': `/accounts(${accountId})`,
-      'rpa_Scheme@odata.bind': `/rpa_schemes(${schemeValue})`,
-      'subjectid@odata.bind': `/subjects(${subjectValue})`,
-      rpa_isunknowncontact: false,
-      rpa_isunknownorganisation: false,
-      incident_rpa_onlinesubmissions: [
-        {
-          subject,
-          description,
-          scheduledstart: scheduledStart,
-          scheduledend: scheduledEnd,
-          rpa_onlinesubmissiondate: new Date().toISOString(),
-          rpa_onlinesubmissionid: rpaOnlinesubmissionid,
-          statecode: stateCode,
-          statuscode: statusCode,
-          'rpa_SubmissionType_rpa_onlinesubmission@odata.bind': `/rpa_documenttypeses(${documentTypesId})`,
-          rpa_onlinesubmission_rpa_activitymetadata: [activityMetadataItem]
-        }
-      ]
-    }
-
-    if (teamRoutingValue) {
-      payload['ownerid@odata.bind'] = `/teams(${teamRoutingValue})`
-    }
-
-    const response = await httpClient(`${baseUrl}/incidents`, {
-      method: 'POST',
-      headers: {
-        Authorization: authToken,
-        ...baseHeaders
-      },
-      body: JSON.stringify(payload)
-    })
-
-    const data = await response.json()
-
-    return {
-      caseId: data.incidentid,
-      rpaOnlinesubmissionid,
-      error: null
-    }
-  } catch (err) {
-    await attachCrmErrorBody(err)
-    return {
-      caseId: null,
-      error: err
-    }
-  }
-}
-
 /**
  * Resolve the Dataverse primary key (activityid) of the online submission
  * activity attached to a case.
@@ -241,28 +168,27 @@ const getOnlineSubmissionActivityId = async (authToken, caseId) => {
 }
 
 /**
- * Derives a stable GUID-formatted key from a (correlationId, fileId) pair so
- * that every attempt at writing a given file's metadata — including retries
- * within a single process and SQS redeliveries after a restart — addresses
- * the same Dataverse record. This makes the write safe to upsert instead of
- * always creating a new record.
+ * Shapes a sha256 digest of the given parts into an RFC 4122 version 4
+ * formatted GUID. Private: callers derive a record id through one of the
+ * named wrappers below, each of which fixes the parts that make up its
+ * digest so identically-shaped ids for different record types cannot
+ * collide with one another.
  *
- * The key is a one-way digest rather than a random value. Both inputs are
- * themselves GUIDs, so the key carries no personal data and nothing
- * meaningful can be recovered from it where it appears in CRM telemetry.
- * Any future change to the inputs must preserve that property: a low entropy
- * input would be recoverable from the digest by brute force.
+ * The key is a one-way digest rather than a random value, which is what
+ * makes it safe to use as a client-supplied primary key: every attempt at
+ * writing a given record — including retries within a single process and
+ * SQS redeliveries after a restart — addresses the same Dataverse record,
+ * which makes the write safe to upsert instead of always creating a new one.
  *
- * @param {string} correlationId - GUID identifying the submission.
- * @param {string} fileId - GUID identifying the file within that submission.
+ * @param {...string} parts - joined with ':' before hashing.
  * @returns {string} A deterministic RFC 4122 version 4 formatted GUID.
  */
-const deriveMetadataRecordId = (correlationId, fileId) => {
-  const hash = createHash('sha256').update(`${correlationId}:${fileId}`).digest('hex')
+const deriveRecordId = (...parts) => {
+  const hash = createHash('sha256').update(parts.join(':')).digest('hex')
   const hex = hash.slice(0, GUID_NIBBLE_COUNT).split('')
   hex[GUID_VERSION_NIBBLE_INDEX] = '4'
   hex[GUID_VARIANT_NIBBLE_INDEX] = (
-    (parseInt(hex[GUID_VARIANT_NIBBLE_INDEX], HEX_RADIX) & GUID_VARIANT_MASK) | GUID_VARIANT_RFC4122
+    (Number.parseInt(hex[GUID_VARIANT_NIBBLE_INDEX], HEX_RADIX) & GUID_VARIANT_MASK) | GUID_VARIANT_RFC4122
   ).toString(HEX_RADIX)
   const guid = hex.join('')
 
@@ -276,12 +202,56 @@ const deriveMetadataRecordId = (correlationId, fileId) => {
 }
 
 /**
- * Writes the metadata record as a conditional upsert.
+ * Derives a stable GUID-formatted key from a (correlationId, fileId) pair so
+ * that every attempt at writing a given file's metadata addresses the same
+ * Dataverse record.
  *
- * The record is addressed on its own entity set rather than the parent's
- * navigation property collection, which does not support PATCH. If-None-Match
- * makes the write create-only: Dataverse answers any subsequent attempt with
- * 412 rather than duplicating the record.
+ * Both inputs are themselves GUIDs, so the key carries no personal data and
+ * nothing meaningful can be recovered from it where it appears in CRM
+ * telemetry. Any future change to the inputs must preserve that property: a
+ * low entropy input would be recoverable from the digest by brute force.
+ *
+ * Unnamespaced, for backwards compatibility with records already written
+ * under this exact derivation in both Dataverse organisations. Do not change
+ * its input shape — see the pinned regression test in crm.test.js.
+ *
+ * @param {string} correlationId - GUID identifying the submission.
+ * @param {string} fileId - GUID identifying the file within that submission.
+ * @returns {string} A deterministic RFC 4122 version 4 formatted GUID.
+ */
+const deriveMetadataRecordId = (correlationId, fileId) => deriveRecordId(correlationId, fileId)
+
+/**
+ * Derives a stable GUID-formatted key for the case (incident) created by a
+ * submission. Keyed on correlationId alone, deliberately: a submission has
+ * exactly one case, so every file in it — including one taking over case
+ * creation from a failed creator — must derive the same identifier. Namespaced
+ * against deriveOnlineSubmissionRecordId so the two never collide for the
+ * same correlationId.
+ *
+ * @param {string} correlationId - GUID identifying the submission.
+ * @returns {string} A deterministic RFC 4122 version 4 formatted GUID.
+ */
+const deriveCaseRecordId = (correlationId) => deriveRecordId('incident', correlationId)
+
+/**
+ * Derives a stable GUID-formatted key for a submission's online submission
+ * (rpa_onlinesubmission) activity record. Keyed on correlationId alone, for
+ * the same reason as deriveCaseRecordId. Namespaced against it so the two
+ * never collide for the same correlationId.
+ *
+ * @param {string} correlationId - GUID identifying the submission.
+ * @returns {string} A deterministic RFC 4122 version 4 formatted GUID.
+ */
+const deriveOnlineSubmissionRecordId = (correlationId) => deriveRecordId('onlinesubmission', correlationId)
+
+/**
+ * Writes a record as a conditional upsert, addressed by a derived key on its
+ * own entity set rather than as a nested navigation property, which does not
+ * support PATCH. If-None-Match makes the write create-only: Dataverse
+ * answers any subsequent attempt with 412 rather than duplicating the
+ * record. Used for the metadata record and, since the case-duplication fix,
+ * for the incident and online submission records too.
  *
  * Note that this is first-write-wins. A later write carrying the same derived
  * key but different content (a corrected name or mime type, say) is discarded
@@ -291,7 +261,7 @@ const deriveMetadataRecordId = (correlationId, fileId) => {
  * @returns {Promise<boolean>} true when the record was created, false when an
  * identical write had already created it.
  */
-const upsertMetadataRecord = async (endpoint, authToken, payload) => {
+const upsertRecord = async (endpoint, authToken, payload) => {
   try {
     await httpClient(endpoint, {
       method: 'PATCH',
@@ -350,7 +320,7 @@ const createMetadataForOnlineSubmission = async (request) => {
     }
 
     const endpoint = `${baseUrl}/rpa_activitymetadatas(${metadataId})`
-    const created = await upsertMetadataRecord(endpoint, authToken, payload)
+    const created = await upsertRecord(endpoint, authToken, payload)
 
     if (!created) {
       // A prior attempt's write succeeded but its response was lost, delayed
@@ -366,6 +336,206 @@ const createMetadataForOnlineSubmission = async (request) => {
     await attachCrmErrorBody(err)
     return {
       metadataId: null,
+      error: err
+    }
+  }
+}
+
+/**
+ * Logs that a case creation changeset was suppressed because the derived
+ * records already existed — the redelivery-after-timeout case this whole
+ * mechanism exists for. Mirrors the metadata suppression log in level and
+ * intent. This is the single most valuable line the fix produces: it turns
+ * a silent duplicate into an observable, countable event.
+ */
+const logCaseCreationSuppressed = ({ caseId, correlationId, fileId }) => {
+  logger.info({
+    event: {
+      type: 'crm.case.create_suppressed',
+      action: 'create_case',
+      category: 'crm',
+      outcome: 'success',
+      reason: 'case_already_exists',
+      reference: caseId
+    },
+    tenant: { message: `correlationId=${correlationId} fileId=${fileId}` }
+  }, 'Case already exists, duplicate creation suppressed')
+}
+
+/**
+ * Builds the derived record ids and the three PATCH parts for the case
+ * creation changeset, from the same inputs the old deep-insert payload used.
+ * Pure and synchronous: makes no request.
+ */
+const buildCaseChangeset = ({ correlationId, fileId, caseData, onlineSubmissionActivity }) => {
+  const { title, caseDescription, contactId, accountId, documentTypeMetadata } = caseData
+  const { subject, description, scheduledStart, scheduledEnd, stateCode, statusCode, metadata } = onlineSubmissionActivity
+  const { name, blobFileId, mimeType } = metadata
+  const { schemeValue, subjectValue, teamRoutingValue, documentTypesId } = documentTypeMetadata
+
+  const caseId = deriveCaseRecordId(correlationId)
+  const onlineSubmissionId = deriveOnlineSubmissionRecordId(correlationId)
+  const metadataId = deriveMetadataRecordId(correlationId, fileId)
+  const rpaOnlinesubmissionid = randomBytes(10).toString('hex')
+
+  const casePayload = {
+    title,
+    description: caseDescription,
+    caseorigincode: caseOriginCode,
+    prioritycode: 2,
+    'customerid_contact@odata.bind': `/contacts(${contactId})`,
+    'rpa_Contact@odata.bind': `/contacts(${contactId})`,
+    'rpa_Organisation@odata.bind': `/accounts(${accountId})`,
+    'rpa_Scheme@odata.bind': `/rpa_schemes(${schemeValue})`,
+    'subjectid@odata.bind': `/subjects(${subjectValue})`,
+    rpa_isunknowncontact: false,
+    rpa_isunknownorganisation: false
+  }
+  if (teamRoutingValue) {
+    casePayload['ownerid@odata.bind'] = `/teams(${teamRoutingValue})`
+  }
+
+  const onlineSubmissionPayload = {
+    subject,
+    description,
+    scheduledstart: scheduledStart,
+    scheduledend: scheduledEnd,
+    rpa_onlinesubmissiondate: new Date().toISOString(),
+    rpa_onlinesubmissionid: rpaOnlinesubmissionid,
+    statecode: stateCode,
+    statuscode: statusCode,
+    'rpa_SubmissionType_rpa_onlinesubmission@odata.bind': `/rpa_documenttypeses(${documentTypesId})`,
+    // Read directly from RelationshipDefinitions rather than guessed.
+    // Do not shorten or re-derive this name.
+    'regardingobjectid_incident_rpa_onlinesubmission@odata.bind': `/incidents(${caseId})`
+  }
+
+  const metadataPayload = {
+    rpa_name: name,
+    rpa_blobfileid: blobFileId,
+    'rpa_DocumentTypeMetaId@odata.bind': `/rpa_documenttypeses(${documentTypesId})`,
+    'rpa_RelatedOnlineSubmissionId@odata.bind': `/rpa_onlinesubmissions(${onlineSubmissionId})`
+  }
+  if (mimeType) {
+    metadataPayload.rpa_filemimetype = mimeType
+  }
+
+  return {
+    caseId,
+    onlineSubmissionId,
+    rpaOnlinesubmissionid,
+    // Used only if the changeset is suppressed and this file's metadata must
+    // be written on its own, via the same shape createMetadataForOnlineSubmission expects.
+    fallbackMetadata: { name, blobFileId, mimeType, documentTypeId: documentTypesId },
+    parts: [
+      { method: 'PATCH', url: `${baseUrl}/incidents(${caseId})`, headers: { 'If-None-Match': '*' }, body: casePayload },
+      { method: 'PATCH', url: `${baseUrl}/rpa_onlinesubmissions(${onlineSubmissionId})`, headers: { 'If-None-Match': '*' }, body: onlineSubmissionPayload },
+      { method: 'PATCH', url: `${baseUrl}/rpa_activitymetadatas(${metadataId})`, headers: { 'If-None-Match': '*' }, body: metadataPayload }
+    ]
+  }
+}
+
+/**
+ * Issues the case creation changeset and resolves a 412 into a suppressed
+ * success. A 412 means a previous attempt already committed all three parts
+ * — the redelivery-after-timeout case this exists to fix. Because the
+ * changeset is atomic, that also means THIS file's metadata record was
+ * written in that same earlier attempt only if it was the original
+ * creator's file: a different file taking over creation (see the
+ * creator-role recovery this composes with) derives the same case and
+ * online submission keys but a different metadata key, so its record is
+ * still genuinely new and must be written separately — the same call a
+ * sibling file already makes once the case exists, so the suppressed path
+ * and the sibling path converge on one code path rather than two.
+ *
+ * Anything other than a 412 is rethrown to the caller unchanged.
+ */
+const writeCaseChangesetOrSuppress = async ({ authToken, correlationId, fileId, caseId, onlineSubmissionId, rpaOnlinesubmissionid, fallbackMetadata, parts }) => {
+  const { headers: batchHeaders, body: batchBody } = buildChangesetRequest(parts)
+
+  try {
+    const response = await httpClient(`${baseUrl}/$batch`, {
+      method: 'POST',
+      headers: { Authorization: authToken, ...batchHeaders },
+      body: batchBody
+    })
+
+    const responseText = await response.text()
+    const parsedParts = parseBatchResponse(responseText)
+
+    // A malformed batch body (missing CRLF framing, most likely) is parsed by
+    // Dataverse as containing zero parts and answered with an outer 200 —
+    // indistinguishable from success unless the part count is checked.
+    if (parsedParts.length !== parts.length || parsedParts.some((part) => part.status !== HTTP_NO_CONTENT)) {
+      throw new Error(`Malformed $batch response: expected ${parts.length} successful parts, got ${JSON.stringify(parsedParts)}`)
+    }
+
+    return { caseId, rpaOnlinesubmissionid, error: null }
+  } catch (err) {
+    if (!(err instanceof HttpError) || err.cause?.status !== HTTP_PRECONDITION_FAILED) {
+      throw err
+    }
+  }
+
+  logCaseCreationSuppressed({ caseId, correlationId, fileId })
+  const { error: metadataError } = await createMetadataForOnlineSubmission({
+    authToken,
+    onlineSubmissionActivityId: onlineSubmissionId,
+    metadata: fallbackMetadata,
+    correlationId,
+    fileId
+  })
+  if (metadataError) {
+    throw metadataError
+  }
+
+  return { caseId, rpaOnlinesubmissionid, error: null }
+}
+
+/**
+ * Creates a case, its online submission and the creating file's metadata
+ * record as one atomic, idempotent write.
+ *
+ * The three records are addressed by keys derived from correlationId (and,
+ * for the metadata record, fileId — see deriveMetadataRecordId), and issued
+ * as a single Dataverse $batch changeset with If-None-Match: * on every
+ * part. Dataverse cannot apply a conditional upsert to a deep insert (a
+ * create-with-nested-children request), which is why this is three separate
+ * PATCHes in one changeset rather than one POST: the changeset gives back
+ * the atomicity the deep insert used to provide, while each part remains
+ * individually addressable and safe to repeat. See writeCaseChangesetOrSuppress
+ * for what happens when Dataverse reports the changeset already applied.
+ *
+ * @returns {Promise<{caseId: string, rpaOnlinesubmissionid: string, error: null}
+ *   | {caseId: null, error: Error}>}
+ */
+const createCaseWithOnlineSubmission = async (request) => {
+  const { authToken, correlationId, fileId, case: caseData, onlineSubmissionActivity } = request
+
+  try {
+    // Without both identifiers the derived keys would be stable but
+    // meaningless, and every submission missing one would collide onto a
+    // single incident.
+    if (!correlationId || !fileId) {
+      throw new Error(`Cannot derive stable record keys: correlationId and fileId are both required, got '${correlationId}' and '${fileId}'`)
+    }
+
+    const changeset = buildCaseChangeset({ correlationId, fileId, caseData, onlineSubmissionActivity })
+
+    return await writeCaseChangesetOrSuppress({
+      authToken,
+      correlationId,
+      fileId,
+      caseId: changeset.caseId,
+      onlineSubmissionId: changeset.onlineSubmissionId,
+      rpaOnlinesubmissionid: changeset.rpaOnlinesubmissionid,
+      fallbackMetadata: changeset.fallbackMetadata,
+      parts: changeset.parts
+    })
+  } catch (err) {
+    await attachCrmErrorBody(err)
+    return {
+      caseId: null,
       error: err
     }
   }
@@ -453,5 +623,7 @@ export {
   getCaseIdByOnlineSubmissionId,
   createMetadataForOnlineSubmission,
   getDocumentTypeMetadata,
-  deriveMetadataRecordId
+  deriveMetadataRecordId,
+  deriveCaseRecordId,
+  deriveOnlineSubmissionRecordId
 }

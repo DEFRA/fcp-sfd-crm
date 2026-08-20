@@ -29,7 +29,7 @@ describe('createCaseWithOnlineSubmissionInCrm edge cases', () => {
 
   test('should throw Boom badRequest for each missing required param', async () => {
     const base = {
-      authToken: 't', crn: 'c', sbi: 's', caseType: 'SomeType', caseData: {}, onlineSubmissionActivity: {}
+      authToken: 't', crn: 'c', sbi: 's', caseType: 'SomeType', caseData: {}, onlineSubmissionActivity: {}, fileId: 'test-file-id'
     }
     for (const key of Object.keys(base)) {
       const req = { ...base, [key]: null }
@@ -49,7 +49,8 @@ describe('createCaseWithOnlineSubmissionInCrm edge cases', () => {
       caseType: 'SomeType',
       caseData: {},
       onlineSubmissionActivity: {},
-      correlationId: 'test-correlation-id'
+      correlationId: 'test-correlation-id',
+      fileId: 'test-file-id'
     }))
       .rejects.toMatchObject({ isBoom: true, message: expect.stringContaining('Contact ID not found') })
     getContactIdFromCrn.mockResolvedValue({ contactId: 'id' })
@@ -61,7 +62,8 @@ describe('createCaseWithOnlineSubmissionInCrm edge cases', () => {
       caseType: 'SomeType',
       caseData: {},
       onlineSubmissionActivity: {},
-      correlationId: 'test-correlation-id'
+      correlationId: 'test-correlation-id',
+      fileId: 'test-file-id'
     }))
       .rejects.toMatchObject({ isBoom: true, message: expect.stringContaining('Account ID not found') })
   })
@@ -78,7 +80,8 @@ describe('createCaseWithOnlineSubmissionInCrm edge cases', () => {
       caseType: 'SomeType',
       caseData: {},
       onlineSubmissionActivity: {},
-      correlationId: 'test-correlation-id'
+      correlationId: 'test-correlation-id',
+      fileId: 'test-file-id'
     }))
       .rejects.toMatchObject({ isBoom: true, message: expect.stringContaining('Unable to create case with online submission activity in CRM') })
   })
@@ -95,7 +98,8 @@ describe('createCaseWithOnlineSubmissionInCrm edge cases', () => {
       caseType: 'SomeType',
       caseData: {},
       onlineSubmissionActivity: {},
-      correlationId: 'test-correlation-id'
+      correlationId: 'test-correlation-id',
+      fileId: 'test-file-id'
     })
     expect(result).toEqual({ contactId: 'id', accountId: 'aid', caseId: 'cid', rpaOnlinesubmissionid: 'ols-1' })
   })
@@ -113,7 +117,8 @@ describe('createCaseWithOnlineSubmissionInCrm edge cases', () => {
       caseType: 'SomeType',
       caseData: {},
       onlineSubmissionActivity: {},
-      correlationId: 'test-correlation-id'
+      correlationId: 'test-correlation-id',
+      fileId: 'test-file-id'
     })
     expect(result).toEqual({ contactId: 'id', accountId: 'aid', caseId: 'cid', rpaOnlinesubmissionid: 'ols-1' })
   })
