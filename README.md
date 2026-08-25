@@ -260,13 +260,15 @@ Both paths go through `claimCreatorRole`, a single conditional MongoDB update th
 
 | Variable | Default | Description |
 |---|---|---|
-| `CASE_CREATION_DEADLINE_MS` | `60000` | How long a submission waits for its creator to create the case before another file may take over |
+| `CASE_CREATION_DEADLINE_MS` | `30000` | How long a submission waits for its creator to create the case before another file may take over |
 
 `CASE_CREATION_DEADLINE_MS` must stay well inside the CRM request queue's redelivery budget (`visibility_timeout_seconds` × `dlq_max_receive_count`, set per environment in `cdp-tenant-config`), or a submission can be sent to the dead letter queue before the deadline ever has a chance to fire. A waiting file's own retries are its only recovery path in the meantime.
 
+That budget is currently 60 × 3 = 180 s in every environment. A waiting file is redelivered every 60 s and has three deliveries before the dead letter queue, so the default of 30000 expires comfortably before the second delivery rather than on the boundary of it. Recompute this if either queue setting changes.
+
 ### Observability
 
-A submission stuck waiting for its case is visible without checking the dead letter queue: `crm.case.waiting_for_case`, `crm.case.creator_role_claimed` and `crm.case.creator_role_released` are emitted as metrics (see [`src/api/common/helpers/metrics.js`](src/api/common/helpers/metrics.js)), and `crm.case.creator_reassigned` / `crm.case.creator_released` are logged with ECS `event.*` fields from `src/services/case.js`.
+A submission stuck waiting for its case is visible without checking the dead letter queue: `crm.case.waiting_for_case`, `crm.case.creator_role_claimed`, `crm.case.creator_role_released` and `crm.case.creator_release_failed` are emitted as metrics (see [`src/api/common/helpers/metrics.js`](src/api/common/helpers/metrics.js)). Every name except `crm.case.waiting_for_case` is also written as `event.type` on an ECS-shaped log line from `src/services/case.js`, so the same string finds the event in either place.
 
 ## Licence
 

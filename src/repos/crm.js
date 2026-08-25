@@ -541,7 +541,7 @@ const writeCaseChangesetOrSuppress = async ({ authToken, correlationId, fileId, 
  * individually addressable and safe to repeat. See writeCaseChangesetOrSuppress
  * for what happens when Dataverse reports the changeset already applied.
  *
- * @returns {Promise<{caseId: string, rpaOnlinesubmissionid: string, error: null}
+ * @returns {Promise<{caseId: string, rpaOnlinesubmissionid: string|null, error: null}
  *   | {caseId: null, error: Error}>}
  */
 const createCaseWithOnlineSubmission = async (request) => {

@@ -7,7 +7,7 @@ import { createMetadataForOnlineSubmission } from '../repos/crm.js'
 import { fetchOnlineSubmissionActivityIdOrThrow } from './crm-helpers.js'
 import { messages } from '../constants/messages.js'
 import { metricsCounter } from '../api/common/helpers/metrics.js'
-import { caseCreationMetrics, caseCreationEvents, caseActions } from '../constants/case-creation-metrics.js'
+import { caseCreationMetrics, caseActions } from '../constants/case-creation-metrics.js'
 
 const logger = createLogger()
 
@@ -114,7 +114,7 @@ async function prepareCase ({ correlationId, fileId }) {
     if (await claimCreatorRole(correlationId, fileId)) {
       await metricsCounter(caseCreationMetrics.CREATOR_ROLE_CLAIMED)
       logger.info({
-        event: { type: caseCreationEvents.CREATOR_ROLE_CLAIMED, action: 'claim_creator_role', category: 'crm', outcome: 'success', reference: correlationId },
+        event: { type: caseCreationMetrics.CREATOR_ROLE_CLAIMED, action: 'claim_creator_role', category: 'crm', outcome: 'success', reference: correlationId },
         tenant: { message: toTenantMessage({ fileId }) }
       }, 'Creator role reassigned to this file')
       return { action: caseActions.CREATE }
@@ -149,9 +149,10 @@ async function releaseCreatorRole (correlationId, fileId) {
   try {
     return await releaseCreator(correlationId, fileId)
   } catch (releaseError) {
+    await metricsCounter(caseCreationMetrics.CREATOR_RELEASE_FAILED)
     logger.error({
       error: releaseError,
-      event: { category: 'crm', reason: 'creator_release_failed' },
+      event: { type: caseCreationMetrics.CREATOR_RELEASE_FAILED, category: 'crm', reason: 'creator_release_failed' },
       tenant: { message: toTenantMessage({ fileId }) }
     }, 'Failed to release creator role; submission will rely on the creation deadline')
     return false
@@ -172,7 +173,7 @@ async function createNewCase ({ authToken, transformedPayload, correlationId, fi
     if (!err.retryable && await releaseCreatorRole(correlationId, fileId)) {
       await metricsCounter(caseCreationMetrics.CREATOR_ROLE_RELEASED)
       logger.info({
-        event: { type: caseCreationEvents.CREATOR_ROLE_RELEASED, action: 'release_creator_role', category: 'crm', outcome: 'success', reference: correlationId },
+        event: { type: caseCreationMetrics.CREATOR_ROLE_RELEASED, action: 'release_creator_role', category: 'crm', outcome: 'success', reference: correlationId },
         tenant: { message: toTenantMessage({ fileId }) }
       }, 'Creator role released after non-retryable failure')
     }

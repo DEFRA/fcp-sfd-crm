@@ -1,16 +1,13 @@
-export const caseCreationMetrics = {
+// Metric names for the creator-role transitions. Every name except
+// WAITING_FOR_CASE is also used as the log event.type for the same
+// transition, so that a name found in a metric and a name found in a log
+// line always refer to the same event.
+export const caseCreationMetrics = Object.freeze({
   WAITING_FOR_CASE: 'crm.case.waiting_for_case',
   CREATOR_ROLE_CLAIMED: 'crm.case.creator_role_claimed',
-  CREATOR_ROLE_RELEASED: 'crm.case.creator_role_released'
-}
-
-// Log event.type values for the same creator-role transitions, kept in the
-// same module as, and using the same names as, the metrics above so the two
-// families cannot drift apart.
-export const caseCreationEvents = {
-  CREATOR_ROLE_CLAIMED: caseCreationMetrics.CREATOR_ROLE_CLAIMED,
-  CREATOR_ROLE_RELEASED: caseCreationMetrics.CREATOR_ROLE_RELEASED
-}
+  CREATOR_ROLE_RELEASED: 'crm.case.creator_role_released',
+  CREATOR_RELEASE_FAILED: 'crm.case.creator_release_failed'
+})
 
 export const caseActions = Object.freeze({
   SKIP: 'skip',

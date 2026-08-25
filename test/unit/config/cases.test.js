@@ -17,10 +17,10 @@ describe('src/config/cases.js', () => {
     }
   })
 
-  test('defaults creationDeadlineMs to 60000', () => {
+  test('defaults creationDeadlineMs to 30000', () => {
     const config = convict(casesConfig)
 
-    expect(config.get('cases.creationDeadlineMs')).toBe(60000)
+    expect(config.get('cases.creationDeadlineMs')).toBe(30000)
   })
 
   test('honours CASE_CREATION_DEADLINE_MS override', () => {

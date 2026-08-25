@@ -9,7 +9,7 @@ export const casesConfig = {
           throw new Error(`must be an integer >= ${MIN_CREATION_DEADLINE_MS}`)
         }
       },
-      default: 60000,
+      default: 30000,
       env: 'CASE_CREATION_DEADLINE_MS'
     }
   }

@@ -342,6 +342,18 @@ describe('case service', () => {
       )
     })
 
+    test('should count a failed release so the degraded path is alertable', async () => {
+      const nonRetryableErr = new Error('Unable to create case with online submission activity in CRM')
+      nonRetryableErr.retryable = false
+      createCaseWithOnlineSubmissionInCrm.mockRejectedValue(nonRetryableErr)
+      releaseCreator.mockRejectedValue(new Error('MongoNetworkError: connection timed out'))
+
+      await createCase(validPayload).catch(e => e)
+
+      expect(metricsCounter).toHaveBeenCalledWith(caseCreationMetrics.CREATOR_RELEASE_FAILED)
+      expect(metricsCounter).not.toHaveBeenCalledWith(caseCreationMetrics.CREATOR_ROLE_RELEASED)
+    })
+
     test('should not log or count a release when releaseCreator finds nothing to release', async () => {
       const nonRetryableErr = new Error('Unable to create case with online submission activity in CRM')
       nonRetryableErr.retryable = false
