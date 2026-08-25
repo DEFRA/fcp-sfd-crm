@@ -59,6 +59,7 @@ const request = (overrides = {}) => ({
     documentTypeMetadata: {
       schemeValue: 'scheme-1',
       subjectValue: 'subject-1',
+      teamRoutingValue: 'team-1',
       documentTypesId: '4e88916b-aae2-ee11-904c-000d3adc1ec9'
     }
   },
