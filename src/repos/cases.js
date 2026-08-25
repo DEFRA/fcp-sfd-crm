@@ -3,7 +3,10 @@ import { createIndex } from '../data/create-index.js'
 import { config } from '../config/index.js'
 
 const COLLECTION = 'cases'
-const creationDeadlineMs = config.get('cases.creationDeadlineMs')
+
+// Read per call rather than at module import, so importing this repository
+// does not require the config module to have been mocked first.
+const creationDeadline = () => new Date(Date.now() + config.get('cases.creationDeadlineMs'))
 
 const setCorrelationIdIndex = async () => {
   await createIndex(db.collection(COLLECTION), { correlationId: 1 }, 'correlationId_1', true)
@@ -31,7 +34,7 @@ const upsertCase = async (correlationId, fileId) => {
         creatorFileId: fileId,
         processedFileIds: [],
         createdAt: new Date(),
-        creationDeadline: new Date(Date.now() + creationDeadlineMs)
+        creationDeadline: creationDeadline()
       }
     },
     { upsert: true, returnDocument: 'before' }
@@ -111,7 +114,7 @@ const claimCreatorRole = async (correlationId, fileId) => {
     {
       $set: {
         creatorFileId: fileId,
-        creationDeadline: new Date(Date.now() + creationDeadlineMs)
+        creationDeadline: creationDeadline()
       }
     }
   )
