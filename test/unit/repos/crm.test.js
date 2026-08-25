@@ -314,39 +314,47 @@ describe('CRM repository', () => {
       expect(body).not.toContain('rpa_onlinesubmission_rpa_activitymetadata')
     })
 
-    test('should omit rpa_filemimetype and ownerid@odata.bind when not provided', async () => {
+    // The case and the activity are owned independently: Dataverse assigns a
+    // new activity to the calling user, so routing the case alone leaves the
+    // activity owned by the integration's service principal.
+    test('should bind ownerid@odata.bind to the routing team on both the case and the online submission', async () => {
       mockHttpClient.mockResolvedValue({ text: vi.fn().mockResolvedValue(successfulBatchResponseText()) })
 
-      await createCaseWithOnlineSubmission(buildRequest({
-        case: {
-          title: 'Test case title',
-          caseDescription: 'Test case description',
-          contactId: 'contact-123',
-          accountId: 'account-456',
-          documentTypeMetadata: {
-            schemeValue: 'scheme-abc',
-            subjectValue: 'subject-def',
-            documentTypesId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
-          }
-        },
-        onlineSubmissionActivity: {
-          subject: 'Test submission subject',
-          description: 'Test submission description',
-          scheduledStart: '2026-01-01T10:00:00Z',
-          scheduledEnd: '2026-01-01T11:00:00Z',
-          stateCode: 0,
-          statusCode: 1,
-          metadata: {
-            name: 'test-document.pdf',
-            documentType: 'doc-type-789',
-            blobFileId: 'blob-file-id-123'
-          }
-        }
-      }))
+      await createCaseWithOnlineSubmission(buildRequest())
+
+      const body = mockHttpClient.mock.calls[0][1].body
+      const ownerBindCount = (body.match(/"ownerid@odata\.bind":"\/teams\(team-ghi\)"/g) ?? []).length
+      expect(ownerBindCount).toBe(2)
+    })
+
+    // Every documentTypeMetadata field is bound into the changeset and so is
+    // required in the same way. Asserted for each rather than singling out
+    // team routing, which would imply the others were optional.
+    test.each(['schemeValue', 'subjectValue', 'teamRoutingValue', 'documentTypesId'])(
+      'should write nothing at all when documentTypeMetadata is missing %s',
+      async (field) => {
+        const request = buildRequest()
+        delete request.case.documentTypeMetadata[field]
+
+        const { caseId, error } = await createCaseWithOnlineSubmission(request)
+
+        expect(caseId).toBeNull()
+        expect(error).toBeInstanceOf(Error)
+        expect(error.message).toBe(`Incomplete documentTypeMetadata: ${field} required`)
+        expect(mockHttpClient).not.toHaveBeenCalled()
+      }
+    )
+
+    test('should omit rpa_filemimetype when no mime type is provided', async () => {
+      mockHttpClient.mockResolvedValue({ text: vi.fn().mockResolvedValue(successfulBatchResponseText()) })
+
+      const request = buildRequest()
+      delete request.onlineSubmissionActivity.metadata.mimeType
+
+      await createCaseWithOnlineSubmission(request)
 
       const body = mockHttpClient.mock.calls[0][1].body
       expect(body).not.toContain('rpa_filemimetype')
-      expect(body).not.toContain('ownerid@odata.bind')
     })
 
     test('should treat a 412 on the changeset as success, log the suppression, and write only the current file\'s metadata', async () => {

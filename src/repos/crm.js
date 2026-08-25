@@ -372,12 +372,28 @@ const logCaseCreationSuppressed = ({ caseId, correlationId, fileId }) => {
  * Builds the derived record ids and the three PATCH parts for the case
  * creation changeset, from the same inputs the old deep-insert payload used.
  * Pure and synchronous: makes no request.
+ *
+ * @throws {Error} when documentTypeMetadata is incomplete. Team routing is
+ * required alongside the rest: a case or activity left unowned reaches no
+ * team's queue, so it is never written at all rather than written unroutable.
  */
 const buildCaseChangeset = ({ correlationId, fileId, caseData, onlineSubmissionActivity }) => {
   const { title, caseDescription, contactId, accountId, documentTypeMetadata } = caseData
   const { subject, description, scheduledStart, scheduledEnd, stateCode, statusCode, metadata } = onlineSubmissionActivity
   const { name, blobFileId, mimeType } = metadata
   const { schemeValue, subjectValue, teamRoutingValue, documentTypesId } = documentTypeMetadata
+
+  // Every one of these is bound into the payload below, so a missing value
+  // would be interpolated as the string 'undefined' and rejected by Dataverse
+  // as a malformed bind, or worse, silently produce an unroutable case that
+  // no team ever works. There is deliberately no fallback for any of them:
+  // defaulting would hide the misconfiguration rather than surface it.
+  const missing = Object.entries({ schemeValue, subjectValue, teamRoutingValue, documentTypesId })
+    .filter(([, value]) => !value)
+    .map(([key]) => key)
+  if (missing.length) {
+    throw new Error(`Incomplete documentTypeMetadata: ${missing.join(', ')} required`)
+  }
 
   const caseId = deriveCaseRecordId(correlationId)
   const onlineSubmissionId = deriveOnlineSubmissionRecordId(correlationId)
@@ -400,11 +416,9 @@ const buildCaseChangeset = ({ correlationId, fileId, caseData, onlineSubmissionA
     'rpa_Organisation@odata.bind': `/accounts(${accountId})`,
     'rpa_Scheme@odata.bind': `/rpa_schemes(${schemeValue})`,
     'subjectid@odata.bind': `/subjects(${subjectValue})`,
+    'ownerid@odata.bind': `/teams(${teamRoutingValue})`,
     rpa_isunknowncontact: false,
     rpa_isunknownorganisation: false
-  }
-  if (teamRoutingValue) {
-    casePayload['ownerid@odata.bind'] = `/teams(${teamRoutingValue})`
   }
 
   const onlineSubmissionPayload = {
@@ -417,6 +431,11 @@ const buildCaseChangeset = ({ correlationId, fileId, caseData, onlineSubmissionA
     statecode: stateCode,
     statuscode: statusCode,
     'rpa_SubmissionType_rpa_onlinesubmission@odata.bind': `/rpa_documenttypeses(${documentTypesId})`,
+    // Set on the activity in its own right, not inherited from the case:
+    // Dataverse assigns a newly created activity to the calling user, so
+    // without this bind the activity stays owned by the integration's service
+    // principal even when the parent case is routed correctly.
+    'ownerid@odata.bind': `/teams(${teamRoutingValue})`,
     // Read directly from RelationshipDefinitions rather than guessed.
     // Do not shorten or re-derive this name.
     'regardingobjectid_incident_rpa_onlinesubmission@odata.bind': `/incidents(${caseId})`
