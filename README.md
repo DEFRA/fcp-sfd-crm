@@ -243,6 +243,33 @@ Two clients are exported: `httpClient` (CRM API) and `authHttpClient` (token end
 
 See [`src/config/retry.js`](src/config/retry.js) and [`src/http/client.js`](src/http/client.js) for implementation details.
 
+## Multi-file case creation
+
+A submission uploaded as several files shares one `correlationId` and produces one CRM case. The first file processed for a `correlationId` becomes its *creator* and is the one that creates the case; every other file waits until the case exists, then attaches its own metadata to it. This is coordinated through a single Mongo document per `correlationId` in the `cases` collection — see [`src/repos/cases.js`](src/repos/cases.js) and [`src/services/case.js`](src/services/case.js).
+
+### Creator role recovery
+
+The creator can fail to create the case — a non-retryable CRM error, or its process being lost entirely — without losing the rest of the submission:
+
+- **Non-retryable failure.** `createNewCase` releases the creator role before its message reaches the dead letter queue, so the next file to be processed finds no live creator and creates the case itself.
+- **Lost creator.** Each submission records a `creationDeadline`, set when it is first seen. If no case has been created by the time the deadline passes, a waiting file may claim the creator role and create the case instead of continuing to wait.
+
+Both paths go through `claimCreatorRole`, a single conditional MongoDB update that matches at most one document, so two files can never simultaneously win the creator role for the same submission. Case creation itself is additionally idempotent — see [`src/repos/crm.js`](src/repos/crm.js) — so even if two files did both attempt to create a case for the same `correlationId`, only one incident would ever be committed in Dataverse.
+
+### Configuration
+
+| Variable | Default | Description |
+|---|---|---|
+| `CASE_CREATION_DEADLINE_MS` | `30000` | How long a submission waits for its creator to create the case before another file may take over |
+
+`CASE_CREATION_DEADLINE_MS` must stay well inside the CRM request queue's redelivery budget (`visibility_timeout_seconds` × `dlq_max_receive_count`, set per environment in `cdp-tenant-config`), or a submission can be sent to the dead letter queue before the deadline ever has a chance to fire. A waiting file's own retries are its only recovery path in the meantime.
+
+That budget is currently 60 × 3 = 180 s in every environment. A waiting file is redelivered every 60 s and has three deliveries before the dead letter queue, so the default of 30000 expires comfortably before the second delivery rather than on the boundary of it. Recompute this if either queue setting changes.
+
+### Observability
+
+A submission stuck waiting for its case is visible without checking the dead letter queue: `crm.case.waiting_for_case`, `crm.case.creator_role_claimed`, `crm.case.creator_role_released` and `crm.case.creator_release_failed` are emitted as metrics (see [`src/api/common/helpers/metrics.js`](src/api/common/helpers/metrics.js)). Every name except `crm.case.waiting_for_case` is also written as `event.type` on an ECS-shaped log line from `src/services/case.js`, so the same string finds the event in either place.
+
 ## Licence
 
 THIS INFORMATION IS LICENSED UNDER THE CONDITIONS OF THE OPEN GOVERNMENT LICENCE found at:

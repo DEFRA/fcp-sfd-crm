@@ -190,6 +190,20 @@ describe('Cases repository - Database integration', () => {
 
       expect(results.filter(Boolean)).toHaveLength(1)
     })
+
+    test('should refuse a second claimant immediately after a successful takeover, since the new deadline is extended', async () => {
+      await upsertCase('corr-1', 'file-1')
+      await expireDeadline('corr-1')
+
+      const firstClaim = await claimCreatorRole('corr-1', 'file-2')
+      expect(firstClaim).toBe(true)
+
+      const secondClaim = await claimCreatorRole('corr-1', 'file-3')
+      expect(secondClaim).toBe(false)
+
+      const doc = await db.collection(COLLECTION).findOne({ correlationId: 'corr-1' })
+      expect(doc.creatorFileId).toBe('file-2')
+    })
   })
 
   describe('releaseCreator', () => {

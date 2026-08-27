@@ -312,7 +312,10 @@ describe('case service', () => {
       expect(releaseCreator).toHaveBeenCalledWith('corr-1', 'file-1')
     })
 
-    test('should release the creator role when contact lookup fails with a Boom 422 carrying no retryable flag', async () => {
+    test('should release the creator role when contact/account lookup fails with a Boom error carrying no retryable flag', async () => {
+      // Mirrors the real Boom 422 thrown by ensureContactAndAccount ("Contact
+      // ID not found" / "Account ID not found"), which the consumer treats as
+      // terminal (discardFailedMessage) despite never setting err.retryable.
       const contactErr = Boom.boomify(new Error('Contact ID not found'), { statusCode: 422 })
       createCaseWithOnlineSubmissionInCrm.mockRejectedValue(contactErr)
 
@@ -337,6 +340,18 @@ describe('case service', () => {
         }),
         expect.stringContaining('Failed to release creator role')
       )
+    })
+
+    test('should count a failed release so the degraded path is alertable', async () => {
+      const nonRetryableErr = new Error('Unable to create case with online submission activity in CRM')
+      nonRetryableErr.retryable = false
+      createCaseWithOnlineSubmissionInCrm.mockRejectedValue(nonRetryableErr)
+      releaseCreator.mockRejectedValue(new Error('MongoNetworkError: connection timed out'))
+
+      await createCase(validPayload).catch(e => e)
+
+      expect(metricsCounter).toHaveBeenCalledWith(caseCreationMetrics.CREATOR_RELEASE_FAILED)
+      expect(metricsCounter).not.toHaveBeenCalledWith(caseCreationMetrics.CREATOR_ROLE_RELEASED)
     })
 
     test('should not log or count a release when releaseCreator finds nothing to release', async () => {
