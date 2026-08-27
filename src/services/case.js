@@ -6,6 +6,8 @@ import { upsertCase, updateCaseId, markFileProcessed, claimCreatorRole, releaseC
 import { createMetadataForOnlineSubmission } from '../repos/crm.js'
 import { fetchOnlineSubmissionActivityIdOrThrow } from './crm-helpers.js'
 import { messages } from '../constants/messages.js'
+import { metricsCounter } from '../api/common/helpers/metrics.js'
+import { caseCreationMetrics } from '../constants/case-creation-metrics.js'
 import { isTerminalFailure } from '../utils/is-terminal-failure.js'
 
 const logger = createLogger()
@@ -108,9 +110,16 @@ async function prepareCase ({ correlationId, fileId }) {
 
   if (!caseId && !isNew && !isCreator) {
     if (await claimCreatorRole(correlationId, fileId)) {
+      await recordCreatorRoleTransition({
+        metric: caseCreationMetrics.CREATOR_ROLE_CLAIMED,
+        action: 'claim_creator_role',
+        correlationId,
+        fileId
+      }, 'Creator role reassigned to this file')
       return { action: 'create' }
     }
 
+    await metricsCounter(caseCreationMetrics.WAITING_FOR_CASE)
     logger.info({ tenant: { message: toTenantMessage({ fileId }) } }, 'Case creation in progress, will retry')
     const error = new Error('Case creation in progress for this correlationId')
     error.retryable = true
@@ -122,6 +131,19 @@ async function prepareCase ({ correlationId, fileId }) {
   }
 
   return { action: 'addMetadata', caseId }
+}
+
+/**
+ * Emits a creator-role transition as both a metric and a log line, under the
+ * one name. The metric name doubles as the log `event.type` so that a name
+ * found in either place refers to the same transition.
+ */
+async function recordCreatorRoleTransition ({ metric, action, correlationId, fileId }, message) {
+  await metricsCounter(metric)
+  logger.info({
+    event: { type: metric, action, category: 'crm', outcome: 'success', reference: correlationId },
+    tenant: { message: toTenantMessage({ fileId }) }
+  }, message)
 }
 
 /**
@@ -155,8 +177,13 @@ async function createNewCase ({ authToken, transformedPayload, correlationId, fi
   } catch (err) {
     // A message about to dead-letter must not take the creator role with it,
     // or its siblings wait for the deadline instead of proceeding at once.
-    if (isTerminalFailure(err)) {
-      await releaseCreatorRole(correlationId, fileId)
+    if (isTerminalFailure(err) && await releaseCreatorRole(correlationId, fileId)) {
+      await recordCreatorRoleTransition({
+        metric: caseCreationMetrics.CREATOR_ROLE_RELEASED,
+        action: 'release_creator_role',
+        correlationId,
+        fileId
+      }, 'Creator role released after non-retryable failure')
     }
     throw err
   }

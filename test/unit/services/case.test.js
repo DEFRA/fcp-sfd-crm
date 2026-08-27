@@ -29,11 +29,17 @@ vi.mock('../../../src/repos/crm.js', () => ({
   createMetadataForOnlineSubmission: vi.fn()
 }))
 
+vi.mock('../../../src/api/common/helpers/metrics.js', () => ({
+  metricsCounter: vi.fn()
+}))
+
 const { createCase, transformPayload } = await import('../../../src/services/case.js')
 const { getCrmAuthToken } = await import('../../../src/auth/get-crm-auth-token.js')
 const { createCaseWithOnlineSubmissionInCrm, resolveDocumentTypeOrThrow } = await import('../../../src/services/create-case-with-online-submission-in-crm.js')
 const { upsertCase, updateCaseId, markFileProcessed, claimCreatorRole, releaseCreator } = await import('../../../src/repos/cases.js')
 const { getOnlineSubmissionActivityId, createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
+const { metricsCounter } = await import('../../../src/api/common/helpers/metrics.js')
+const { caseCreationMetrics } = await import('../../../src/constants/case-creation-metrics.js')
 
 const validPayload = {
   data: {
@@ -206,6 +212,7 @@ describe('case service', () => {
         { tenant: { message: 'fileId=file-1' } },
         'Case creation in progress, will retry'
       )
+      expect(metricsCounter).toHaveBeenCalledWith(caseCreationMetrics.WAITING_FOR_CASE)
     })
 
     test('should create the case when a waiting file successfully claims the creator role', async () => {
@@ -220,6 +227,22 @@ describe('case service', () => {
       expect(updateCaseId).toHaveBeenCalledWith('corr-1', 'mock-case-id')
       expect(markFileProcessed).toHaveBeenCalledWith('corr-1', 'file-1')
       expect(response.caseId).toBe('mock-case-id')
+      expect(metricsCounter).toHaveBeenCalledWith(caseCreationMetrics.CREATOR_ROLE_CLAIMED)
+    })
+
+    test('should log a claimed creator role with ECS fields', async () => {
+      upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: null, isCreator: false })
+      claimCreatorRole.mockResolvedValue(true)
+
+      await createCase(validPayload)
+
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        {
+          event: { type: caseCreationMetrics.CREATOR_ROLE_CLAIMED, action: 'claim_creator_role', category: 'crm', outcome: 'success', reference: 'corr-1' },
+          tenant: { message: 'fileId=file-1' }
+        },
+        'Creator role reassigned to this file'
+      )
     })
 
     test('should not attempt a claim when the creator itself is retrying (isCreator, caseId null)', async () => {
@@ -260,6 +283,14 @@ describe('case service', () => {
       expect(releaseCreator).toHaveBeenCalledWith('corr-1', 'file-1')
       expect(updateCaseId).not.toHaveBeenCalled()
       expect(markFileProcessed).not.toHaveBeenCalled()
+      expect(metricsCounter).toHaveBeenCalledWith(caseCreationMetrics.CREATOR_ROLE_RELEASED)
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        {
+          event: { type: caseCreationMetrics.CREATOR_ROLE_RELEASED, action: 'release_creator_role', category: 'crm', outcome: 'success', reference: 'corr-1' },
+          tenant: { message: 'fileId=file-1' }
+        },
+        'Creator role released after non-retryable failure'
+      )
     })
 
     test('should not release the creator role when case creation fails retryably', async () => {
@@ -270,6 +301,7 @@ describe('case service', () => {
       await createCase(validPayload).catch(e => e)
 
       expect(releaseCreator).not.toHaveBeenCalled()
+      expect(metricsCounter).not.toHaveBeenCalledWith(caseCreationMetrics.CREATOR_ROLE_RELEASED)
     })
 
     test('should release the creator role when an error carries no retryable flag, since the consumer dead-letters it', async () => {
@@ -304,6 +336,38 @@ describe('case service', () => {
           event: expect.objectContaining({ reason: 'creator_release_failed' })
         }),
         expect.stringContaining('Failed to release creator role')
+      )
+    })
+
+    test('should not log or count a release when releaseCreator finds nothing to release', async () => {
+      const nonRetryableErr = new Error('Unable to create case with online submission activity in CRM')
+      nonRetryableErr.retryable = false
+      createCaseWithOnlineSubmissionInCrm.mockRejectedValue(nonRetryableErr)
+      releaseCreator.mockResolvedValue(false)
+
+      await createCase(validPayload).catch(e => e)
+
+      expect(releaseCreator).toHaveBeenCalledWith('corr-1', 'file-1')
+      expect(metricsCounter).not.toHaveBeenCalledWith(caseCreationMetrics.CREATOR_ROLE_RELEASED)
+      expect(mockLogger.info).not.toHaveBeenCalledWith(
+        expect.objectContaining({ event: expect.objectContaining({ type: caseCreationMetrics.CREATOR_ROLE_RELEASED }) }),
+        expect.any(String)
+      )
+    })
+
+    test('should not log or count a release when releaseCreator finds nothing to release', async () => {
+      const nonRetryableErr = new Error('Unable to create case with online submission activity in CRM')
+      nonRetryableErr.retryable = false
+      createCaseWithOnlineSubmissionInCrm.mockRejectedValue(nonRetryableErr)
+      releaseCreator.mockResolvedValue(false)
+
+      await createCase(validPayload).catch(e => e)
+
+      expect(releaseCreator).toHaveBeenCalledWith('corr-1', 'file-1')
+      expect(metricsCounter).not.toHaveBeenCalledWith(caseCreationMetrics.CREATOR_ROLE_RELEASED)
+      expect(mockLogger.info).not.toHaveBeenCalledWith(
+        expect.objectContaining({ event: expect.objectContaining({ type: caseCreationMetrics.CREATOR_ROLE_RELEASED }) }),
+        expect.any(String)
       )
     })
 
