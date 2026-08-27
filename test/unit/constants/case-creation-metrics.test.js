@@ -6,7 +6,8 @@ describe('src/constants/case-creation-metrics.js', () => {
     expect(caseCreationMetrics).toEqual({
       WAITING_FOR_CASE: 'crm.case.waiting_for_case',
       CREATOR_ROLE_CLAIMED: 'crm.case.creator_role_claimed',
-      CREATOR_ROLE_RELEASED: 'crm.case.creator_role_released'
+      CREATOR_ROLE_RELEASED: 'crm.case.creator_role_released',
+      CREATOR_RELEASE_FAILED: 'crm.case.creator_release_failed'
     })
   })
 
@@ -20,6 +21,10 @@ describe('src/constants/case-creation-metrics.js', () => {
 
   test('CREATOR_ROLE_RELEASED metric is correctly defined', () => {
     expect(caseCreationMetrics.CREATOR_ROLE_RELEASED).toBe('crm.case.creator_role_released')
+  })
+
+  test('CREATOR_RELEASE_FAILED metric is correctly defined', () => {
+    expect(caseCreationMetrics.CREATOR_RELEASE_FAILED).toBe('crm.case.creator_release_failed')
   })
 
   test('all metrics follow the naming convention', () => {

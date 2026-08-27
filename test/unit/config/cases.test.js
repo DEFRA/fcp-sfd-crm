@@ -17,10 +17,10 @@ describe('src/config/cases.js', () => {
     }
   })
 
-  test('defaults creationDeadlineMs to 60000', () => {
+  test('defaults creationDeadlineMs to 30000', () => {
     const config = convict(casesConfig)
 
-    expect(config.get('cases.creationDeadlineMs')).toBe(60000)
+    expect(config.get('cases.creationDeadlineMs')).toBe(30000)
   })
 
   test('honours CASE_CREATION_DEADLINE_MS override', () => {
@@ -29,5 +29,21 @@ describe('src/config/cases.js', () => {
     const config = convict(casesConfig)
 
     expect(config.get('cases.creationDeadlineMs')).toBe(90000)
+  })
+
+  test('rejects a value below the minimum', () => {
+    process.env.CASE_CREATION_DEADLINE_MS = '999'
+
+    const config = convict(casesConfig)
+
+    expect(() => config.validate()).toThrow(/must be an integer >= 1000/)
+  })
+
+  test('rejects a non-integer value', () => {
+    process.env.CASE_CREATION_DEADLINE_MS = '1000.5'
+
+    const config = convict(casesConfig)
+
+    expect(() => config.validate()).toThrow(/must be an integer >= 1000/)
   })
 })
