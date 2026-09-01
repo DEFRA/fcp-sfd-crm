@@ -48,7 +48,7 @@ const validPayload = {
     crm: { title: 'Test Title' },
     file: { fileId: 'file-1', fileName: 'file.pdf', url: 'http://file', contentType: 'application/pdf' },
     correlationId: 'corr-1',
-    filesInSubmission: 3
+    filesInBatch: 3
   }
 }
 
@@ -77,16 +77,16 @@ describe('case service', () => {
       expect(result.correlationId).toBe('corr-1')
     })
 
-    test('should carry filesInSubmission through to the transformed payload', () => {
+    test('should carry filesInBatch through to the transformed payload', () => {
       const payloadWithFiles = {
         data: {
           ...validPayload.data,
-          filesInSubmission: 3
+          filesInBatch: 3
         }
       }
 
       const result = transformPayload(payloadWithFiles)
-      expect(result.filesInSubmission).toBe(3)
+      expect(result.filesInBatch).toBe(3)
     })
 
     test('should throw if data is missing', () => {
@@ -155,7 +155,7 @@ describe('case service', () => {
           sbi: 'sbi1',
           correlationId: 'corr-1',
           fileId: 'file-1',
-          filesInSubmission: expect.any(Number)
+          filesInBatch: expect.any(Number)
         })
       )
       expect(updateCaseId).toHaveBeenCalledWith('corr-1', 'mock-case-id')

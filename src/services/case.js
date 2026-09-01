@@ -52,7 +52,7 @@ export function transformPayload (cloudEventPayload) {
     throw new Error('Missing data property in CloudEvents payload')
   }
 
-  const { crn, sbi, crm, file, correlationId, filesInSubmission } = data
+  const { crn, sbi, crm, file, correlationId, filesInBatch } = data
 
   return {
     crn,
@@ -61,7 +61,7 @@ export function transformPayload (cloudEventPayload) {
     caseData: buildCaseData(crm, file),
     onlineSubmissionActivity: buildOnlineSubmissionActivity(file, correlationId),
     correlationId,
-    filesInSubmission
+    filesInBatch
   }
 }
 

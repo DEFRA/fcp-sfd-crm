@@ -8,7 +8,7 @@ export const createCasePayloadSchema = Joi.object({
   correlationId: Joi.string().guid({ version: ['uuidv4'] }).required(),
   crn: Joi.string().required(),
   sbi: Joi.string().required(),
-  filesInSubmission: Joi.number().integer().min(1).optional(),
+  filesInBatch: Joi.number().integer().min(1).optional(),
   caseData: Joi.object({
     title: Joi.string().required(),
     caseDescription: Joi.string().required()

@@ -50,13 +50,13 @@ describe('api/common/schemas', () => {
     expect(error.details.some(d => d.message.includes('correlationId'))).toBeTruthy()
   })
 
-  test('createCasePayloadSchema accepts valid filesInSubmission count', () => {
+  test('createCasePayloadSchema accepts valid filesInBatch count', () => {
     const valid = {
       caseType: 'some-type',
       correlationId: '550e8400-e29b-41d4-a716-446655440000',
       crn: 'CRN123',
       sbi: 'SBI123',
-      filesInSubmission: 3,
+      filesInBatch: 3,
       caseData: {
         title: 'Title',
         caseDescription: 'Description'
@@ -80,13 +80,13 @@ describe('api/common/schemas', () => {
     expect(error).toBeUndefined()
   })
 
-  test.each([0, -1, 1.5, '3'])('createCasePayloadSchema rejects invalid filesInSubmission value %p', (filesInSubmission) => {
+  test.each([0, -1, 1.5, '3'])('createCasePayloadSchema rejects invalid filesInBatch value %p', (filesInBatch) => {
     const invalid = {
       caseType: 'some-type',
       correlationId: '550e8400-e29b-41d4-a716-446655440000',
       crn: 'CRN123',
       sbi: 'SBI123',
-      filesInSubmission,
+      filesInBatch,
       caseData: {
         title: 'Title',
         caseDescription: 'Description'
@@ -137,7 +137,7 @@ describe('api/common/schemas', () => {
     expect(error).toBeUndefined()
   })
 
-  test('inboundCloudEventSchema accepts valid filesInSubmission count', () => {
+  test('inboundCloudEventSchema accepts valid filesInBatch count', () => {
     const validEvent = {
       id: '1',
       source: '/source',
@@ -157,7 +157,7 @@ describe('api/common/schemas', () => {
         correlationId: '550e8400-e29b-41d4-a716-446655440000',
         sourceSystem: 'fcp-sfd-frontend',
         submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
-        filesInSubmission: 3
+        filesInBatch: 3
       }
     }
 
@@ -165,7 +165,7 @@ describe('api/common/schemas', () => {
     expect(error).toBeUndefined()
   })
 
-  test.each([0, -1, 1.5, '3'])('inboundCloudEventSchema rejects invalid filesInSubmission value %p', (filesInSubmission) => {
+  test.each([0, -1, 1.5, '3'])('inboundCloudEventSchema rejects invalid filesInBatch value %p', (filesInBatch) => {
     const invalidEvent = {
       id: '1',
       source: '/source',
@@ -185,7 +185,7 @@ describe('api/common/schemas', () => {
         correlationId: '550e8400-e29b-41d4-a716-446655440000',
         sourceSystem: 'fcp-sfd-frontend',
         submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
-        filesInSubmission
+        filesInBatch
       }
     }
 
@@ -193,7 +193,7 @@ describe('api/common/schemas', () => {
     expect(error).toBeTruthy()
   })
 
-  test('inboundCloudEventSchema accepts an event without filesInSubmission', () => {
+  test('inboundCloudEventSchema accepts an event without filesInBatch', () => {
     const validEvent = {
       id: '1',
       source: '/source',
