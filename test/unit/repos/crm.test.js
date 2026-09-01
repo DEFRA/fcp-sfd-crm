@@ -6,6 +6,7 @@ const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
 const mockConfigGet = vi.fn((key) => {
   if (key === 'crm.baseUrl') return 'https://crm.example.com/api'
   if (key === 'crm.caseOriginCode') return 3
+  if (key === 'crm.writeFilesInSubmission') return false
   return null
 })
 
@@ -305,7 +306,22 @@ describe('CRM repository', () => {
       expect(body).toContain(`"regardingobjectid_incident_rpa_onlinesubmission@odata.bind":"/incidents(${caseId})"`)
     })
 
-    test('should include rpa_filesinsubmission when a valid positive value is present', async () => {
+    test('should omit rpa_filesinsubmission when the feature flag is disabled', async () => {
+      mockHttpClient.mockResolvedValue({ text: vi.fn().mockResolvedValue(successfulBatchResponseText()) })
+
+      await createCaseWithOnlineSubmission(buildRequest({ filesInSubmission: 3 }))
+
+      const body = mockHttpClient.mock.calls[0][1].body
+      expect(body).not.toContain('rpa_filesinsubmission')
+    })
+
+    test('should include rpa_filesinsubmission when the feature flag is enabled and the value is valid', async () => {
+      mockConfigGet.mockImplementation((key) => {
+        if (key === 'crm.baseUrl') return 'https://crm.example.com/api'
+        if (key === 'crm.caseOriginCode') return 3
+        if (key === 'crm.writeFilesInSubmission') return true
+        return null
+      })
       mockHttpClient.mockResolvedValue({ text: vi.fn().mockResolvedValue(successfulBatchResponseText()) })
 
       await createCaseWithOnlineSubmission(buildRequest({ filesInSubmission: 3 }))
@@ -314,10 +330,11 @@ describe('CRM repository', () => {
       expect(body).toContain('"rpa_filesinsubmission":3')
     })
 
-    test('should omit rpa_filesinsubmission when the value is missing or invalid', async () => {
+    test.each([undefined, 0, -1, 1.5, '3'])('should omit rpa_filesinsubmission when the value is %p', async (filesInSubmission) => {
       mockHttpClient.mockResolvedValue({ text: vi.fn().mockResolvedValue(successfulBatchResponseText()) })
 
-      await createCaseWithOnlineSubmission(buildRequest({ filesInSubmission: 0 }))
+      await createCaseWithOnlineSubmission(buildRequest({ filesInSubmission }))
+
       const body = mockHttpClient.mock.calls[0][1].body
       expect(body).not.toContain('rpa_filesinsubmission')
     })

@@ -382,7 +382,7 @@ const buildCaseChangeset = ({ correlationId, fileId, caseData, onlineSubmissionA
   const { subject, description, scheduledStart, scheduledEnd, stateCode, statusCode, metadata } = onlineSubmissionActivity
   const { name, blobFileId, mimeType } = metadata
   const { schemeValue, subjectValue, teamRoutingValue, documentTypesId } = documentTypeMetadata
-  const shouldWriteFilesInSubmission = Number.isInteger(filesInSubmission) && filesInSubmission > 0
+  const shouldWriteFilesInSubmission = config.get('crm.writeFilesInSubmission') === true && Number.isInteger(filesInSubmission) && filesInSubmission > 0
 
   // Every one of these is bound into the payload below, so a missing value
   // would be interpolated as the string 'undefined' and rejected by Dataverse

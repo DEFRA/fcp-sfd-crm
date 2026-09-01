@@ -11,6 +11,12 @@ export const crmConfig = {
       format: Number,
       default: 3,
       env: 'CRM_CASE_ORIGIN_CODE'
+    },
+    writeFilesInSubmission: {
+      doc: 'Enable writing rpa_filesinsubmission to the online submission activity only after the Dataverse attribute has been confirmed in the target environment.',
+      format: Boolean,
+      default: false,
+      env: 'CRM_WRITE_FILES_IN_SUBMISSION'
     }
   }
 }
