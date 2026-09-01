@@ -9,8 +9,8 @@ import { buildChangesetRequest, parseBatchResponse } from './dataverse-batch.js'
 
 const logger = createLogger()
 
-const baseUrl = config.get('crm.baseUrl')
-const caseOriginCode = config.get('crm.caseOriginCode')
+const getBaseUrl = () => config.get('crm.baseUrl')
+const getCaseOriginCode = () => config.get('crm.caseOriginCode')
 // Dataverse GUIDs are not necessarily RFC 4122 version 4, so no version
 // constraint here — consistent with the caseId schema in api/schemas/outbound.js.
 const guidSchema = Joi.string().guid().required()
@@ -82,6 +82,7 @@ const buildQuery = (params) =>
     .join('&')
 
 const getContactIdFromCrn = async (authToken, crn) => {
+  const baseUrl = getBaseUrl()
   const query = `/contacts?${buildQuery({
     $select: 'contactid',
     $filter: `rpa_capcustomerid eq '${crn}'`
@@ -107,6 +108,7 @@ const getContactIdFromCrn = async (authToken, crn) => {
 
 // get business from SBI - we can also get FRN from here if needed
 const getAccountIdFromSbi = async (authToken, sbi) => {
+  const baseUrl = getBaseUrl()
   const query = `/accounts?${buildQuery({
     $select: 'accountid',
     $filter: `rpa_sbinumber eq '${sbi}'`
@@ -141,6 +143,7 @@ const getAccountIdFromSbi = async (authToken, sbi) => {
  * rpa_onlinesubmission is activityid.
  */
 const getOnlineSubmissionActivityId = async (authToken, caseId) => {
+  const baseUrl = getBaseUrl()
   try {
     const query = `/incidents(${caseId})?${buildQuery({
       $select: 'incidentid,title',
@@ -300,6 +303,7 @@ const createMetadataForOnlineSubmission = async (request) => {
       throw new Error(`Invalid onlineSubmissionActivityId: expected a GUID, got '${onlineSubmissionActivityId}'`)
     }
 
+    const baseUrl = getBaseUrl()
     const { name, blobFileId, documentTypeId, mimeType } = metadata
 
     // The document type must be resolved before writing. There is deliberately
@@ -378,11 +382,13 @@ const logCaseCreationSuppressed = ({ caseId, correlationId, fileId }) => {
  * team's queue, so it is never written at all rather than written unroutable.
  */
 const buildCaseChangeset = ({ correlationId, fileId, caseData, onlineSubmissionActivity, filesInSubmission }) => {
+  const baseUrl = getBaseUrl()
+  const caseOriginCode = getCaseOriginCode()
   const { title, caseDescription, contactId, accountId, documentTypeMetadata } = caseData
   const { subject, description, scheduledStart, scheduledEnd, stateCode, statusCode, metadata } = onlineSubmissionActivity
   const { name, blobFileId, mimeType } = metadata
   const { schemeValue, subjectValue, teamRoutingValue, documentTypesId } = documentTypeMetadata
-  const shouldWriteFilesInSubmission = config.get('crm.writeFilesInSubmission') === true && Number.isInteger(filesInSubmission) && filesInSubmission > 0
+  const shouldWriteFilesInSubmission = config.get('crm.writeFilesInSubmission') && Number.isInteger(filesInSubmission) && filesInSubmission > 0
 
   // Every one of these is bound into the payload below, so a missing value
   // would be interpolated as the string 'undefined' and rejected by Dataverse
@@ -487,6 +493,7 @@ const buildCaseChangeset = ({ correlationId, fileId, caseData, onlineSubmissionA
  * Anything other than a 412 is rethrown to the caller unchanged.
  */
 const writeCaseChangesetOrSuppress = async ({ authToken, correlationId, fileId, caseId, onlineSubmissionId, rpaOnlinesubmissionid, fallbackMetadata, parts }) => {
+  const baseUrl = getBaseUrl()
   const { headers: batchHeaders, body: batchBody } = buildChangesetRequest(parts)
 
   try {
@@ -607,6 +614,7 @@ const getDocumentTypeMetadata = async (authToken, caseType) => {
     }
   }
 
+  const baseUrl = getBaseUrl()
   const escapedCaseType = caseType.replaceAll("'", "''")
   const query = `/rpa_documenttypeses?${buildQuery({
   $select: '_rpa_scheme_value,_rpa_subject_value,_rpa_teamrouting_value,rpa_documenttypesid',

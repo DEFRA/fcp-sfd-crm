@@ -19,6 +19,10 @@ Set `CRM_AUTH_FEDERATED_DISABLED=true` to opt out and use the client-credentials
 flow with `CRM_AUTH_ENDPOINT` and `CRM_AUTH_CLIENT_SECRET` instead. The flag
 defaults to `false` so existing authentication behaviour is unchanged.
 
+Set `CRM_WRITE_FILES_IN_SUBMISSION=true` to enable writing
+`rpa_filesinsubmission` on online-submission records, defaults to
+`false`.
+
 ### Pre-commit hooks
 
 This repo includes pre-commit hooks:
