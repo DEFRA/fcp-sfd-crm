@@ -316,7 +316,7 @@ describe('CRM repository', () => {
     })
 
     test('should include rpa_filesinsubmission when the feature flag is enabled and the value is valid', async () => {
-      mockConfigGet.mockImplementation((key) => {
+      mockConfigGet.mockImplementationOnce((key) => {
         if (key === 'crm.baseUrl') return 'https://crm.example.com/api'
         if (key === 'crm.caseOriginCode') return 3
         if (key === 'crm.writeFilesInSubmission') return true
