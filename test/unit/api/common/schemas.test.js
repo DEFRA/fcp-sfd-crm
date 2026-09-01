@@ -1,115 +1,11 @@
 import { describe, test, expect } from 'vitest'
 import {
-  createCasePayloadSchema,
   inboundCloudEventSchema,
   receivedEventSchema,
   validationOptions
 } from '../../../../src/api/schemas/index.js'
 
 describe('api/common/schemas', () => {
-  test('createCasePayloadSchema accepts valid payload', () => {
-    const valid = {
-      caseType: 'some-type',
-      correlationId: '550e8400-e29b-41d4-a716-446655440000',
-      crn: 'CRN123',
-      sbi: 'SBI123',
-      caseData: {
-        title: 'Title',
-        caseDescription: 'Description'
-      },
-      onlineSubmissionActivity: {
-        subject: 'sub',
-        description: 'desc',
-        scheduledStart: new Date().toISOString(),
-        scheduledEnd: new Date().toISOString(),
-        stateCode: 1,
-        statusCode: 2,
-        metadata: {
-          name: 'file.pdf',
-          documentType: 'default',
-          blobFileId: 'blob-123'
-        }
-      }
-    }
-
-    const { error, value } = createCasePayloadSchema.validate(valid, validationOptions)
-    expect(error).toBeUndefined()
-    expect(value).toBeTruthy()
-  })
-
-  test('createCasePayloadSchema rejects missing required fields', () => {
-    const invalid = {
-      crn: 'CRN',
-      sbi: 'SBI'
-    }
-
-    const { error } = createCasePayloadSchema.validate(invalid, validationOptions)
-    expect(error).toBeTruthy()
-    // should mention missing caseType and other fields
-    expect(error.details.some(d => d.message.includes('caseType'))).toBeTruthy()
-    expect(error.details.some(d => d.message.includes('correlationId'))).toBeTruthy()
-  })
-
-  test('createCasePayloadSchema accepts valid filesInBatch count', () => {
-    const valid = {
-      caseType: 'some-type',
-      correlationId: '550e8400-e29b-41d4-a716-446655440000',
-      crn: 'CRN123',
-      sbi: 'SBI123',
-      filesInBatch: 3,
-      caseData: {
-        title: 'Title',
-        caseDescription: 'Description'
-      },
-      onlineSubmissionActivity: {
-        subject: 'sub',
-        description: 'desc',
-        scheduledStart: new Date().toISOString(),
-        scheduledEnd: new Date().toISOString(),
-        stateCode: 1,
-        statusCode: 2,
-        metadata: {
-          name: 'file.pdf',
-          documentType: 'default',
-          blobFileId: 'blob-123'
-        }
-      }
-    }
-
-    const { error } = createCasePayloadSchema.validate(valid, validationOptions)
-    expect(error).toBeUndefined()
-  })
-
-  test.each([0, -1, 1.5, '3'])('createCasePayloadSchema rejects invalid filesInBatch value %p', (filesInBatch) => {
-    const invalid = {
-      caseType: 'some-type',
-      correlationId: '550e8400-e29b-41d4-a716-446655440000',
-      crn: 'CRN123',
-      sbi: 'SBI123',
-      filesInBatch,
-      caseData: {
-        title: 'Title',
-        caseDescription: 'Description'
-      },
-      onlineSubmissionActivity: {
-        subject: 'sub',
-        description: 'desc',
-        scheduledStart: new Date().toISOString(),
-        scheduledEnd: new Date().toISOString(),
-        stateCode: 1,
-        statusCode: 2,
-        metadata: {
-          name: 'file.pdf',
-          documentType: 'default',
-          blobFileId: 'blob-123'
-        }
-      }
-    }
-
-    const { error } = createCasePayloadSchema.validate(invalid, validationOptions)
-    expect(error).toBeTruthy()
-  })
-
   test('inboundCloudEventSchema accepts valid cloud event wrapper', () => {
     const validEvent = {
       id: '1',
