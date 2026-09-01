@@ -377,11 +377,12 @@ const logCaseCreationSuppressed = ({ caseId, correlationId, fileId }) => {
  * required alongside the rest: a case or activity left unowned reaches no
  * team's queue, so it is never written at all rather than written unroutable.
  */
-const buildCaseChangeset = ({ correlationId, fileId, caseData, onlineSubmissionActivity }) => {
+const buildCaseChangeset = ({ correlationId, fileId, caseData, onlineSubmissionActivity, filesInSubmission }) => {
   const { title, caseDescription, contactId, accountId, documentTypeMetadata } = caseData
   const { subject, description, scheduledStart, scheduledEnd, stateCode, statusCode, metadata } = onlineSubmissionActivity
   const { name, blobFileId, mimeType } = metadata
   const { schemeValue, subjectValue, teamRoutingValue, documentTypesId } = documentTypeMetadata
+  const shouldWriteFilesInSubmission = Number.isInteger(filesInSubmission) && filesInSubmission > 0
 
   // Every one of these is bound into the payload below, so a missing value
   // would be interpolated as the string 'undefined' and rejected by Dataverse
@@ -439,6 +440,10 @@ const buildCaseChangeset = ({ correlationId, fileId, caseData, onlineSubmissionA
     // Read directly from RelationshipDefinitions rather than guessed.
     // Do not shorten or re-derive this name.
     'regardingobjectid_incident_rpa_onlinesubmission@odata.bind': `/incidents(${caseId})`
+  }
+
+  if (shouldWriteFilesInSubmission) {
+    onlineSubmissionPayload.rpa_filesinsubmission = filesInSubmission
   }
 
   const metadataPayload = {
@@ -545,7 +550,7 @@ const writeCaseChangesetOrSuppress = async ({ authToken, correlationId, fileId, 
  *   | {caseId: null, error: Error}>}
  */
 const createCaseWithOnlineSubmission = async (request) => {
-  const { authToken, correlationId, fileId, case: caseData, onlineSubmissionActivity } = request
+  const { authToken, correlationId, fileId, case: caseData, onlineSubmissionActivity, filesInSubmission } = request
 
   try {
     // Without both identifiers the derived keys would be stable but
@@ -555,7 +560,7 @@ const createCaseWithOnlineSubmission = async (request) => {
       throw new Error(`Cannot derive stable record keys: correlationId and fileId are both required, got '${correlationId}' and '${fileId}'`)
     }
 
-    const changeset = buildCaseChangeset({ correlationId, fileId, caseData, onlineSubmissionActivity })
+    const changeset = buildCaseChangeset({ correlationId, fileId, caseData, onlineSubmissionActivity, filesInSubmission })
 
     return await writeCaseChangesetOrSuppress({
       authToken,

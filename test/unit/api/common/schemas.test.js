@@ -77,6 +77,34 @@ describe('api/common/schemas', () => {
     expect(error).toBeUndefined()
   })
 
+  test('inboundCloudEventSchema accepts valid filesInSubmission count', () => {
+    const validEvent = {
+      id: '1',
+      source: '/source',
+      specversion: '1.0',
+      type: 'type',
+      datacontenttype: 'application/json',
+      time: new Date().toISOString(),
+      data: {
+        crn: 'CRN',
+        sbi: 'SBI',
+        crm: {},
+        file: {
+          fileId: '9fcaabe5-77ec-44db-8356-3a6e8dc51b13',
+          fileName: 'f.pdf',
+          url: 'https://example.com/api/v1/blob/9fcaabe5-77ec-44db-8356-3a6e8dc51b13'
+        },
+        correlationId: '550e8400-e29b-41d4-a716-446655440000',
+        sourceSystem: 'fcp-sfd-frontend',
+        submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+        filesInSubmission: 3
+      }
+    }
+
+    const { error } = inboundCloudEventSchema.validate(validEvent, validationOptions)
+    expect(error).toBeUndefined()
+  })
+
   test('inboundCloudEventSchema rejects invalid data types', () => {
     const invalidEvent = {
       ...{

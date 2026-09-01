@@ -3,6 +3,11 @@ import { HttpError } from '@fetchkit/ffetch'
 
 const mockHttpClient = vi.fn()
 const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+const mockConfigGet = vi.fn((key) => {
+  if (key === 'crm.baseUrl') return 'https://crm.example.com/api'
+  if (key === 'crm.caseOriginCode') return 3
+  return null
+})
 
 vi.mock('../../../src/http/client.js', () => ({
   httpClient: mockHttpClient
@@ -15,11 +20,7 @@ vi.mock('../../../src/logging/logger.js', () => ({
 // Mock config
 vi.mock('../../../src/config/index.js', () => ({
   config: {
-    get: vi.fn((key) => {
-      if (key === 'crm.baseUrl') return 'https://crm.example.com/api'
-      if (key === 'crm.caseOriginCode') return 3
-      return null
-    })
+    get: mockConfigGet
   }
 }))
 
@@ -302,6 +303,23 @@ describe('CRM repository', () => {
       const body = mockHttpClient.mock.calls[0][1].body
       const caseId = deriveCaseRecordId(CASE_CORRELATION_ID)
       expect(body).toContain(`"regardingobjectid_incident_rpa_onlinesubmission@odata.bind":"/incidents(${caseId})"`)
+    })
+
+    test('should include rpa_filesinsubmission when a valid positive value is present', async () => {
+      mockHttpClient.mockResolvedValue({ text: vi.fn().mockResolvedValue(successfulBatchResponseText()) })
+
+      await createCaseWithOnlineSubmission(buildRequest({ filesInSubmission: 3 }))
+
+      const body = mockHttpClient.mock.calls[0][1].body
+      expect(body).toContain('"rpa_filesinsubmission":3')
+    })
+
+    test('should omit rpa_filesinsubmission when the value is missing or invalid', async () => {
+      mockHttpClient.mockResolvedValue({ text: vi.fn().mockResolvedValue(successfulBatchResponseText()) })
+
+      await createCaseWithOnlineSubmission(buildRequest({ filesInSubmission: 0 }))
+      const body = mockHttpClient.mock.calls[0][1].body
+      expect(body).not.toContain('rpa_filesinsubmission')
     })
 
     test('should never send a nested navigation property, the mistake 0x80060888 punishes', async () => {
