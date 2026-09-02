@@ -7,12 +7,17 @@ import {
   getAccountIdFromSbi
 } from '../repos/crm.js'
 import { messages } from '../constants/messages.js'
+import { emitAuditEvent } from '../messaging/outbound/audit/send-audit-event.js'
+import { buildPersonReadEvent, buildBusinessReadEvent } from '../messaging/outbound/audit/build-audit-event.js'
+import { auditStatuses, auditFailureReasons } from '../constants/audit.js'
 
 const logger = createLogger()
 const { constants: httpConstants } = http2
 
 const MASK_VISIBLE_DIGITS = 4
 
+// Generic identifier masker: safe for CRN, SBI or any other numeric/text
+// identifier where only the last few digits should be logged.
 export function maskCrn (crn) {
   if (crn === null || crn === undefined) { return '****' }
   const str = String(crn)
@@ -36,7 +41,27 @@ export function assertRequiredParams (requiredParams) {
   }
 }
 
-export async function ensureContactAndAccount (authToken, crn, sbi) {
+/**
+ * Resolve the CRM contact and account for a farmer, looking up by CRN and
+ * SBI respectively. Emits person/read and business/read audit events per
+ * the FLS1-21 spike table: success events on resolution, failure events
+ * (status: "failure") when a lookup returns no match. Every emission is
+ * wrapped so a failure to audit can never prevent the business error below
+ * from being thrown as normal, nor affect message processing outcome.
+ * @param {string} authToken - CRM bearer token
+ * @param {string|number} crn - Customer Reference Number for the farmer
+ * @param {string|number} sbi - Single Business Identifier for the farm
+ * @param {{ correlationId?: string }} [context] - inbound CloudEvents correlationId, for audit traceability
+ * @returns {Promise<{ contactId: string, accountId: string }>}
+ */
+export async function ensureContactAndAccount (authToken, crn, sbi, { correlationId } = {}) {
+  if (!correlationId) {
+    // Not fatal - lookups still proceed - but every event emitted for this
+    // call will fail correlationid schema validation and be dropped, so
+    // this is surfaced loudly rather than silently defaulting.
+    logger.warn('ensureContactAndAccount called without a correlationId: person/read and business/read audit events for this call will fail schema validation')
+  }
+
   const { contactId, error: contactError } = await getContactIdFromCrn(authToken, crn)
 
   if (contactError) {
@@ -52,8 +77,16 @@ export async function ensureContactAndAccount (authToken, crn, sbi) {
 
   if (!contactId) {
     logger.error(`No contact found for CRN: ${maskCrn(crn)}`)
+    await emitAuditEvent(buildPersonReadEvent({
+      correlationId,
+      crn,
+      status: auditStatuses.FAILURE,
+      details: { reason: auditFailureReasons.CRN_NOT_FOUND }
+    }))
     throw unprocessableEntity('Contact ID not found')
   }
+
+  await emitAuditEvent(buildPersonReadEvent({ correlationId, contactId, crn }))
 
   const { accountId, error: accountError } = await getAccountIdFromSbi(authToken, sbi)
 
@@ -70,8 +103,16 @@ export async function ensureContactAndAccount (authToken, crn, sbi) {
 
   if (!accountId) {
     logger.error(`No account found for SBI: ${sbi}`)
+    await emitAuditEvent(buildBusinessReadEvent({
+      correlationId,
+      sbi,
+      status: auditStatuses.FAILURE,
+      details: { reason: auditFailureReasons.SBI_NOT_FOUND }
+    }))
     throw unprocessableEntity('Account ID not found')
   }
+
+  await emitAuditEvent(buildBusinessReadEvent({ correlationId, accountId, sbi }))
 
   return { contactId, accountId }
 }

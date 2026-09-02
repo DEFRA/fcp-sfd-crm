@@ -17,6 +17,15 @@ vi.mock('../../../src/messaging/outbound/received-event/publish-received-event.j
   publishReceivedEvent: vi.fn()
 }))
 
+// ensureContactAndAccount (from crm-helpers.js, exercised for real by this
+// suite) now emits audit events. Mocked here for the same reason
+// publishReceivedEvent is above: this is a unit test of the service layer,
+// not of the outbound messaging path, and should not depend on a real or
+// mocked SNS endpoint being reachable.
+vi.mock('../../../src/messaging/outbound/audit/send-audit-event.js', () => ({
+  emitAuditEvent: vi.fn().mockResolvedValue(undefined)
+}))
+
 const { createCaseWithOnlineSubmissionInCrm } = await import('../../../src/services/create-case-with-online-submission-in-crm.js')
 const { getContactIdFromCrn, getAccountIdFromSbi, createCaseWithOnlineSubmission, getDocumentTypeMetadata } = await import('../../../src/repos/crm.js')
 const { publishReceivedEvent } = await import('../../../src/messaging/outbound/received-event/publish-received-event.js')
