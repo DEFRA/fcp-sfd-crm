@@ -4,7 +4,6 @@ import {
   auditActions,
   auditStatuses,
   auditFailureReasons,
-  securityPmcCodes,
   auditLogEventType,
   auditLogReasons
 } from '../../../src/constants/audit.js'
@@ -14,16 +13,14 @@ describe('src/constants/audit.js', () => {
     expect(auditEntities).toEqual({
       PERSON: 'person',
       BUSINESS: 'business',
-      DOCUMENT: 'document',
-      SERVICE: 'service'
+      DOCUMENT: 'document'
     })
   })
 
   test('exposes the canonical action literals', () => {
     expect(auditActions).toEqual({
       READ: 'read',
-      CREATED: 'created',
-      AUTHENTICATE: 'authenticate'
+      CREATED: 'created'
     })
   })
 
@@ -38,12 +35,6 @@ describe('src/constants/audit.js', () => {
     expect(auditFailureReasons).toEqual({
       CRN_NOT_FOUND: 'CRN not found',
       SBI_NOT_FOUND: 'SBI not found'
-    })
-  })
-
-  test('exposes the security event pmccodes', () => {
-    expect(securityPmcCodes).toEqual({
-      CREDENTIAL_FAILURE: 'AUTH'
     })
   })
 
