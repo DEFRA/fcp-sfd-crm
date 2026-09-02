@@ -6,7 +6,6 @@ import { secureContext } from './api/common/helpers/secure-context/secure-contex
 import { pulse } from './api/common/helpers/pulse.js'
 import { requestTracing } from './api/common/helpers/request-tracing.js'
 import { setupProxy } from './api/common/helpers/proxy/setup-proxy.js'
-import { postCreateCaseWithOnlineSubmission } from './routes/create-case-with-online-submission.js'
 
 const createServer = async () => {
   setupProxy()
@@ -45,12 +44,9 @@ const createServer = async () => {
     pulse
   ])
 
-  if (config.get('cdpEnvironment') !== 'prod') {
-    server.route([
-      postCreateCaseWithOnlineSubmission()
-    ])
-  }
-
+  // This service is driven entirely by the SQS consumer. It registers no
+  // routes of its own: the HTTP server exists only to host the platform
+  // plugins above and to keep the pod alive.
   return server
 }
 

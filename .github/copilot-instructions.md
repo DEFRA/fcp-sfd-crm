@@ -78,8 +78,7 @@ npm run docker:debug
 ### Directory Structure
 
 - **`src/index.js`** - Application entry point; starts HTTP server and messaging consumers
-- **`src/server.js`** - Hapi server creation with security/logging plugins
-- **`src/routes/`** - HTTP route definitions (e.g., create-case-with-online-submission)
+- **`src/server.js`** - Hapi server creation with security/logging plugins; registers no routes
 - **`src/api/`** - HTTP handlers and shared API utilities (plugins, middleware, helpers, proxy setup)
 - **`src/services/`** - Business logic layer:
   - **`case.js`** - Case operations and lifecycle management
