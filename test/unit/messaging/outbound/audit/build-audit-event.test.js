@@ -3,8 +3,7 @@ import { validateAuditEvent } from '@defra/fcp-audit-publisher'
 import {
   buildDocumentCreatedEvent,
   buildPersonReadEvent,
-  buildBusinessReadEvent,
-  buildCredentialFailureEvent
+  buildBusinessReadEvent
 } from '../../../../../src/messaging/outbound/audit/build-audit-event.js'
 
 // publishAuditEvent (the real transport) applies these defaults before
@@ -134,30 +133,6 @@ describe('buildBusinessReadEvent', () => {
     expect(event.audit.entities).toEqual([{ entity: 'business', action: 'read', entityid: '' }])
     expect(event.audit.status).toBe('failure')
     expect(event.audit.details).toEqual({ reason: 'SBI not found' })
-    assertValid(event)
-  })
-})
-
-describe('buildCredentialFailureEvent', () => {
-  test('builds a valid event carrying both security and audit objects', () => {
-    const event = buildCredentialFailureEvent({
-      correlationId: 'corr-8',
-      reason: 'Invalid or missing credentials'
-    })
-
-    expect(event.security).toBeDefined()
-    expect(event.audit).toBeDefined()
-    expect(event.audit.status).toBe('failure')
-    expect(event.audit.entities).toEqual([{ entity: 'service', action: 'authenticate', entityid: '' }])
-    assertValid(event)
-  })
-
-  test('omits the correlationid key entirely when no correlationId is supplied, so the publisher default applies', () => {
-    const event = buildCredentialFailureEvent({
-      reason: 'Invalid or missing credentials'
-    })
-
-    expect(event).not.toHaveProperty('correlationid')
     assertValid(event)
   })
 })

@@ -1,8 +1,7 @@
 import {
   auditEntities,
   auditActions,
-  auditStatuses,
-  securityPmcCodes
+  auditStatuses
 } from '../../../constants/audit.js'
 
 /**
@@ -96,25 +95,3 @@ export const buildBusinessReadEvent = ({ correlationId, accountId, sbi, status =
     status,
     details
   })
-
-/**
- * Event 7 (invalid or missing credentials) from the spike table. Carries
- * both `security` and `audit` objects so SOC can query it in MongoDB.
- * @param {{ correlationId: string, reason: string }} params
- * @returns {object} audit event payload for publishAuditEvent
- */
-export const buildCredentialFailureEvent = ({ correlationId, reason }) => ({
-  ...(correlationId !== undefined && correlationId !== null && { correlationid: correlationId }),
-  security: {
-    pmccode: securityPmcCodes.CREDENTIAL_FAILURE,
-    details: {
-      message: reason
-    }
-  },
-  audit: {
-    entities: [{ entity: auditEntities.SERVICE, action: auditActions.AUTHENTICATE, entityid: '' }],
-    accounts: {},
-    status: auditStatuses.FAILURE,
-    details: { reason }
-  }
-})
