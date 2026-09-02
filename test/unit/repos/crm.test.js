@@ -311,7 +311,7 @@ describe('CRM repository', () => {
     test('should omit rpa_filesinsubmission when the feature flag is disabled', async () => {
       mockHttpClient.mockResolvedValue({ text: vi.fn().mockResolvedValue(successfulBatchResponseText()) })
 
-      await createCaseWithOnlineSubmission(buildRequest({ filesInSubmission: 3 }))
+      await createCaseWithOnlineSubmission(buildRequest({ filesInBatch: 3 }))
 
       const body = mockHttpClient.mock.calls[0][1].body
       expect(body).not.toContain('rpa_filesinsubmission')
@@ -321,17 +321,17 @@ describe('CRM repository', () => {
       mockConfigGet.mockImplementation(configWith(true))
       mockHttpClient.mockResolvedValue({ text: vi.fn().mockResolvedValue(successfulBatchResponseText()) })
 
-      await createCaseWithOnlineSubmission(buildRequest({ filesInSubmission: 3 }))
+      await createCaseWithOnlineSubmission(buildRequest({ filesInBatch: 3 }))
 
       const body = mockHttpClient.mock.calls[0][1].body
       expect(body).toContain('"rpa_filesinsubmission":3')
     })
 
-    test.each([undefined, 0, -1, 1.5, '3'])('should omit rpa_filesinsubmission when the flag is on but the value is %p', async (filesInSubmission) => {
+    test.each([undefined, 0, -1, 1.5, '3'])('should omit rpa_filesinsubmission when the flag is on but the value is %p', async (filesInBatch) => {
       mockConfigGet.mockImplementation(configWith(true))
       mockHttpClient.mockResolvedValue({ text: vi.fn().mockResolvedValue(successfulBatchResponseText()) })
 
-      await createCaseWithOnlineSubmission(buildRequest({ filesInSubmission }))
+      await createCaseWithOnlineSubmission(buildRequest({ filesInBatch }))
 
       const body = mockHttpClient.mock.calls[0][1].body
       expect(body).not.toContain('rpa_filesinsubmission')
