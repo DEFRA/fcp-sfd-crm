@@ -353,6 +353,7 @@ describe('case service', () => {
 
       expect(releaseCreator).not.toHaveBeenCalled()
       expect(metricsCounter).not.toHaveBeenCalledWith(caseCreationMetrics.CREATOR_ROLE_RELEASED)
+      expect(createIntegrationInboundQueueRecord).not.toHaveBeenCalled()
     })
 
     test('should release the creator role when an error carries no retryable flag, since the consumer dead-letters it', async () => {
@@ -428,6 +429,51 @@ describe('case service', () => {
           })
         }),
         'CRM triage record write completed'
+      )
+    })
+
+    test('should trim processing entity config and log duplicate suppression when triage record already exists', async () => {
+      const err = new Error('No document type metadata found for caseType: Document Upload')
+      err.retryable = false
+      err.retryMetadata = { category: 'non-retryable', terminalReason: 'document_type_not_found' }
+      createCaseWithOnlineSubmissionInCrm.mockRejectedValue(err)
+      mockConfigGet.mockReturnValue(' 927350008 ')
+      createIntegrationInboundQueueRecord.mockResolvedValue({
+        triageRecordId: 'e5f31d07-a1c6-4067-a8ce-7695e1453d96',
+        created: false,
+        error: null
+      })
+
+      await createCase(validPayload).catch(() => {})
+
+      expect(createIntegrationInboundQueueRecord).toHaveBeenCalledWith(expect.objectContaining({
+        processingEntity: '927350008'
+      }))
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: expect.objectContaining({
+            type: triageEventTypes.WRITE_SUCCEEDED,
+            reason: 'duplicate_suppressed',
+            reference: 'e5f31d07-a1c6-4067-a8ce-7695e1453d96'
+          })
+        }),
+        'CRM triage record write completed'
+      )
+    })
+
+    test('should not write triage record when terminal failure is not mapped to a triage reason', async () => {
+      const err = new Error('Unexpected terminal failure')
+      err.retryable = false
+      err.retryMetadata = { category: 'non-retryable', terminalReason: 'some_other_reason' }
+      createCaseWithOnlineSubmissionInCrm.mockRejectedValue(err)
+      mockConfigGet.mockReturnValue('927350008')
+
+      await createCase(validPayload).catch(() => {})
+
+      expect(createIntegrationInboundQueueRecord).not.toHaveBeenCalled()
+      expect(mockLogger.warn).not.toHaveBeenCalledWith(
+        expect.objectContaining({ event: expect.objectContaining({ type: triageEventTypes.WRITE_SKIPPED }) }),
+        expect.any(String)
       )
     })
 

@@ -384,7 +384,7 @@ const createIntegrationInboundQueueRecord = async (request) => {
     if (processingEntity !== null && processingEntity !== undefined && String(processingEntity).trim() !== '') {
       const parsedProcessingEntity = Number.parseInt(String(processingEntity), 10)
       if (!Number.isInteger(parsedProcessingEntity)) {
-        throw new Error(`Invalid processing entity value: '${processingEntity}'`)
+        throw new TypeError(`Invalid processing entity value: '${processingEntity}'`)
       }
       payload.rpa_processingentity = parsedProcessingEntity
     }
