@@ -122,13 +122,14 @@ function throwCaseCreationError (caseError, { correlationId, fileId }) {
   throw err
 }
 
-async function createCrmCaseOrThrow ({ authToken, correlationId, fileId, contactId, accountId, caseData, onlineSubmissionActivity, documentTypeMetadata }) {
+async function createCrmCaseOrThrow ({ authToken, correlationId, fileId, contactId, accountId, caseData, onlineSubmissionActivity, documentTypeMetadata, filesInBatch }) {
   const { caseId, rpaOnlinesubmissionid, error: caseError } = await createCaseWithOnlineSubmission({
     authToken,
     correlationId,
     fileId,
     case: { ...caseData, contactId, accountId, documentTypeMetadata },
-    onlineSubmissionActivity
+    onlineSubmissionActivity,
+    filesInBatch
   })
 
   if (caseError) {
@@ -138,12 +139,12 @@ async function createCrmCaseOrThrow ({ authToken, correlationId, fileId, contact
   return { caseId, rpaOnlinesubmissionid }
 }
 
-export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi, caseType, caseData, onlineSubmissionActivity, correlationId, fileId }) => {
+export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi, caseType, caseData, onlineSubmissionActivity, correlationId, fileId, filesInBatch }) => {
   assertRequiredParams({ authToken, crn, sbi, caseType, caseData, onlineSubmissionActivity, correlationId, fileId })
 
   const { contactId, accountId } = await ensureContactAndAccount(authToken, crn, sbi)
   const documentTypeMetadata = await resolveDocumentTypeOrThrow(authToken, caseType)
-  const { caseId, rpaOnlinesubmissionid } = await createCrmCaseOrThrow({ authToken, correlationId, fileId, contactId, accountId, caseData, onlineSubmissionActivity, documentTypeMetadata })
+  const { caseId, rpaOnlinesubmissionid } = await createCrmCaseOrThrow({ authToken, correlationId, fileId, contactId, accountId, caseData, onlineSubmissionActivity, documentTypeMetadata, filesInBatch })
 
   const eventData = { correlationId, caseId, crn: Number(crn), sbi: Number(sbi) }
   try {

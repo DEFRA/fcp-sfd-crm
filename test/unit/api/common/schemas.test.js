@@ -50,7 +50,150 @@ describe('api/common/schemas', () => {
     expect(error.details.some(d => d.message.includes('correlationId'))).toBeTruthy()
   })
 
+  test('createCasePayloadSchema accepts valid filesInBatch count', () => {
+    const valid = {
+      caseType: 'some-type',
+      correlationId: '550e8400-e29b-41d4-a716-446655440000',
+      crn: 'CRN123',
+      sbi: 'SBI123',
+      filesInBatch: 3,
+      caseData: {
+        title: 'Title',
+        caseDescription: 'Description'
+      },
+      onlineSubmissionActivity: {
+        subject: 'sub',
+        description: 'desc',
+        scheduledStart: new Date().toISOString(),
+        scheduledEnd: new Date().toISOString(),
+        stateCode: 1,
+        statusCode: 2,
+        metadata: {
+          name: 'file.pdf',
+          documentType: 'default',
+          blobFileId: 'blob-123'
+        }
+      }
+    }
+
+    const { error } = createCasePayloadSchema.validate(valid, validationOptions)
+    expect(error).toBeUndefined()
+  })
+
+  test.each([0, -1, 1.5, '3'])('createCasePayloadSchema rejects invalid filesInBatch value %p', (filesInBatch) => {
+    const invalid = {
+      caseType: 'some-type',
+      correlationId: '550e8400-e29b-41d4-a716-446655440000',
+      crn: 'CRN123',
+      sbi: 'SBI123',
+      filesInBatch,
+      caseData: {
+        title: 'Title',
+        caseDescription: 'Description'
+      },
+      onlineSubmissionActivity: {
+        subject: 'sub',
+        description: 'desc',
+        scheduledStart: new Date().toISOString(),
+        scheduledEnd: new Date().toISOString(),
+        stateCode: 1,
+        statusCode: 2,
+        metadata: {
+          name: 'file.pdf',
+          documentType: 'default',
+          blobFileId: 'blob-123'
+        }
+      }
+    }
+
+    const { error } = createCasePayloadSchema.validate(invalid, validationOptions)
+    expect(error).toBeTruthy()
+  })
+
   test('inboundCloudEventSchema accepts valid cloud event wrapper', () => {
+    const validEvent = {
+      id: '1',
+      source: '/source',
+      specversion: '1.0',
+      type: 'type',
+      datacontenttype: 'application/json',
+      time: new Date().toISOString(),
+      data: {
+        crn: 'CRN',
+        sbi: 'SBI',
+        crm: {},
+        file: {
+          fileId: '9fcaabe5-77ec-44db-8356-3a6e8dc51b13',
+          fileName: 'f.pdf',
+          url: 'https://example.com/api/v1/blob/9fcaabe5-77ec-44db-8356-3a6e8dc51b13'
+        },
+        correlationId: '550e8400-e29b-41d4-a716-446655440000',
+        sourceSystem: 'fcp-sfd-frontend',
+        submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6'
+      }
+    }
+
+    const { error } = inboundCloudEventSchema.validate(validEvent, validationOptions)
+    expect(error).toBeUndefined()
+  })
+
+  test('inboundCloudEventSchema accepts valid filesInBatch count', () => {
+    const validEvent = {
+      id: '1',
+      source: '/source',
+      specversion: '1.0',
+      type: 'type',
+      datacontenttype: 'application/json',
+      time: new Date().toISOString(),
+      data: {
+        crn: 'CRN',
+        sbi: 'SBI',
+        crm: {},
+        file: {
+          fileId: '9fcaabe5-77ec-44db-8356-3a6e8dc51b13',
+          fileName: 'f.pdf',
+          url: 'https://example.com/api/v1/blob/9fcaabe5-77ec-44db-8356-3a6e8dc51b13'
+        },
+        correlationId: '550e8400-e29b-41d4-a716-446655440000',
+        sourceSystem: 'fcp-sfd-frontend',
+        submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+        filesInBatch: 3
+      }
+    }
+
+    const { error } = inboundCloudEventSchema.validate(validEvent, validationOptions)
+    expect(error).toBeUndefined()
+  })
+
+  test.each([0, -1, 1.5, '3'])('inboundCloudEventSchema rejects invalid filesInBatch value %p', (filesInBatch) => {
+    const invalidEvent = {
+      id: '1',
+      source: '/source',
+      specversion: '1.0',
+      type: 'type',
+      datacontenttype: 'application/json',
+      time: new Date().toISOString(),
+      data: {
+        crn: 'CRN',
+        sbi: 'SBI',
+        crm: {},
+        file: {
+          fileId: '9fcaabe5-77ec-44db-8356-3a6e8dc51b13',
+          fileName: 'f.pdf',
+          url: 'https://example.com/api/v1/blob/9fcaabe5-77ec-44db-8356-3a6e8dc51b13'
+        },
+        correlationId: '550e8400-e29b-41d4-a716-446655440000',
+        sourceSystem: 'fcp-sfd-frontend',
+        submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+        filesInBatch
+      }
+    }
+
+    const { error } = inboundCloudEventSchema.validate(invalidEvent, validationOptions)
+    expect(error).toBeTruthy()
+  })
+
+  test('inboundCloudEventSchema accepts an event without filesInBatch', () => {
     const validEvent = {
       id: '1',
       source: '/source',

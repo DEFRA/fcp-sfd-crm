@@ -19,7 +19,8 @@ export const inboundCloudEventSchema = Joi.object({
     }).required(),
     correlationId: Joi.string().guid({ version: ['uuidv4'] }).required(),
     sourceSystem: Joi.string().required(),
-    submissionId: Joi.string().required()
+    submissionId: Joi.string().required(),
+    filesInBatch: Joi.number().integer().min(1).optional()
   }).required()
 }).required()
 
