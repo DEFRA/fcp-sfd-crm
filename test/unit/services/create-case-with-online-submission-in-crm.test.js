@@ -278,6 +278,42 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     expect(mockLogger.error).toHaveBeenCalled()
   })
 
+  test('throws non-retryable error with fallback metadata when lookup error has no retryMetadata', async () => {
+    const lookupErr = new Error('Unexpected response shape')
+    lookupErr.crmError = '{"error":{"code":"0x800","message":"Malformed"}}'
+    getContactIdFromCrn.mockResolvedValue({ contactId: 'mock-contact-id' })
+    getAccountIdFromSbi.mockResolvedValue({ accountId: 'mock-account-id' })
+    getDocumentTypeMetadata.mockResolvedValue({ documentTypeMetadata: null, error: lookupErr })
+
+    await expect(createCaseWithOnlineSubmissionInCrm({
+      authToken: 'mock-bearer-token',
+      correlationId: 'mock-correlation-id',
+      fileId: FILE_ID,
+      caseType: 'CS_Agreement_Evidence',
+      crn: 'mock-crn',
+      sbi: 'mock-sbi',
+      caseData: {},
+      onlineSubmissionActivity: {}
+    })).rejects.toMatchObject({
+      retryable: false,
+      retryMetadata: {
+        category: 'non-retryable',
+        terminalReason: 'document_type_lookup_failed'
+      }
+    })
+
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: lookupErr,
+        event: expect.objectContaining({
+          category: 'document_type_lookup_failed',
+          reason: '{"error":{"code":"0x800","message":"Malformed"}}'
+        })
+      }),
+      'Error looking up document type metadata'
+    )
+  })
+
   test('throws non-retryable error when document type lookup returns empty result', async () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: 'mock-contact-id' })
     getAccountIdFromSbi.mockResolvedValue({ accountId: 'mock-account-id' })
@@ -338,6 +374,48 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
         })
       }),
       'Invalid caseType for document type lookup'
+    )
+  })
+
+  test('marks incomplete document type metadata failures for terminal triage reporting', async () => {
+    getContactIdFromCrn.mockResolvedValue({ contactId: 'mock-contact-id' })
+    getAccountIdFromSbi.mockResolvedValue({ accountId: 'mock-account-id' })
+    getDocumentTypeMetadata.mockResolvedValue({
+      documentTypeMetadata: { schemeValue: 's', subjectValue: 'sub', documentTypesId: 'd' },
+      error: null
+    })
+
+    const incompleteMetadataError = new Error('Incomplete documentTypeMetadata: teamRoutingValue required')
+    createCaseWithOnlineSubmission.mockResolvedValue({ caseId: null, error: incompleteMetadataError })
+
+    await expect(createCaseWithOnlineSubmissionInCrm({
+      authToken: 'mock-bearer-token',
+      correlationId: 'mock-correlation-id',
+      fileId: FILE_ID,
+      caseType: 'CS_Agreement_Evidence',
+      crn: 'mock-crn',
+      sbi: 'mock-sbi',
+      caseData: {},
+      onlineSubmissionActivity: {}
+    })).rejects.toMatchObject({
+      retryable: false,
+      triageFailureReason: 'document_type_metadata_incomplete',
+      retryMetadata: {
+        category: 'non-retryable',
+        terminalReason: 'document_type_metadata_incomplete'
+      }
+    })
+
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: expect.objectContaining({
+          triageFailureReason: 'document_type_metadata_incomplete'
+        }),
+        event: expect.objectContaining({
+          category: 'non-retryable'
+        })
+      }),
+      'Error creating case with online submission activity'
     )
   })
 })
