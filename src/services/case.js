@@ -3,16 +3,149 @@ import { toTenantMessage } from '../logging/tenant-message.js'
 import { getCrmAuthToken } from '../auth/get-crm-auth-token.js'
 import { createCaseWithOnlineSubmissionInCrm, resolveDocumentTypeOrThrow } from './create-case-with-online-submission-in-crm.js'
 import { upsertCase, updateCaseId, markFileProcessed, claimCreatorRole, releaseCreator } from '../repos/cases.js'
-import { createMetadataForOnlineSubmission } from '../repos/crm.js'
+import { createMetadataForOnlineSubmission, createIntegrationInboundQueueRecord } from '../repos/crm.js'
 import { fetchOnlineSubmissionActivityIdOrThrow } from './crm-helpers.js'
 import { messages } from '../constants/messages.js'
 import { metricsCounter } from '../api/common/helpers/metrics.js'
 import { caseCreationMetrics, caseActions } from '../constants/case-creation-metrics.js'
 import { isTerminalFailure } from '../utils/is-terminal-failure.js'
+import { config } from '../config/index.js'
+import { triageEventTypes, triageFailureReasons } from '../constants/integration-inbound-triage.js'
 
 const logger = createLogger()
 
 const ONE_HOUR_MS = 60 * 60 * 1000
+
+const triageReasonFromTerminalReason = {
+  document_type_not_found: triageFailureReasons.DOCUMENT_TYPE_NOT_FOUND,
+  [triageFailureReasons.DOCUMENT_TYPE_METADATA_INCOMPLETE]: triageFailureReasons.DOCUMENT_TYPE_METADATA_INCOMPLETE
+}
+
+const classifyTriageFailureReason = (err) => {
+  if (err?.triageFailureReason) {
+    return err.triageFailureReason
+  }
+
+  if (err?.message === 'Contact ID not found') {
+    return triageFailureReasons.CONTACT_NOT_FOUND_FOR_CRN
+  }
+
+  if (err?.message === 'Account ID not found') {
+    return triageFailureReasons.ACCOUNT_NOT_FOUND_FOR_SBI
+  }
+
+  return triageReasonFromTerminalReason[err?.retryMetadata?.terminalReason] ?? null
+}
+
+const getConfiguredTriageProcessingEntity = () => {
+  const rawValue = config.get('crm.integrationInboundFailureProcessingEntity')
+  if (rawValue === null || rawValue === undefined) {
+    return null
+  }
+
+  const value = String(rawValue).trim()
+  return value.length ? value : null
+}
+
+const buildTriageErrorDetails = ({ correlationId, fileId, caseType, failureReason, errorMessage }) => JSON.stringify({
+  correlationId,
+  fileId,
+  caseType,
+  failureReason,
+  errorMessage
+})
+
+const logTriageWriteSkipped = ({ correlationId, fileId, caseType, failureReason }) => {
+  logger.warn({
+    event: {
+      type: triageEventTypes.WRITE_SKIPPED,
+      action: 'skip_triage_record',
+      category: 'crm',
+      outcome: 'unknown',
+      reason: triageFailureReasons.CONFIG_MISSING_OR_EMPTY,
+      reference: correlationId
+    },
+    tenant: {
+      message: toTenantMessage({ correlationId, fileId, caseType, failureReason })
+    }
+  }, 'Skipping CRM triage record write because processing entity config is missing or empty')
+}
+
+const logTriageWriteSuccess = ({ correlationId, fileId, caseType, failureReason, triageRecordId, created }) => {
+  logger.info({
+    event: {
+      type: triageEventTypes.WRITE_SUCCEEDED,
+      action: 'write_triage_record',
+      category: 'crm',
+      outcome: 'success',
+      reason: created ? failureReason : triageFailureReasons.DUPLICATE_SUPPRESSED,
+      reference: triageRecordId ?? correlationId
+    },
+    tenant: {
+      message: toTenantMessage({ correlationId, fileId, caseType, failureReason, triageRecordId })
+    }
+  }, 'CRM triage record write completed')
+}
+
+const logTriageWriteFailed = ({ correlationId, fileId, caseType, failureReason, triageRecordId, triageError }) => {
+  logger.error({
+    event: {
+      type: triageEventTypes.WRITE_FAILED,
+      action: 'write_triage_record',
+      category: 'crm',
+      outcome: 'failure',
+      reason: failureReason,
+      reference: triageRecordId ?? correlationId
+    },
+    error: {
+      message: triageError?.crmError ?? triageError?.message,
+      type: triageError?.name,
+      stack_trace: triageError?.stack,
+      code: triageError?.retryMetadata?.status ?? null
+    },
+    tenant: {
+      message: toTenantMessage({ correlationId, fileId, caseType, failureReason, triageRecordId })
+    }
+  }, 'CRM triage record write failed')
+}
+
+const reportInboundFailureForTriage = async ({ authToken, correlationId, fileId, caseType, err }) => {
+  if (!isTerminalFailure(err)) {
+    return
+  }
+
+  const failureReason = classifyTriageFailureReason(err)
+  if (!failureReason) {
+    return
+  }
+
+  const processingEntity = getConfiguredTriageProcessingEntity()
+  if (!processingEntity) {
+    logTriageWriteSkipped({ correlationId, fileId, caseType, failureReason })
+    return
+  }
+
+  const { triageRecordId, created, error: triageError } = await createIntegrationInboundQueueRecord({
+    authToken,
+    correlationId,
+    failureReason,
+    processingEntity,
+    errorDetails: buildTriageErrorDetails({
+      correlationId,
+      fileId,
+      caseType,
+      failureReason,
+      errorMessage: err?.message
+    })
+  })
+
+  if (triageError) {
+    logTriageWriteFailed({ correlationId, fileId, caseType, failureReason, triageRecordId, triageError })
+    return
+  }
+
+  logTriageWriteSuccess({ correlationId, fileId, caseType, failureReason, triageRecordId, created })
+}
 
 function buildCaseData (crm, file) {
   return {
@@ -87,19 +220,25 @@ export async function createCase (payload) {
 
   const authToken = await getCrmAuthToken()
   const transformedPayload = transformPayload(payload)
+  const { caseType } = transformedPayload
 
-  if (prep.action === caseActions.CREATE) {
-    return createNewCase({ authToken, transformedPayload, correlationId, fileId })
+  try {
+    if (prep.action === caseActions.CREATE) {
+      return await createNewCase({ authToken, transformedPayload, correlationId, fileId })
+    }
+
+    return await addMetadataToExistingCase({
+      authToken,
+      caseId: prep.caseId,
+      correlationId,
+      file,
+      fileId,
+      caseType
+    })
+  } catch (err) {
+    await reportInboundFailureForTriage({ authToken, correlationId, fileId, caseType, err })
+    throw err
   }
-
-  return addMetadataToExistingCase({
-    authToken,
-    caseId: prep.caseId,
-    correlationId,
-    file,
-    fileId,
-    caseType: transformedPayload.caseType
-  })
 }
 
 async function prepareCase ({ correlationId, fileId }) {

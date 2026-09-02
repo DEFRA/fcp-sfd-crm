@@ -23,6 +23,11 @@ Set `CRM_WRITE_FILES_IN_SUBMISSION=true` to enable writing
 `rpa_filesinsubmission` on online-submission records, defaults to
 `false`.
 
+Terminal inbound failures can be written to CRM triage records in
+`rpa_integrationinboundqueues` for operations follow-up. Set `CRM_INTEGRATION_INBOUND_FAILURE_PROCESSING_ENTITY=927350008` to enable
+these triage writes and bind that value to `rpa_processingentity` on the
+triage record.
+
 ### Pre-commit hooks
 
 This repo includes pre-commit hooks:

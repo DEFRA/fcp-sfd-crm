@@ -10,6 +10,7 @@ import { messages } from '../constants/messages.js'
 import { emitAuditEvent } from '../messaging/outbound/audit/send-audit-event.js'
 import { buildPersonReadEvent, buildBusinessReadEvent } from '../messaging/outbound/audit/build-audit-event.js'
 import { auditStatuses, auditFailureReasons } from '../constants/audit.js'
+import { triageFailureReasons } from '../constants/integration-inbound-triage.js'
 
 const logger = createLogger()
 const { constants: httpConstants } = http2
@@ -83,7 +84,9 @@ export async function ensureContactAndAccount (authToken, crn, sbi, { correlatio
       status: auditStatuses.FAILURE,
       details: { reason: auditFailureReasons.CRN_NOT_FOUND }
     }))
-    throw unprocessableEntity('Contact ID not found')
+    const err = unprocessableEntity('Contact ID not found')
+    err.triageFailureReason = triageFailureReasons.CONTACT_NOT_FOUND_FOR_CRN
+    throw err
   }
 
   await emitAuditEvent(buildPersonReadEvent({ correlationId, contactId, crn }))
@@ -109,7 +112,9 @@ export async function ensureContactAndAccount (authToken, crn, sbi, { correlatio
       status: auditStatuses.FAILURE,
       details: { reason: auditFailureReasons.SBI_NOT_FOUND }
     }))
-    throw unprocessableEntity('Account ID not found')
+    const err = unprocessableEntity('Account ID not found')
+    err.triageFailureReason = triageFailureReasons.ACCOUNT_NOT_FOUND_FOR_SBI
+    throw err
   }
 
   await emitAuditEvent(buildBusinessReadEvent({ correlationId, accountId, sbi }))

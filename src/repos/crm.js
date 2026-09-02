@@ -248,6 +248,7 @@ const deriveCaseRecordId = (correlationId) => deriveRecordId('incident', correla
  * @returns {string} A deterministic RFC 4122 version 4 formatted GUID.
  */
 const deriveOnlineSubmissionRecordId = (correlationId) => deriveRecordId('onlinesubmission', correlationId)
+const deriveIntegrationInboundQueueRecordId = (correlationId, failureReason) => deriveRecordId('integrationinboundqueue', correlationId, failureReason)
 
 /**
  * Writes a record as a conditional upsert, addressed by a derived key on its
@@ -346,6 +347,61 @@ const createMetadataForOnlineSubmission = async (request) => {
     await attachCrmErrorBody(err)
     return {
       metadataId: null,
+      error: err
+    }
+  }
+}
+
+const TRIAGE_RECORD_NAME_PREFIX = 'SFD doc upload failure'
+const TRIAGE_RECORD_NAME_MAX_LENGTH = 100
+const TRIAGE_PROCESSING_RESULT_FAILED = 927350001
+
+const buildTriageRecordName = (correlationId) => (
+  `${TRIAGE_RECORD_NAME_PREFIX} ${correlationId}`.slice(0, TRIAGE_RECORD_NAME_MAX_LENGTH)
+)
+
+const createIntegrationInboundQueueRecord = async (request) => {
+  const { authToken, correlationId, failureReason, errorDetails, processingEntity } = request
+
+  try {
+    if (!correlationId || !failureReason) {
+      throw new Error(`Cannot derive triage key: correlationId and failureReason are required, got '${correlationId}' and '${failureReason}'`)
+    }
+
+    if (!errorDetails) {
+      throw new Error('Missing required triage errorDetails payload')
+    }
+
+    const triageRecordId = deriveIntegrationInboundQueueRecordId(correlationId, failureReason)
+    const baseUrl = getBaseUrl()
+
+    const payload = {
+      rpa_name: buildTriageRecordName(correlationId),
+      rpa_errordetails: errorDetails,
+      rpa_processingresult: TRIAGE_PROCESSING_RESULT_FAILED
+    }
+
+    if (processingEntity !== null && processingEntity !== undefined && String(processingEntity).trim() !== '') {
+      const parsedProcessingEntity = Number.parseInt(String(processingEntity), 10)
+      if (!Number.isInteger(parsedProcessingEntity)) {
+        throw new Error(`Invalid processing entity value: '${processingEntity}'`)
+      }
+      payload.rpa_processingentity = parsedProcessingEntity
+    }
+
+    const endpoint = `${baseUrl}/rpa_integrationinboundqueues(${triageRecordId})`
+    const created = await upsertRecord(endpoint, authToken, payload)
+
+    return {
+      triageRecordId,
+      created,
+      error: null
+    }
+  } catch (err) {
+    await attachCrmErrorBody(err)
+    return {
+      triageRecordId: null,
+      created: false,
       error: err
     }
   }
@@ -654,8 +710,10 @@ export {
   createCaseWithOnlineSubmission,
   getOnlineSubmissionActivityId,
   createMetadataForOnlineSubmission,
+  createIntegrationInboundQueueRecord,
   getDocumentTypeMetadata,
   deriveMetadataRecordId,
   deriveCaseRecordId,
-  deriveOnlineSubmissionRecordId
+  deriveOnlineSubmissionRecordId,
+  deriveIntegrationInboundQueueRecordId
 }

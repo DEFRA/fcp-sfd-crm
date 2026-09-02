@@ -26,7 +26,20 @@ vi.mock('../../../src/repos/cases.js', () => ({
 
 vi.mock('../../../src/repos/crm.js', () => ({
   getOnlineSubmissionActivityId: vi.fn(),
-  createMetadataForOnlineSubmission: vi.fn()
+  createMetadataForOnlineSubmission: vi.fn(),
+  createIntegrationInboundQueueRecord: vi.fn()
+}))
+
+vi.mock('../../../src/messaging/outbound/audit/send-audit-event.js', () => ({
+  emitAuditEvent: vi.fn().mockResolvedValue(undefined)
+}))
+
+const mockConfigGet = vi.fn(() => '')
+
+vi.mock('../../../src/config/index.js', () => ({
+  config: {
+    get: mockConfigGet
+  }
 }))
 
 vi.mock('../../../src/api/common/helpers/metrics.js', () => ({
@@ -38,8 +51,10 @@ const { getCrmAuthToken } = await import('../../../src/auth/get-crm-auth-token.j
 const { createCaseWithOnlineSubmissionInCrm, resolveDocumentTypeOrThrow } = await import('../../../src/services/create-case-with-online-submission-in-crm.js')
 const { upsertCase, updateCaseId, markFileProcessed, claimCreatorRole, releaseCreator } = await import('../../../src/repos/cases.js')
 const { getOnlineSubmissionActivityId, createMetadataForOnlineSubmission } = await import('../../../src/repos/crm.js')
+const { createIntegrationInboundQueueRecord } = await import('../../../src/repos/crm.js')
 const { metricsCounter } = await import('../../../src/api/common/helpers/metrics.js')
 const { caseCreationMetrics } = await import('../../../src/constants/case-creation-metrics.js')
+const { triageEventTypes } = await import('../../../src/constants/integration-inbound-triage.js')
 
 const validPayload = {
   data: {
@@ -55,6 +70,7 @@ const validPayload = {
 describe('case service', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockConfigGet.mockReturnValue('')
     upsertCase.mockResolvedValue({ isNew: true, isDuplicateFile: false, caseId: null, isCreator: true })
     updateCaseId.mockResolvedValue({ modifiedCount: 1 })
     markFileProcessed.mockResolvedValue({ modifiedCount: 1 })
@@ -64,6 +80,7 @@ describe('case service', () => {
     // mocks for additional-file flow
     getOnlineSubmissionActivityId.mockResolvedValue({ onlineSubmissionActivityId: '84c190b8-5d96-f111-8076-000d3ada3978', error: null })
     createMetadataForOnlineSubmission.mockResolvedValue({ metadataId: 'meta-1', error: null })
+    createIntegrationInboundQueueRecord.mockResolvedValue({ triageRecordId: 'triage-1', created: true, error: null })
   })
 
   describe('transformPayload', () => {
@@ -337,6 +354,99 @@ describe('case service', () => {
 
       expect(thrown.retryable).toBeUndefined()
       expect(releaseCreator).toHaveBeenCalledWith('corr-1', 'file-1')
+    })
+
+    test('should log triage write skipped when a mapped terminal failure occurs but config is empty', async () => {
+      const err = new Error('No document type metadata found for caseType: Document Upload')
+      err.retryable = false
+      err.retryMetadata = { category: 'non-retryable', terminalReason: 'document_type_not_found' }
+      createCaseWithOnlineSubmissionInCrm.mockRejectedValue(err)
+
+      await createCase(validPayload).catch(() => {})
+
+      expect(createIntegrationInboundQueueRecord).not.toHaveBeenCalled()
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: expect.objectContaining({
+            type: triageEventTypes.WRITE_SKIPPED,
+            action: 'skip_triage_record',
+            reason: 'config_missing_or_empty'
+          })
+        }),
+        'Skipping CRM triage record write because processing entity config is missing or empty'
+      )
+    })
+
+    test('should write triage record when config is set and failure reason is mapped', async () => {
+      const err = new Error('No document type metadata found for caseType: Document Upload')
+      err.retryable = false
+      err.retryMetadata = { category: 'non-retryable', terminalReason: 'document_type_not_found' }
+      createCaseWithOnlineSubmissionInCrm.mockRejectedValue(err)
+      mockConfigGet.mockReturnValue('927350008')
+      createIntegrationInboundQueueRecord.mockResolvedValue({
+        triageRecordId: 'e5f31d07-a1c6-4067-a8ce-7695e1453d96',
+        created: true,
+        error: null
+      })
+
+      await createCase(validPayload).catch(() => {})
+
+      expect(createIntegrationInboundQueueRecord).toHaveBeenCalledWith(expect.objectContaining({
+        authToken: 'mock-token',
+        correlationId: 'corr-1',
+        failureReason: 'document_type_not_found',
+        processingEntity: '927350008'
+      }))
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: expect.objectContaining({
+            type: triageEventTypes.WRITE_SUCCEEDED,
+            action: 'write_triage_record',
+            outcome: 'success',
+            reason: 'document_type_not_found',
+            reference: 'e5f31d07-a1c6-4067-a8ce-7695e1453d96'
+          })
+        }),
+        'CRM triage record write completed'
+      )
+    })
+
+    test('should log triage write failed and preserve original terminal behavior when triage write errors', async () => {
+      const err = new Error('No document type metadata found for caseType: Document Upload')
+      err.retryable = false
+      err.retryMetadata = { category: 'non-retryable', terminalReason: 'document_type_not_found' }
+      createCaseWithOnlineSubmissionInCrm.mockRejectedValue(err)
+      mockConfigGet.mockReturnValue('927350008')
+
+      const triageWriteError = new Error('Bad Request')
+      triageWriteError.name = 'HttpError'
+      triageWriteError.retryMetadata = { status: 400 }
+      createIntegrationInboundQueueRecord.mockResolvedValue({
+        triageRecordId: null,
+        created: false,
+        error: triageWriteError
+      })
+
+      const thrown = await createCase(validPayload).catch(e => e)
+
+      expect(thrown).toBe(err)
+      expect(releaseCreator).toHaveBeenCalledWith('corr-1', 'file-1')
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: expect.objectContaining({
+            type: triageEventTypes.WRITE_FAILED,
+            action: 'write_triage_record',
+            outcome: 'failure',
+            reason: 'document_type_not_found'
+          }),
+          error: expect.objectContaining({
+            message: 'Bad Request',
+            type: 'HttpError',
+            code: 400
+          })
+        }),
+        'CRM triage record write failed'
+      )
     })
 
     test('should rethrow the original failure even when releasing the creator role itself fails', async () => {

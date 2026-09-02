@@ -27,7 +27,17 @@ vi.mock('../../../src/config/index.js', () => ({
 }))
 
 // Import after mocks
-const { getContactIdFromCrn, getAccountIdFromSbi, createCaseWithOnlineSubmission, getDocumentTypeMetadata, deriveMetadataRecordId, deriveCaseRecordId, deriveOnlineSubmissionRecordId } = await import('../../../src/repos/crm.js')
+const {
+  getContactIdFromCrn,
+  getAccountIdFromSbi,
+  createCaseWithOnlineSubmission,
+  getDocumentTypeMetadata,
+  createIntegrationInboundQueueRecord,
+  deriveMetadataRecordId,
+  deriveCaseRecordId,
+  deriveOnlineSubmissionRecordId,
+  deriveIntegrationInboundQueueRecordId
+} = await import('../../../src/repos/crm.js')
 
 const DOC_TYPE_ID = '4e88916b-aae2-ee11-904c-000d3adc1ec9'
 const ACTIVITY_ID = '84c190b8-5d96-f111-8076-000d3ada3978'
@@ -962,6 +972,83 @@ describe('CRM repository', () => {
         teamRoutingValue: 'first-team',
         documentTypesId: 'first-id'
       })
+    })
+  })
+
+  describe('createIntegrationInboundQueueRecord', () => {
+    test('should create triage record via conditional upsert and include processing fields', async () => {
+      mockHttpClient.mockResolvedValue({ ok: true, status: 204 })
+
+      const result = await createIntegrationInboundQueueRecord({
+        authToken: 'Bearer token',
+        correlationId: '77777777-8888-4999-8aaa-bbbbbbbbbbbb',
+        failureReason: 'document_type_not_found',
+        errorDetails: JSON.stringify({ correlationId: '77777777-8888-4999-8aaa-bbbbbbbbbbbb' }),
+        processingEntity: '927350008'
+      })
+
+      expect(result.error).toBeNull()
+      expect(result.created).toBe(true)
+      expect(result.triageRecordId).toBe(deriveIntegrationInboundQueueRecordId('77777777-8888-4999-8aaa-bbbbbbbbbbbb', 'document_type_not_found'))
+
+      const [url, options] = mockHttpClient.mock.calls[0]
+      expect(url).toBe(`https://crm.example.com/api/rpa_integrationinboundqueues(${result.triageRecordId})`)
+      expect(options.method).toBe('PATCH')
+      expect(options.headers['If-None-Match']).toBe('*')
+
+      const body = JSON.parse(options.body)
+      expect(body.rpa_processingresult).toBe(927350001)
+      expect(body.rpa_processingentity).toBe(927350008)
+      expect(body.rpa_name).toContain('SFD doc upload failure')
+    })
+
+    test('should report created=false when a duplicate write is suppressed by 412', async () => {
+      const httpError = new HttpError('HTTP error: 412 Precondition Failed', {
+        status: 412,
+        text: vi.fn().mockResolvedValue('')
+      })
+      mockHttpClient.mockRejectedValue(httpError)
+
+      const result = await createIntegrationInboundQueueRecord({
+        authToken: 'Bearer token',
+        correlationId: '77777777-8888-4999-8aaa-bbbbbbbbbbbb',
+        failureReason: 'document_type_not_found',
+        errorDetails: JSON.stringify({ correlationId: '77777777-8888-4999-8aaa-bbbbbbbbbbbb' }),
+        processingEntity: '927350008'
+      })
+
+      expect(result.error).toBeNull()
+      expect(result.created).toBe(false)
+      expect(result.triageRecordId).toBe(deriveIntegrationInboundQueueRecordId('77777777-8888-4999-8aaa-bbbbbbbbbbbb', 'document_type_not_found'))
+    })
+
+    test('should reject invalid processingEntity and not call CRM', async () => {
+      const result = await createIntegrationInboundQueueRecord({
+        authToken: 'Bearer token',
+        correlationId: '77777777-8888-4999-8aaa-bbbbbbbbbbbb',
+        failureReason: 'document_type_not_found',
+        errorDetails: JSON.stringify({ correlationId: '77777777-8888-4999-8aaa-bbbbbbbbbbbb' }),
+        processingEntity: 'not-a-number'
+      })
+
+      expect(result.created).toBe(false)
+      expect(result.error).toBeInstanceOf(Error)
+      expect(result.error.message).toContain('Invalid processing entity value')
+      expect(mockHttpClient).not.toHaveBeenCalled()
+    })
+
+    test('should reject missing key parts and not call CRM', async () => {
+      const result = await createIntegrationInboundQueueRecord({
+        authToken: 'Bearer token',
+        correlationId: null,
+        failureReason: null,
+        errorDetails: 'any'
+      })
+
+      expect(result.created).toBe(false)
+      expect(result.error).toBeInstanceOf(Error)
+      expect(result.error.message).toContain('Cannot derive triage key')
+      expect(mockHttpClient).not.toHaveBeenCalled()
     })
   })
 })
