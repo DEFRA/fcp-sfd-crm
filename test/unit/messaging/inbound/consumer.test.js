@@ -235,6 +235,12 @@ describe('CRM request sqs consumer', () => {
       expect(result).toEqual(message)
     })
 
+    // Audit failure isolation is proven in
+    // test/integration/narrow/audit/audit-failure-isolation.test.js, which
+    // runs the real case service, the real audit path and a rejecting SNS
+    // client. It cannot be proven here: this file mocks services/case.js
+    // wholesale, so no audit code executes.
+
     test('should not call createCase for schema-invalid but parseable payload', async () => {
       const { startCRMListener: start, createCase, sqsClient } = await setupAndImportConsumer()
       start(sqsClient)

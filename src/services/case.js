@@ -9,6 +9,8 @@ import { messages } from '../constants/messages.js'
 import { metricsCounter } from '../api/common/helpers/metrics.js'
 import { caseCreationMetrics, caseActions } from '../constants/case-creation-metrics.js'
 import { isTerminalFailure } from '../utils/is-terminal-failure.js'
+import { emitAuditEvent } from '../messaging/outbound/audit/send-audit-event.js'
+import { buildDocumentCreatedEvent } from '../messaging/outbound/audit/build-audit-event.js'
 
 const logger = createLogger()
 
@@ -75,7 +77,7 @@ export function transformPayload (cloudEventPayload) {
  * @param {object} payload - parsed CloudEvents message payload
  */
 export async function createCase (payload) {
-  const { correlationId, file } = payload.data
+  const { correlationId, file, crn, sbi } = payload.data
   const fileId = file?.fileId
 
   const prep = await prepareCase({ correlationId, fileId })
@@ -89,7 +91,7 @@ export async function createCase (payload) {
   const transformedPayload = transformPayload(payload)
 
   if (prep.action === caseActions.CREATE) {
-    return createNewCase({ authToken, transformedPayload, correlationId, fileId })
+    return createNewCase({ authToken, transformedPayload, correlationId, fileId, crn, sbi })
   }
 
   return addMetadataToExistingCase({
@@ -98,7 +100,9 @@ export async function createCase (payload) {
     correlationId,
     file,
     fileId,
-    caseType: transformedPayload.caseType
+    caseType: transformedPayload.caseType,
+    crn,
+    sbi
   })
 }
 
@@ -175,7 +179,7 @@ async function releaseCreatorRole (correlationId, fileId) {
   }
 }
 
-async function createNewCase ({ authToken, transformedPayload, correlationId, fileId }) {
+async function createNewCase ({ authToken, transformedPayload, correlationId, fileId, crn, sbi }) {
   let response
   try {
     response = await createCaseWithOnlineSubmissionInCrm({ authToken, fileId, ...transformedPayload })
@@ -207,11 +211,23 @@ async function createNewCase ({ authToken, transformedPayload, correlationId, fi
       })
     }
   }, 'Case created')
+
+  // Event 1 from the FLS1-21 spike table: a case was opened for the farmer.
+  // crn/sbi come from the same payload.data extraction as
+  // addMetadataToExistingCase uses, rather than from transformedPayload, so
+  // both emission points share a single source for these identifiers.
+  await emitAuditEvent(buildDocumentCreatedEvent({
+    correlationId,
+    entityId: response.caseId,
+    crn,
+    sbi
+  }))
+
   return response
 }
 
-async function addMetadataToExistingCase ({ authToken, caseId, correlationId, file, fileId, caseType }) {
-  const onlineSubmissionActivityId = await fetchOnlineSubmissionActivityIdOrThrow(authToken, caseId, { fileId })
+async function addMetadataToExistingCase ({ authToken, caseId, correlationId, file, fileId, caseType, crn, sbi }) {
+  const onlineSubmissionActivityId = await fetchOnlineSubmissionActivityIdOrThrow(authToken, caseId, { fileId, correlationId })
 
   // Additional files must be labelled with the same document type as the first
   // file in the submission, which is resolved from the case type at creation.
@@ -264,5 +280,12 @@ async function addMetadataToExistingCase ({ authToken, caseId, correlationId, fi
     event: { reference: metadataId },
     tenant: { message: toTenantMessage({ fileId, caseId }) }
   }, 'Metadata added to existing case')
+
+  await emitAuditEvent(buildDocumentCreatedEvent({
+    correlationId,
+    entityId: metadataId,
+    crn,
+    sbi
+  }))
   return { caseId }
 }
