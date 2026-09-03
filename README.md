@@ -8,6 +8,99 @@
 CRM orchestration service for Single Front Door.
 This service is part of the [Single Front Door (SFD)](https://github.com/defra/fcp-sfd-core) service.
 
+## Overview
+
+This service turns document upload events into cases in Dataverse (Dynamics CRM). It consumes `uk.gov.fcp.sfd.document.uploaded` CloudEvents from an SQS queue, published by [fcp-sfd-object-processor](https://github.com/DEFRA/fcp-sfd-object-processor), resolves the farmer's contact and organisation records, and writes the case, its online submission activity and one metadata record per file. It then publishes a received event for the Farming Data Model and audit events to the shared audit topic.
+
+The two properties that shape most of the code are that a submission may arrive as several messages which must converge on **one** case, and that a redelivered message must never create a second case.
+
+## Architecture
+
+### Message flow
+
+```mermaid
+sequenceDiagram
+    participant OP as Object Processor
+    participant Q as SQS fcp_sfd_crm_requests
+    participant C as Consumer
+    participant DB as MongoDB (cases)
+    participant CRM as Dataverse Web API
+    participant SNS as AWS SNS
+    participant DLQ as Dead letter queue
+
+    OP->>Q: uk.gov.fcp.sfd.document.uploaded
+    C->>Q: Poll (batch of 10)
+    C->>C: Validate against inbound CloudEvent schema
+    alt Invalid payload
+        C->>DLQ: Route immediately (never retried)
+    else Valid
+        C->>DB: Upsert submission by correlationId, resolve role
+        alt This file creates the case
+            C->>CRM: Resolve document type, contact by CRN, account by SBI
+            C->>CRM: $batch changeset: incident + online submission + metadata
+            C->>DB: Record caseId, mark file processed
+            C->>SNS: Received event (FDM) and audit event
+        else Case already exists
+            C->>CRM: Fetch online submission activity, add metadata record
+            C->>SNS: Audit event
+        else Case still being created
+            C-->>Q: Leave on queue, retry on redelivery
+        end
+    end
+    Note over C,DLQ: Retryable failures stay on the queue.<br/>Terminal failures are routed to the DLQ.
+```
+
+### Multi-file convergence
+
+Each message competes for a single *creator* role per `correlationId`, held in one MongoDB document. Only the creator writes the case; the rest attach their own metadata to it once it exists.
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 100, 'rankSpacing': 130}}}%%
+flowchart LR
+    S([message received]) --> U[Upsert submission<br/>by correlationId]
+    U -->|file already<br/>processed| SK[Skip]
+    U -->|case already<br/>created| AM[Add metadata<br/>to the case]
+    U -->|first file, or<br/>holds creator role| CR[Create the case]
+    U -->|another file is<br/>creating the case| W[Wait]
+    W -->|creation deadline passed,<br/>role claimed| CR
+    W -->|redelivered,<br/>still no case| W
+    CR -->|case created,<br/>caseId recorded| AM
+    CR -->|non-retryable failure<br/>releases the role| W
+    SK --> E([done])
+    AM --> E
+```
+
+`claimCreatorRole` is a single conditional update matching at most one document, so two files can never both win the role. Case creation is idempotent regardless, so even a lost race commits only one incident.
+
+### Idempotency
+
+Cases are written as a Dataverse `$batch` changeset of `PATCH` requests carrying `If-None-Match: '*'`, against record IDs derived deterministically from the `correlationId` and `fileId`.
+
+A redelivered message therefore resolves to the same record IDs and is rejected by Dataverse as already existing, rather than creating a duplicate. 
+
+The reasoning and the alternatives considered are in [Use a Dataverse $batch changeset of conditional upserts instead of a deep insert for case creation](https://eaflood.atlassian.net/wiki/x/c4ACiAE).
+
+Partial submissions are accepted rather than discarded when some files fail. See [Accept a partial submission rather than discarding the whole upload when one file fails](https://eaflood.atlassian.net/wiki/x/NoBziAE).
+
+### Layered architecture
+
+```
+src/messaging/    → SQS consumer (inbound), SNS publishing (outbound), DLQ routing
+src/services/     → Case orchestration, creator role, CRM helpers
+src/repos/        → Dataverse Web API calls, batch changesets, Mongo cases collection
+src/auth/         → CRM token acquisition (federated credentials or client secret)
+src/api/schemas/  → Joi schemas for inbound, outbound and HTTP payloads
+src/http/         → Outbound HTTP clients with retry policy
+src/config/       → Convict configuration, split by concern
+src/logging/      → Pino/ECS logger, correlation ID store, tenant message redaction
+src/data/         → MongoDB client and index creation
+src/constants/    → Shared enums and literals
+```
+
+### Contracts
+
+The message this service consumes is defined in [`docs/asyncapi/v1.yml`](docs/asyncapi/v1.yml). Requests against the Dataverse Web API can be exercised directly using the Bruno collection in [fcp-sfd-core](https://github.com/DEFRA/fcp-sfd-core/tree/main/resources/bruno/collections/CRM), which mirrors the changeset logic in [`src/repos/crm.js`](src/repos/crm.js).
+
 ## Prerequisites
 
 ### Environment variables
@@ -247,6 +340,48 @@ Two clients are exported: `httpClient` (CRM API) and `authHttpClient` (token end
 
 See [`src/config/retry.js`](src/config/retry.js) and [`src/http/client.js`](src/http/client.js) for implementation details.
 
+## Message failure handling
+
+HTTP retry governs a single outbound call. A second, independent layer decides what becomes of the inbound SQS message once processing has failed. Every failure ends one of two ways in [`src/messaging/inbound/consumer.js`](src/messaging/inbound/consumer.js): the message is left on the queue for another delivery, or it is copied to the dead letter queue and deleted from the main queue.
+
+### Retryable versus terminal
+
+The decision is made by [`isTerminalFailure`](src/utils/is-terminal-failure.js), which is simply `!err?.retryable`. A failure is retried only when the error carries an explicit `retryable = true`. An error that never sets the flag is terminal by default, so a thrown `Error` with no classification is discarded rather than replayed indefinitely.
+
+Services set the flag deliberately. A CRM call whose HTTP classification came back as `retryable` is rethrown as retryable (see [`src/services/crm-helpers.js`](src/services/crm-helpers.js) and [`src/services/create-case-with-online-submission-in-crm.js`](src/services/create-case-with-online-submission-in-crm.js)). So are two waiting states: a file waiting for another file's case creation to finish, and an online submission that is not yet queryable after the case was created. Everything else, including a Boom 400 from parameter assertion and a Boom 422 from contact and account resolution, is terminal.
+
+| Failure | Action | Log `event.type` |
+|---|---|---|
+| Body is not valid JSON | Dead letter queue | `crm.dlq.message_received` (`error.type: invalid_json`) |
+| Payload fails the inbound CloudEvent schema | Dead letter queue | `crm.dlq.message_received` (`error.type: schema_invalid`) |
+| Error with `retryable = true` | Left on queue for redelivery | `crm_case_creation_retryable`, `event.action: leave_on_queue` |
+| Any other processing error | Dead letter queue | `crm_case_creation_failed` or `crm_metadata_attachment_failed`, `event.action: discard_message` |
+
+Schema validation failures are always terminal. The payload is validated against [`inboundCloudEventSchema`](src/api/schemas/inbound.js) with `convert: false` and `abortEarly: false`, the full set of field errors is logged, and the message goes straight to the dead letter queue. A malformed message cannot become well formed on redelivery, so retrying it would only consume the redelivery budget.
+
+A message replayed from the dead letter queue is recognised by the `replayed_from` message attribute and logged as `crm.dlq.message_replayed` before processing. If the send to the dead letter queue itself fails, `crm.dlq.send_failed` is logged at `fatal` and the message is still deleted from the main queue.
+
+### Redelivery budget
+
+Retryable failures are bounded by the queue rather than by application configuration. SQS redelivers the message when the visibility timeout expires and moves it to the dead letter queue once the receive count is exhausted. That budget, its current value, and its interaction with `CASE_CREATION_DEADLINE_MS` are described under [Multi-file case creation](#multi-file-case-creation).
+
+### Outbound publish failures
+
+Publishing the CRM event to SNS has its own safety net. [`publishWithDurability`](src/messaging/outbound/durable-publish.js) wraps the publish and, on failure, sends an envelope to a dead letter queue containing the original payload plus metadata: `caseId`, `correlationId`, `topicArn`, `failedAt`, `errorMessage`, `errorName` and `source`. The envelope carries `eventType`, `source` and `failureReason` message attributes (see [`src/messaging/sqs/send-to-dlq.js`](src/messaging/sqs/send-to-dlq.js)) so failures can be filtered without opening each body. There is no in-process retry loop here. The publish either succeeds or is captured for later replay. Failure to reach the dead letter queue is logged as a critical error, and the event may then be lost.
+
+### Configuration
+
+| Variable | Default | Description |
+|---|---|---|
+| `CRM_QUEUE_URL` | none — **required** | URL of the inbound CRM request queue |
+| `CRM_DEAD_LETTER_QUEUE_URL` | none — **required** | URL of the dead letter queue, used both for discarded inbound messages and for failed outbound SNS publishes |
+| `CRM_EVENTS_TOPIC_ARN` | none — **required** | ARN of the CRM events SNS topic |
+| `SQS_CONSUMER_BATCH_SIZE` | `10` | Maximum messages returned per receive call |
+| `SQS_CONSUMER_WAIT_TIME_SECONDS` | `10` | Long-poll wait for a message to arrive |
+| `SQS_CONSUMER_POLLING_WAIT_TIME` | `0` | Delay before the consumer polls again |
+
+See [`src/config/messaging.js`](src/config/messaging.js). `visibility_timeout_seconds` and `dlq_max_receive_count` are queue properties, not service configuration, and are set per environment in `cdp-tenant-config`.
+
 ## Multi-file case creation
 
 A submission uploaded as several files shares one `correlationId` and produces one CRM case. The first file processed for a `correlationId` becomes its *creator* and is the one that creates the case; every other file waits until the case exists, then attaches its own metadata to it. This is coordinated through a single Mongo document per `correlationId` in the `cases` collection — see [`src/repos/cases.js`](src/repos/cases.js) and [`src/services/case.js`](src/services/case.js).
@@ -285,6 +420,13 @@ This service publishes audit events to the shared `fcp-audit` SNS topic via `@de
 | `AUDIT_TOPIC_ARN` | none — **required** | ARN of the audit SNS topic. The service will not start without it |
 | `AWS_SNS_REQUEST_TIMEOUT_MS` | `3000` | Socket and connection timeout for SNS publishes |
 | `AWS_SNS_MAX_ATTEMPTS` | `2` | Total attempts (including the first) for an SNS publish |
+
+## Related repositories
+
+| Repository | Description |
+|-----------|-------------|
+| [fcp-sfd-core](https://github.com/DEFRA/fcp-sfd-core) | Full-stack local development orchestration, plus the Bruno CRM collection |
+| [fcp-sfd-object-processor](https://github.com/DEFRA/fcp-sfd-object-processor) | Publishes the `uk.gov.fcp.sfd.document.uploaded` events this service consumes, and serves the blob URLs referenced in them |
 
 ## Licence
 
