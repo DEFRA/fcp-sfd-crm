@@ -279,6 +279,18 @@ That budget is currently 60 × 3 = 180 s in every environment. A waiting file is
 
 A submission stuck waiting for its case is visible without checking the dead letter queue: `crm.case.waiting_for_case`, `crm.case.creator_role_claimed`, `crm.case.creator_role_released` and `crm.case.creator_release_failed` are emitted as metrics (see [`src/api/common/helpers/metrics.js`](src/api/common/helpers/metrics.js)). Every name except `crm.case.waiting_for_case` is also written as `event.type` on an ECS-shaped log line from `src/services/case.js`, so the same string finds the event in either place.
 
+## Audit events
+
+This service publishes audit events to the shared `fcp-audit` SNS topic via `@defra/fcp-audit-publisher`. See [`docs/audit-events.md`](docs/audit-events.md) for the table of events emitted, where each is emitted from, and the fields still to be confirmed with the fcp-audit team.
+
+### Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AUDIT_TOPIC_ARN` | none — **required** | ARN of the audit SNS topic. The service will not start without it |
+| `AWS_SNS_REQUEST_TIMEOUT_MS` | `3000` | Socket and connection timeout for SNS publishes |
+| `AWS_SNS_MAX_ATTEMPTS` | `2` | Total attempts (including the first) for an SNS publish |
+
 ## Licence
 
 THIS INFORMATION IS LICENSED UNDER THE CONDITIONS OF THE OPEN GOVERNMENT LICENCE found at:

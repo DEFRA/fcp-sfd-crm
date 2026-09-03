@@ -160,7 +160,13 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
       output: { statusCode: 422 }
     })
 
-    expect(mockLogger.error).toHaveBeenCalledWith('No contact found for CRN: ****-crn, error: Not found')
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      {
+        transaction: { id: 'mock-correlation-id' },
+        error: { type: 'CrmLookupError', status: null }
+      },
+      'No contact found for CRN: ****-crn'
+    )
   })
 
   test('throws error if account not found', async () => {
@@ -184,7 +190,13 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
       output: { statusCode: 422 }
     })
 
-    expect(mockLogger.error).toHaveBeenCalledWith('No account found for SBI: mock-sbi, error: Not found')
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      {
+        transaction: { id: 'mock-correlation-id' },
+        error: { type: 'CrmLookupError', status: null }
+      },
+      'No account found for SBI: ****-sbi'
+    )
   })
 
   test('throws error if createCaseWithOnlineSubmission returns error', async () => {

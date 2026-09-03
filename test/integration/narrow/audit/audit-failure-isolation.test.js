@@ -156,6 +156,7 @@ describe('Integration - audit failure is isolated from message processing', () =
       expect(payload.event.type).toBe('error')
       expect(payload.event.reason).toBe('transport')
       expect(payload.event.reference).toBe(CORRELATION_ID)
+      expect(payload.error).toEqual({ type: 'Error' })
       // Sanitised: no identifiers, tokens or payload fragments.
       const serialised = JSON.stringify(payload)
       expect(serialised).not.toContain(CRN)

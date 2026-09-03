@@ -87,10 +87,42 @@ describe('sendAuditEvent', () => {
           reason: 'schema_validation',
           reference: 'test-correlation-id'
         },
-        errors: ['"correlationid" is required']
+        audit: { validation: { fields: ['correlationid'] } }
       },
       'Failed to publish audit event'
     )
+  })
+
+  test('should log the failing field only, never a validation message that interpolates the value', async () => {
+    const { validateAuditEvent } = await import('@defra/fcp-audit-publisher')
+    const { sendAuditEvent } = await import('../../../../../src/messaging/outbound/audit/send-audit-event.js')
+
+    // string.pattern.base is the joi rule that echoes the offending value.
+    validateAuditEvent.mockReturnValueOnce({
+      valid: false,
+      errors: ['"audit.accounts.crn" with value "1050000001" fails to match the required pattern: /^\\d+$/']
+    })
+
+    await sendAuditEvent(mockAuditEvent)
+
+    const [loggedPayload] = mockLogger.error.mock.calls[0]
+    expect(loggedPayload.audit).toEqual({ validation: { fields: ['audit.accounts.crn'] } })
+    expect(JSON.stringify(loggedPayload)).not.toContain('1050000001')
+  })
+
+  test('should de-duplicate fields and fall back to "unknown" for an unparseable validation message', async () => {
+    const { validateAuditEvent } = await import('@defra/fcp-audit-publisher')
+    const { sendAuditEvent } = await import('../../../../../src/messaging/outbound/audit/send-audit-event.js')
+
+    validateAuditEvent.mockReturnValueOnce({
+      valid: false,
+      errors: ['"ip" is required', '"ip" must be a string', 'something unexpected']
+    })
+
+    await sendAuditEvent(mockAuditEvent)
+
+    const [loggedPayload] = mockLogger.error.mock.calls[0]
+    expect(loggedPayload.audit.validation.fields).toEqual(['ip', 'unknown'])
   })
 
   test('should not throw when publishAuditEvent rejects', async () => {
@@ -119,10 +151,37 @@ describe('sendAuditEvent', () => {
           outcome: 'failure',
           reason: 'transport',
           reference: 'test-correlation-id'
-        }
+        },
+        error: { type: 'Error' }
       },
       'Failed to publish audit event'
     )
+  })
+
+  test('should log the error class but not the error message, which can carry the topic ARN', async () => {
+    const { publishAuditEvent } = await import('@defra/fcp-audit-publisher')
+    const { sendAuditEvent } = await import('../../../../../src/messaging/outbound/audit/send-audit-event.js')
+
+    const configError = new TypeError('Invalid config: "sns.topicArn" must be a string')
+    publishAuditEvent.mockRejectedValueOnce(configError)
+
+    await sendAuditEvent(mockAuditEvent)
+
+    const [loggedPayload] = mockLogger.error.mock.calls[0]
+    expect(loggedPayload.error).toEqual({ type: 'TypeError' })
+    expect(JSON.stringify(loggedPayload)).not.toContain('topicArn')
+  })
+
+  test('should classify a thrown non-Error as UnknownError rather than omitting the class', async () => {
+    const { publishAuditEvent } = await import('@defra/fcp-audit-publisher')
+    const { sendAuditEvent } = await import('../../../../../src/messaging/outbound/audit/send-audit-event.js')
+
+    publishAuditEvent.mockRejectedValueOnce('a bare string rejection')
+
+    await sendAuditEvent(mockAuditEvent)
+
+    const [loggedPayload] = mockLogger.error.mock.calls[0]
+    expect(loggedPayload.error).toEqual({ type: 'UnknownError' })
   })
 
   test('should omit the reference field entirely when the event has no correlationid', async () => {
@@ -156,13 +215,6 @@ describe('emitAuditEvent', () => {
     vi.clearAllMocks()
   })
 
-  // emitAuditEvent's own catch branch (reason: 'unexpected') only triggers
-  // when sendAuditEvent itself throws, which cannot happen through the real
-  // implementation (it always catches internally). That branch exists as a
-  // backstop for call sites that mock sendAuditEvent directly and is
-  // exercised there instead — see the audit-isolation tests in
-  // crm-helpers.test.js, case.test.js and server.test.js.
-
   test('should publish successfully when sendAuditEvent resolves normally', async () => {
     const { publishAuditEvent, validateAuditEvent } = await import('@defra/fcp-audit-publisher')
     const { emitAuditEvent } = await import('../../../../../src/messaging/outbound/audit/send-audit-event.js')
@@ -172,5 +224,56 @@ describe('emitAuditEvent', () => {
     await emitAuditEvent(mockAuditEvent)
 
     expect(publishAuditEvent).toHaveBeenCalledWith(mockAuditEvent, expect.any(Object))
+  })
+
+  // The catch below is the single mechanism standing between an audit failure
+  // and the SQS message pipeline, so it is exercised directly rather than
+  // deferred to a call site. sendAuditEvent catches the publish itself, but
+  // not validateAuditEvent, which is third-party code called before its try
+  // block.
+  test('should not throw, and should log an unexpected reason, when validation itself throws', async () => {
+    const { validateAuditEvent } = await import('@defra/fcp-audit-publisher')
+    const { emitAuditEvent } = await import('../../../../../src/messaging/outbound/audit/send-audit-event.js')
+
+    validateAuditEvent.mockImplementationOnce(() => { throw new RangeError('validator exploded') })
+
+    await expect(emitAuditEvent(mockAuditEvent)).resolves.toBeUndefined()
+
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      {
+        event: {
+          type: 'error',
+          action: 'audit_publish_failed',
+          category: 'process',
+          outcome: 'failure',
+          reason: 'unexpected',
+          reference: 'test-correlation-id'
+        },
+        error: { type: 'RangeError' }
+      },
+      'Failed to publish audit event'
+    )
+  })
+
+  test('should omit the reference field when an unexpected failure has no correlationid to report', async () => {
+    const { validateAuditEvent } = await import('@defra/fcp-audit-publisher')
+    const { emitAuditEvent } = await import('../../../../../src/messaging/outbound/audit/send-audit-event.js')
+
+    validateAuditEvent.mockImplementationOnce(() => { throw new Error('validator exploded') })
+
+    await expect(emitAuditEvent({ audit: mockAuditEvent.audit })).resolves.toBeUndefined()
+
+    const [loggedPayload] = mockLogger.error.mock.calls[0]
+    expect(loggedPayload.event).not.toHaveProperty('reference')
+  })
+
+  test('should not throw even when the logger itself throws, the one failure that cannot be reported', async () => {
+    const { validateAuditEvent } = await import('@defra/fcp-audit-publisher')
+    const { emitAuditEvent } = await import('../../../../../src/messaging/outbound/audit/send-audit-event.js')
+
+    validateAuditEvent.mockImplementationOnce(() => { throw new Error('validator exploded') })
+    mockLogger.error.mockImplementationOnce(() => { throw new Error('logger exploded') })
+
+    await expect(emitAuditEvent(mockAuditEvent)).resolves.toBeUndefined()
   })
 })
