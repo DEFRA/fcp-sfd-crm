@@ -10,7 +10,7 @@ import { metricsCounter } from '../api/common/helpers/metrics.js'
 import { caseCreationMetrics, caseActions } from '../constants/case-creation-metrics.js'
 import { isTerminalFailure } from '../utils/is-terminal-failure.js'
 import { config } from '../config/index.js'
-import { triageEventTypes, triageFailureReasons } from '../constants/integration-inbound-triage.js'
+import { triageEventTypes, triageFailureReasons, triageSkipReasons } from '../constants/integration-inbound-triage.js'
 import { emitAuditEvent } from '../messaging/outbound/audit/send-audit-event.js'
 import { buildDocumentCreatedEvent } from '../messaging/outbound/audit/build-audit-event.js'
 
@@ -50,7 +50,7 @@ const logTriageWriteSkipped = ({ correlationId, fileId, caseType, failureReason 
       action: 'skip_triage_record',
       category: 'crm',
       outcome: 'unknown',
-      reason: triageFailureReasons.CONFIG_MISSING_OR_EMPTY,
+      reason: triageSkipReasons.CONFIG_MISSING_OR_EMPTY,
       reference: correlationId
     },
     tenant: {
@@ -66,7 +66,7 @@ const logTriageWriteSuccess = ({ correlationId, fileId, caseType, failureReason,
       action: 'write_triage_record',
       category: 'crm',
       outcome: 'success',
-      reason: created ? failureReason : triageFailureReasons.DUPLICATE_SUPPRESSED,
+      reason: created ? failureReason : triageSkipReasons.DUPLICATE_SUPPRESSED,
       reference: triageRecordId ?? correlationId
     },
     tenant: {
@@ -108,7 +108,7 @@ const reportInboundFailureForTriage = async ({ authToken, correlationId, fileId,
   }
 
   const processingEntity = getConfiguredTriageProcessingEntity()
-  if (!processingEntity) {
+  if (processingEntity === null || processingEntity === undefined) {
     logTriageWriteSkipped({ correlationId, fileId, caseType, failureReason })
     return
   }

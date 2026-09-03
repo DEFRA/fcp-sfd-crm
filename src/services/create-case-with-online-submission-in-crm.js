@@ -118,7 +118,7 @@ function throwCaseCreationError (caseError, { correlationId, fileId }) {
     caseError.retryable = true
     throw caseError
   }
-  const err = internal('Unable to create case with online submission activity in CRM', { cause: caseError })
+  const err = internal('Unable to create case with online submission activity in CRM')
   err.cause = caseError
   err.retryable = false
   err.retryMetadata = caseError?.retryMetadata ?? null

@@ -377,6 +377,18 @@ describe('case service', () => {
       expect(releaseCreator).toHaveBeenCalledWith('corr-1', 'file-1')
     })
 
+    test('should not triage a retryable failure even if it carries a mapped triage reason', async () => {
+      const retryableErr = new Error('CRM unavailable, will retry')
+      retryableErr.retryable = true
+      retryableErr.triageFailureReason = 'document_type_not_found'
+      createCaseWithOnlineSubmissionInCrm.mockRejectedValue(retryableErr)
+      mockConfigGet.mockReturnValue('927350008')
+
+      await createCase(validPayload).catch(() => {})
+
+      expect(createIntegrationInboundQueueRecord).not.toHaveBeenCalled()
+    })
+
     test('should log triage write skipped when a mapped terminal failure occurs but config is empty', async () => {
       const err = new Error('No document type metadata found for caseType: Document Upload')
       err.retryable = false
