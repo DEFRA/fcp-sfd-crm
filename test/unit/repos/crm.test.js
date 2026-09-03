@@ -1037,6 +1037,36 @@ describe('CRM repository', () => {
       expect(mockHttpClient).not.toHaveBeenCalled()
     })
 
+    test('should reject processingEntity with trailing non-numeric content and not call CRM', async () => {
+      const result = await createIntegrationInboundQueueRecord({
+        authToken: 'Bearer token',
+        correlationId: '77777777-8888-4999-8aaa-bbbbbbbbbbbb',
+        failureReason: 'document_type_not_found',
+        errorDetails: JSON.stringify({ correlationId: '77777777-8888-4999-8aaa-bbbbbbbbbbbb' }),
+        processingEntity: '927350008x'
+      })
+
+      expect(result.created).toBe(false)
+      expect(result.error).toBeInstanceOf(TypeError)
+      expect(result.error.message).toContain('Invalid processing entity value')
+      expect(mockHttpClient).not.toHaveBeenCalled()
+    })
+
+    test('should reject missing errorDetails and not call CRM', async () => {
+      const result = await createIntegrationInboundQueueRecord({
+        authToken: 'Bearer token',
+        correlationId: '77777777-8888-4999-8aaa-bbbbbbbbbbbb',
+        failureReason: 'document_type_not_found',
+        errorDetails: undefined,
+        processingEntity: '927350008'
+      })
+
+      expect(result.created).toBe(false)
+      expect(result.error).toBeInstanceOf(Error)
+      expect(result.error.message).toContain('Missing required triage errorDetails payload')
+      expect(mockHttpClient).not.toHaveBeenCalled()
+    })
+
     test('should reject missing key parts and not call CRM', async () => {
       const result = await createIntegrationInboundQueueRecord({
         authToken: 'Bearer token',

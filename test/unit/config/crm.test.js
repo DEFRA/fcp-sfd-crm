@@ -30,4 +30,31 @@ describe('src/config/crm.js', () => {
 
     expect(config.get('crm.integrationInboundFailureProcessingEntity')).toBe('927350008')
   })
+
+  test('accepts empty value to disable triage writes', () => {
+    process.env.CRM_INTEGRATION_INBOUND_FAILURE_PROCESSING_ENTITY = '   '
+
+    expect(() => {
+      const config = convict(crmConfig)
+      config.validate({ allowed: 'strict' })
+    }).not.toThrow()
+  })
+
+  test('rejects invalid non-integer processing entity value', () => {
+    process.env.CRM_INTEGRATION_INBOUND_FAILURE_PROCESSING_ENTITY = 'abc'
+
+    expect(() => {
+      const config = convict(crmConfig)
+      config.validate({ allowed: 'strict' })
+    }).toThrow('must be an integer option-set value or empty')
+  })
+
+  test('rejects trailing non-numeric content in processing entity value', () => {
+    process.env.CRM_INTEGRATION_INBOUND_FAILURE_PROCESSING_ENTITY = '927350008x'
+
+    expect(() => {
+      const config = convict(crmConfig)
+      config.validate({ allowed: 'strict' })
+    }).toThrow('must be an integer option-set value or empty')
+  })
 })

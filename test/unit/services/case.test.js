@@ -432,6 +432,20 @@ describe('case service', () => {
       )
     })
 
+    test('should classify tagged contact lookup failures for triage and write record when config is set', async () => {
+      const taggedContactErr = Boom.boomify(new Error('Contact ID not found'), { statusCode: 422 })
+      taggedContactErr.triageFailureReason = 'contact_not_found_for_crn'
+      createCaseWithOnlineSubmissionInCrm.mockRejectedValue(taggedContactErr)
+      mockConfigGet.mockReturnValue('927350008')
+
+      await createCase(validPayload).catch(() => {})
+
+      expect(createIntegrationInboundQueueRecord).toHaveBeenCalledWith(expect.objectContaining({
+        failureReason: 'contact_not_found_for_crn',
+        processingEntity: '927350008'
+      }))
+    })
+
     test('should trim processing entity config and log duplicate suppression when triage record already exists', async () => {
       const err = new Error('No document type metadata found for caseType: Document Upload')
       err.retryable = false
