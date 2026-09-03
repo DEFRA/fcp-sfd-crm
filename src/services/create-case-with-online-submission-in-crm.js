@@ -8,6 +8,7 @@ import {
 import { assertRequiredParams, ensureContactAndAccount } from './crm-helpers.js'
 import { crmEvents } from '../constants/events.js'
 import { publishReceivedEvent } from '../messaging/outbound/received-event/publish-received-event.js'
+import { triageFailureReasons } from '../constants/integration-inbound-triage.js'
 
 const { internal } = Boom
 const logger = createLogger()
@@ -68,6 +69,7 @@ export async function resolveDocumentTypeOrThrow (authToken, caseType) {
     const err = internal(`No document type metadata found for caseType: ${caseType}`)
     err.retryable = false
     err.retryMetadata = { category: NON_RETRYABLE, terminalReason: 'document_type_not_found' }
+    err.triageFailureReason = triageFailureReasons.DOCUMENT_TYPE_NOT_FOUND
     throw err
   }
 
@@ -117,8 +119,10 @@ function throwCaseCreationError (caseError, { correlationId, fileId }) {
     throw caseError
   }
   const err = internal('Unable to create case with online submission activity in CRM')
+  err.cause = caseError
   err.retryable = false
   err.retryMetadata = caseError?.retryMetadata ?? null
+  err.triageFailureReason = caseError?.triageFailureReason ?? null
   throw err
 }
 

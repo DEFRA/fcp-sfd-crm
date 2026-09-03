@@ -3,18 +3,138 @@ import { toTenantMessage } from '../logging/tenant-message.js'
 import { getCrmAuthToken } from '../auth/get-crm-auth-token.js'
 import { createCaseWithOnlineSubmissionInCrm, resolveDocumentTypeOrThrow } from './create-case-with-online-submission-in-crm.js'
 import { upsertCase, updateCaseId, markFileProcessed, claimCreatorRole, releaseCreator } from '../repos/cases.js'
-import { createMetadataForOnlineSubmission } from '../repos/crm.js'
+import { createMetadataForOnlineSubmission, createIntegrationInboundQueueRecord } from '../repos/crm.js'
 import { fetchOnlineSubmissionActivityIdOrThrow } from './crm-helpers.js'
 import { messages } from '../constants/messages.js'
 import { metricsCounter } from '../api/common/helpers/metrics.js'
 import { caseCreationMetrics, caseActions } from '../constants/case-creation-metrics.js'
 import { isTerminalFailure } from '../utils/is-terminal-failure.js'
+import { config } from '../config/index.js'
+import { triageEventTypes, triageSkipReasons } from '../constants/integration-inbound-triage.js'
 import { emitAuditEvent } from '../messaging/outbound/audit/send-audit-event.js'
 import { buildDocumentCreatedEvent } from '../messaging/outbound/audit/build-audit-event.js'
 
 const logger = createLogger()
 
 const ONE_HOUR_MS = 60 * 60 * 1000
+
+const classifyTriageFailureReason = (err) => err?.triageFailureReason ?? null
+
+const getConfiguredTriageProcessingEntity = () => {
+  const rawValue = config.get('crm.integrationInboundFailureProcessingEntity')
+  if (rawValue === null || rawValue === undefined) {
+    return null
+  }
+
+  const value = String(rawValue).trim()
+  if (!value.length) {
+    return null
+  }
+
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : null
+}
+
+const buildTriageErrorDetails = ({ correlationId, fileId, caseType, failureReason, errorMessage }) => JSON.stringify({
+  correlationId,
+  fileId,
+  caseType,
+  failureReason,
+  errorMessage
+})
+
+const logTriageWriteSkipped = ({ correlationId, fileId, caseType, failureReason }) => {
+  logger.warn({
+    event: {
+      type: triageEventTypes.WRITE_SKIPPED,
+      action: 'skip_triage_record',
+      category: 'crm',
+      outcome: 'unknown',
+      reason: triageSkipReasons.CONFIG_MISSING_OR_EMPTY,
+      reference: correlationId
+    },
+    tenant: {
+      message: toTenantMessage({ correlationId, fileId, caseType, failureReason })
+    }
+  }, 'Skipping CRM triage record write because processing entity config is missing or empty')
+}
+
+const logTriageWriteSuccess = ({ correlationId, fileId, caseType, failureReason, triageRecordId, created }) => {
+  logger.info({
+    event: {
+      type: triageEventTypes.WRITE_SUCCEEDED,
+      action: 'write_triage_record',
+      category: 'crm',
+      outcome: 'success',
+      reason: created ? failureReason : triageSkipReasons.DUPLICATE_SUPPRESSED,
+      reference: triageRecordId ?? correlationId
+    },
+    tenant: {
+      message: toTenantMessage({ correlationId, fileId, caseType, failureReason, triageRecordId })
+    }
+  }, 'CRM triage record write completed')
+}
+
+const logTriageWriteFailed = ({ correlationId, fileId, caseType, failureReason, triageRecordId, triageError }) => {
+  logger.error({
+    event: {
+      type: triageEventTypes.WRITE_FAILED,
+      action: 'write_triage_record',
+      category: 'crm',
+      outcome: 'failure',
+      reason: failureReason,
+      reference: triageRecordId ?? correlationId
+    },
+    error: {
+      message: triageError?.crmError ?? triageError?.message,
+      type: triageError?.name,
+      stack_trace: triageError?.stack,
+      code: triageError?.retryMetadata?.status ?? null
+    },
+    tenant: {
+      message: toTenantMessage({ correlationId, fileId, caseType, failureReason, triageRecordId })
+    }
+  }, 'CRM triage record write failed')
+}
+
+const reportInboundFailureForTriage = async ({ authToken, correlationId, fileId, caseType, err }) => {
+  if (!isTerminalFailure(err)) {
+    return
+  }
+
+  const failureReason = classifyTriageFailureReason(err)
+  if (!failureReason) {
+    return
+  }
+
+  const processingEntity = getConfiguredTriageProcessingEntity()
+  if (processingEntity === null || processingEntity === undefined) {
+    logTriageWriteSkipped({ correlationId, fileId, caseType, failureReason })
+    return
+  }
+
+  const { triageRecordId, created, error: triageError } = await createIntegrationInboundQueueRecord({
+    authToken,
+    correlationId,
+    fileId,
+    failureReason,
+    processingEntity,
+    errorDetails: buildTriageErrorDetails({
+      correlationId,
+      fileId,
+      caseType,
+      failureReason,
+      errorMessage: err?.cause?.message ?? err?.message
+    })
+  })
+
+  if (triageError) {
+    logTriageWriteFailed({ correlationId, fileId, caseType, failureReason, triageRecordId, triageError })
+    return
+  }
+
+  logTriageWriteSuccess({ correlationId, fileId, caseType, failureReason, triageRecordId, created })
+}
 
 function buildCaseData (crm, file) {
   return {
@@ -89,21 +209,27 @@ export async function createCase (payload) {
 
   const authToken = await getCrmAuthToken()
   const transformedPayload = transformPayload(payload)
+  const { caseType } = transformedPayload
 
-  if (prep.action === caseActions.CREATE) {
-    return createNewCase({ authToken, transformedPayload, correlationId, fileId, crn, sbi })
+  try {
+    if (prep.action === caseActions.CREATE) {
+      return await createNewCase({ authToken, transformedPayload, correlationId, fileId, crn, sbi })
+    }
+
+    return await addMetadataToExistingCase({
+      authToken,
+      caseId: prep.caseId,
+      correlationId,
+      file,
+      fileId,
+      caseType,
+      crn,
+      sbi
+    })
+  } catch (err) {
+    await reportInboundFailureForTriage({ authToken, correlationId, fileId, caseType, err })
+    throw err
   }
-
-  return addMetadataToExistingCase({
-    authToken,
-    caseId: prep.caseId,
-    correlationId,
-    file,
-    fileId,
-    caseType: transformedPayload.caseType,
-    crn,
-    sbi
-  })
 }
 
 async function prepareCase ({ correlationId, fileId }) {

@@ -10,6 +10,7 @@ import { messages } from '../constants/messages.js'
 import { emitAuditEvent } from '../messaging/outbound/audit/send-audit-event.js'
 import { buildPersonReadEvent, buildBusinessReadEvent } from '../messaging/outbound/audit/build-audit-event.js'
 import { auditStatuses, auditFailureReasons } from '../constants/audit.js'
+import { triageFailureReasons } from '../constants/integration-inbound-triage.js'
 
 const logger = createLogger()
 const { constants: httpConstants } = http2
@@ -58,9 +59,10 @@ const ACCOUNT_NOT_FOUND = 'Account ID not found'
  * @param {string} params.identifierLabel - "CRN" or "SBI"
  * @param {string} params.masked - the masked identifier, safe to log
  * @param {string} params.notFoundMessage - message for the 422
+ * @param {string} params.triageFailureReason - mapped terminal triage reason
  * @throws always
  */
-const throwLookupFailure = ({ error, correlationId, subject, identifierLabel, masked, notFoundMessage }) => {
+const throwLookupFailure = ({ error, correlationId, subject, identifierLabel, masked, notFoundMessage, triageFailureReason }) => {
   if (error.retryMetadata?.category === 'retryable') {
     const retryableErr = new Error(`Retryable error looking up ${subject} for ${identifierLabel}: ${masked}`)
     retryableErr.retryable = true
@@ -75,7 +77,9 @@ const throwLookupFailure = ({ error, correlationId, subject, identifierLabel, ma
     error: { type: error.name ?? 'CrmLookupError', status: error.retryMetadata?.status ?? null }
   }, `No ${subject} found for ${identifierLabel}: ${masked}`)
 
-  throw unprocessableEntity(notFoundMessage)
+  const err = unprocessableEntity(notFoundMessage)
+  err.triageFailureReason = triageFailureReason
+  throw err
 }
 
 /**
@@ -88,12 +92,15 @@ const throwLookupFailure = ({ error, correlationId, subject, identifierLabel, ma
  * @param {string} params.identifierLabel - "CRN" or "SBI"
  * @param {string} params.masked - the masked identifier, safe to log
  * @param {string} params.notFoundMessage - message for the 422
+ * @param {string} params.triageFailureReason - mapped terminal triage reason
  * @throws always
  */
-const throwNotFound = async ({ event, correlationId, subject, identifierLabel, masked, notFoundMessage }) => {
+const throwNotFound = async ({ event, correlationId, subject, identifierLabel, masked, notFoundMessage, triageFailureReason }) => {
   logger.error({ transaction: { id: correlationId } }, `No ${subject} found for ${identifierLabel}: ${masked}`)
   await emitAuditEvent(event)
-  throw unprocessableEntity(notFoundMessage)
+  const err = unprocessableEntity(notFoundMessage)
+  err.triageFailureReason = triageFailureReason
+  throw err
 }
 
 /**
@@ -127,7 +134,13 @@ export async function ensureContactAndAccount (authToken, crn, sbi, { correlatio
 
   const { contactId, error: contactError } = await getContactIdFromCrn(authToken, crn)
 
-  const contact = { subject: 'contact', identifierLabel: 'CRN', masked: maskIdentifier(crn), notFoundMessage: CONTACT_NOT_FOUND }
+  const contact = {
+    subject: 'contact',
+    identifierLabel: 'CRN',
+    masked: maskIdentifier(crn),
+    notFoundMessage: CONTACT_NOT_FOUND,
+    triageFailureReason: triageFailureReasons.CONTACT_NOT_FOUND_FOR_CRN
+  }
 
   if (contactError) {
     throwLookupFailure({ error: contactError, correlationId, ...contact })
@@ -150,7 +163,13 @@ export async function ensureContactAndAccount (authToken, crn, sbi, { correlatio
 
   const { accountId, error: accountError } = await getAccountIdFromSbi(authToken, sbi)
 
-  const account = { subject: 'account', identifierLabel: 'SBI', masked: maskIdentifier(sbi), notFoundMessage: ACCOUNT_NOT_FOUND }
+  const account = {
+    subject: 'account',
+    identifierLabel: 'SBI',
+    masked: maskIdentifier(sbi),
+    notFoundMessage: ACCOUNT_NOT_FOUND,
+    triageFailureReason: triageFailureReasons.ACCOUNT_NOT_FOUND_FOR_SBI
+  }
 
   if (accountError) {
     throwLookupFailure({ error: accountError, correlationId, ...account })

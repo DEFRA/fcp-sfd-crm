@@ -17,6 +17,22 @@ export const crmConfig = {
       format: Boolean,
       default: false,
       env: 'CRM_WRITE_FILES_IN_SUBMISSION'
+    },
+    integrationInboundFailureProcessingEntity: {
+      doc: 'When set, enable CRM triage writes for terminal inbound failures and bind this value to rpa_processingentity.',
+      format: (value) => {
+        const trimmed = String(value).trim()
+        if (trimmed === '') {
+          return
+        }
+
+        const parsed = Number(trimmed)
+        if (!Number.isSafeInteger(parsed)) {
+          throw new TypeError('must be an integer option-set value or empty')
+        }
+      },
+      default: '',
+      env: 'CRM_INTEGRATION_INBOUND_FAILURE_PROCESSING_ENTITY'
     }
   }
 }

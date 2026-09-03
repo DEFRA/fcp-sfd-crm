@@ -43,6 +43,18 @@ export const retryConfig = {
         default: 5000,
         env: 'CRM_AUTH_HTTP_TIMEOUT_MS'
       },
+      triageTimeoutMs: {
+        doc: 'Per-attempt timeout in milliseconds for best-effort CRM triage writes',
+        format: Number,
+        default: 5000,
+        env: 'CRM_TRIAGE_HTTP_TIMEOUT_MS'
+      },
+      triageMaxAttempts: {
+        doc: 'Maximum total HTTP attempts for best-effort CRM triage writes',
+        format: Number,
+        default: 1,
+        env: 'CRM_TRIAGE_HTTP_RETRY_MAX_ATTEMPTS'
+      },
       unknownMaxAttempts: {
         doc: 'Maximum total attempts for unknown errors',
         format: Number,

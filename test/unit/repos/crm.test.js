@@ -2,6 +2,7 @@ import { describe, test, expect, vi, beforeEach } from 'vitest'
 import { HttpError } from '@fetchkit/ffetch'
 
 const mockHttpClient = vi.fn()
+const mockTriageHttpClient = vi.fn()
 const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
 const mockConfigGet = vi.fn()
 const configWith = (writeFilesInSubmission) => (key) => {
@@ -12,7 +13,8 @@ const configWith = (writeFilesInSubmission) => (key) => {
 }
 
 vi.mock('../../../src/http/client.js', () => ({
-  httpClient: mockHttpClient
+  httpClient: mockHttpClient,
+  triageHttpClient: mockTriageHttpClient
 }))
 
 vi.mock('../../../src/logging/logger.js', () => ({
@@ -27,7 +29,17 @@ vi.mock('../../../src/config/index.js', () => ({
 }))
 
 // Import after mocks
-const { getContactIdFromCrn, getAccountIdFromSbi, createCaseWithOnlineSubmission, getDocumentTypeMetadata, deriveMetadataRecordId, deriveCaseRecordId, deriveOnlineSubmissionRecordId } = await import('../../../src/repos/crm.js')
+const {
+  getContactIdFromCrn,
+  getAccountIdFromSbi,
+  createCaseWithOnlineSubmission,
+  getDocumentTypeMetadata,
+  createIntegrationInboundQueueRecord,
+  deriveMetadataRecordId,
+  deriveCaseRecordId,
+  deriveOnlineSubmissionRecordId,
+  deriveIntegrationInboundQueueRecordId
+} = await import('../../../src/repos/crm.js')
 
 const DOC_TYPE_ID = '4e88916b-aae2-ee11-904c-000d3adc1ec9'
 const ACTIVITY_ID = '84c190b8-5d96-f111-8076-000d3ada3978'
@@ -374,6 +386,7 @@ describe('CRM repository', () => {
         expect(caseId).toBeNull()
         expect(error).toBeInstanceOf(Error)
         expect(error.message).toBe(`Incomplete documentTypeMetadata: ${field} required`)
+        expect(error.triageFailureReason).toBe('document_type_metadata_incomplete')
         expect(mockHttpClient).not.toHaveBeenCalled()
       }
     )
@@ -962,6 +975,136 @@ describe('CRM repository', () => {
         teamRoutingValue: 'first-team',
         documentTypesId: 'first-id'
       })
+    })
+  })
+
+  describe('createIntegrationInboundQueueRecord', () => {
+    test('should create triage record via conditional upsert and include processing fields', async () => {
+      mockTriageHttpClient.mockResolvedValue({ ok: true, status: 204 })
+
+      const result = await createIntegrationInboundQueueRecord({
+        authToken: 'Bearer token',
+        correlationId: '77777777-8888-4999-8aaa-bbbbbbbbbbbb',
+        fileId: 'cccccccc-dddd-4eee-8fff-000000000000',
+        failureReason: 'document_type_not_found',
+        errorDetails: JSON.stringify({ correlationId: '77777777-8888-4999-8aaa-bbbbbbbbbbbb' }),
+        processingEntity: 927350008
+      })
+
+      expect(result.error).toBeNull()
+      expect(result.created).toBe(true)
+      expect(result.triageRecordId).toBe(deriveIntegrationInboundQueueRecordId('77777777-8888-4999-8aaa-bbbbbbbbbbbb', 'cccccccc-dddd-4eee-8fff-000000000000', 'document_type_not_found'))
+
+      const [url, options] = mockTriageHttpClient.mock.calls[0]
+      expect(url).toBe(`https://crm.example.com/api/rpa_integrationinboundqueues(${result.triageRecordId})`)
+      expect(options.method).toBe('PATCH')
+      expect(options.headers['If-None-Match']).toBe('*')
+
+      const body = JSON.parse(options.body)
+      expect(body.rpa_processingresult).toBe(927350001)
+      expect(body.rpa_processingentity).toBe(927350008)
+      expect(body.rpa_name).toContain('SFD doc upload failure')
+      expect(mockHttpClient).not.toHaveBeenCalled()
+    })
+
+    test('should report created=false when a duplicate write is suppressed by 412', async () => {
+      const httpError = new HttpError('HTTP error: 412 Precondition Failed', {
+        status: 412,
+        text: vi.fn().mockResolvedValue('')
+      })
+      mockTriageHttpClient.mockRejectedValue(httpError)
+
+      const result = await createIntegrationInboundQueueRecord({
+        authToken: 'Bearer token',
+        correlationId: '77777777-8888-4999-8aaa-bbbbbbbbbbbb',
+        fileId: 'cccccccc-dddd-4eee-8fff-000000000000',
+        failureReason: 'document_type_not_found',
+        errorDetails: JSON.stringify({ correlationId: '77777777-8888-4999-8aaa-bbbbbbbbbbbb' }),
+        processingEntity: 927350008
+      })
+
+      expect(result.error).toBeNull()
+      expect(result.created).toBe(false)
+      expect(result.triageRecordId).toBe(deriveIntegrationInboundQueueRecordId('77777777-8888-4999-8aaa-bbbbbbbbbbbb', 'cccccccc-dddd-4eee-8fff-000000000000', 'document_type_not_found'))
+      expect(mockHttpClient).not.toHaveBeenCalled()
+    })
+
+    test('should derive different triage ids for different files with the same failure reason', () => {
+      const idA = deriveIntegrationInboundQueueRecordId(
+        '77777777-8888-4999-8aaa-bbbbbbbbbbbb',
+        'cccccccc-dddd-4eee-8fff-000000000000',
+        'document_type_not_found'
+      )
+      const idB = deriveIntegrationInboundQueueRecordId(
+        '77777777-8888-4999-8aaa-bbbbbbbbbbbb',
+        '11111111-2222-4333-8444-555555555555',
+        'document_type_not_found'
+      )
+
+      expect(idA).not.toBe(idB)
+    })
+
+    test('should reject invalid processingEntity and not call CRM', async () => {
+      const result = await createIntegrationInboundQueueRecord({
+        authToken: 'Bearer token',
+        correlationId: '77777777-8888-4999-8aaa-bbbbbbbbbbbb',
+        fileId: 'cccccccc-dddd-4eee-8fff-000000000000',
+        failureReason: 'document_type_not_found',
+        errorDetails: JSON.stringify({ correlationId: '77777777-8888-4999-8aaa-bbbbbbbbbbbb' }),
+        processingEntity: 'not-a-number'
+      })
+
+      expect(result.created).toBe(false)
+      expect(result.error).toBeInstanceOf(Error)
+      expect(result.error.message).toContain('Invalid processing entity value')
+      expect(mockTriageHttpClient).not.toHaveBeenCalled()
+    })
+
+    test('should reject processingEntity with trailing non-numeric content and not call CRM', async () => {
+      const result = await createIntegrationInboundQueueRecord({
+        authToken: 'Bearer token',
+        correlationId: '77777777-8888-4999-8aaa-bbbbbbbbbbbb',
+        fileId: 'cccccccc-dddd-4eee-8fff-000000000000',
+        failureReason: 'document_type_not_found',
+        errorDetails: JSON.stringify({ correlationId: '77777777-8888-4999-8aaa-bbbbbbbbbbbb' }),
+        processingEntity: '927350008x'
+      })
+
+      expect(result.created).toBe(false)
+      expect(result.error).toBeInstanceOf(TypeError)
+      expect(result.error.message).toContain('Invalid processing entity value')
+      expect(mockTriageHttpClient).not.toHaveBeenCalled()
+    })
+
+    test('should reject missing errorDetails and not call CRM', async () => {
+      const result = await createIntegrationInboundQueueRecord({
+        authToken: 'Bearer token',
+        correlationId: '77777777-8888-4999-8aaa-bbbbbbbbbbbb',
+        fileId: 'cccccccc-dddd-4eee-8fff-000000000000',
+        failureReason: 'document_type_not_found',
+        errorDetails: undefined,
+        processingEntity: 927350008
+      })
+
+      expect(result.created).toBe(false)
+      expect(result.error).toBeInstanceOf(Error)
+      expect(result.error.message).toContain('Missing required triage errorDetails payload')
+      expect(mockTriageHttpClient).not.toHaveBeenCalled()
+    })
+
+    test('should reject missing key parts and not call CRM', async () => {
+      const result = await createIntegrationInboundQueueRecord({
+        authToken: 'Bearer token',
+        correlationId: null,
+        fileId: null,
+        failureReason: null,
+        errorDetails: 'any'
+      })
+
+      expect(result.created).toBe(false)
+      expect(result.error).toBeInstanceOf(Error)
+      expect(result.error.message).toContain('Cannot derive triage key')
+      expect(mockTriageHttpClient).not.toHaveBeenCalled()
     })
   })
 })

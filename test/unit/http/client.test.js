@@ -9,7 +9,9 @@ const { mockConfigGet, configWith } = vi.hoisted(() => {
   const defaultRetryConfig = {
     'retry.http.timeoutMs': 5000,
     'retry.http.authTimeoutMs': 2000,
+    'retry.http.triageTimeoutMs': 1000,
     'retry.http.maxAttempts': 3,
+    'retry.http.triageMaxAttempts': 1,
     'retry.http.unknownMaxAttempts': 2,
     'retry.http.baseDelayMs': 0, // no real delay in tests
     'retry.http.backoffMultiplier': 1,
