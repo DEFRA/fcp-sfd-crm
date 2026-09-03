@@ -380,7 +380,7 @@ describe('case service', () => {
     test('should log triage write skipped when a mapped terminal failure occurs but config is empty', async () => {
       const err = new Error('No document type metadata found for caseType: Document Upload')
       err.retryable = false
-      err.retryMetadata = { category: 'non-retryable', terminalReason: 'document_type_not_found' }
+      err.triageFailureReason = 'document_type_not_found'
       createCaseWithOnlineSubmissionInCrm.mockRejectedValue(err)
 
       await createCase(validPayload).catch(() => {})
@@ -401,7 +401,7 @@ describe('case service', () => {
     test('should write triage record when config is set and failure reason is mapped', async () => {
       const err = new Error('No document type metadata found for caseType: Document Upload')
       err.retryable = false
-      err.retryMetadata = { category: 'non-retryable', terminalReason: 'document_type_not_found' }
+      err.triageFailureReason = 'document_type_not_found'
       createCaseWithOnlineSubmissionInCrm.mockRejectedValue(err)
       mockConfigGet.mockReturnValue('927350008')
       createIntegrationInboundQueueRecord.mockResolvedValue({
@@ -449,7 +449,7 @@ describe('case service', () => {
     test('should trim processing entity config and log duplicate suppression when triage record already exists', async () => {
       const err = new Error('No document type metadata found for caseType: Document Upload')
       err.retryable = false
-      err.retryMetadata = { category: 'non-retryable', terminalReason: 'document_type_not_found' }
+      err.triageFailureReason = 'document_type_not_found'
       createCaseWithOnlineSubmissionInCrm.mockRejectedValue(err)
       mockConfigGet.mockReturnValue(' 927350008 ')
       createIntegrationInboundQueueRecord.mockResolvedValue({
@@ -494,7 +494,7 @@ describe('case service', () => {
     test('should log triage write failed and preserve original terminal behavior when triage write errors', async () => {
       const err = new Error('No document type metadata found for caseType: Document Upload')
       err.retryable = false
-      err.retryMetadata = { category: 'non-retryable', terminalReason: 'document_type_not_found' }
+      err.triageFailureReason = 'document_type_not_found'
       createCaseWithOnlineSubmissionInCrm.mockRejectedValue(err)
       mockConfigGet.mockReturnValue('927350008')
 

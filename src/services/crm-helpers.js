@@ -73,7 +73,9 @@ export async function ensureContactAndAccount (authToken, crn, sbi, { correlatio
       throw err
     }
     logger.error(`No contact found for CRN: ${maskCrn(crn)}, error: ${contactError}`)
-    throw unprocessableEntity('Contact ID not found')
+    const err = unprocessableEntity('Contact ID not found')
+    err.triageFailureReason = triageFailureReasons.CONTACT_NOT_FOUND_FOR_CRN
+    throw err
   }
 
   if (!contactId) {
@@ -101,7 +103,9 @@ export async function ensureContactAndAccount (authToken, crn, sbi, { correlatio
       throw err
     }
     logger.error(`No account found for SBI: ${sbi}, error: ${accountError}`)
-    throw unprocessableEntity('Account ID not found')
+    const err = unprocessableEntity('Account ID not found')
+    err.triageFailureReason = triageFailureReasons.ACCOUNT_NOT_FOUND_FOR_SBI
+    throw err
   }
 
   if (!accountId) {

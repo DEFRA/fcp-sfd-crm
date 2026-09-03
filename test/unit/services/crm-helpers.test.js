@@ -142,6 +142,7 @@ describe('ensureContactAndAccount', () => {
     expect(thrown.isBoom).toBe(true)
     expect(thrown.output.statusCode).toBe(422)
     expect(thrown.retryable).toBeUndefined()
+    expect(thrown.triageFailureReason).toBe('contact_not_found_for_crn')
     expect(mockEmitAuditEvent).not.toHaveBeenCalled()
   })
 
@@ -189,6 +190,7 @@ describe('ensureContactAndAccount', () => {
 
     expect(thrown.isBoom).toBe(true)
     expect(thrown.output.statusCode).toBe(422)
+    expect(thrown.triageFailureReason).toBe('account_not_found_for_sbi')
     expect(mockEmitAuditEvent).toHaveBeenCalledTimes(1) // only the person/read success event
   })
 

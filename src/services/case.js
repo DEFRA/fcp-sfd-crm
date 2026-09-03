@@ -18,26 +18,7 @@ const logger = createLogger()
 
 const ONE_HOUR_MS = 60 * 60 * 1000
 
-const triageReasonFromTerminalReason = {
-  document_type_not_found: triageFailureReasons.DOCUMENT_TYPE_NOT_FOUND,
-  [triageFailureReasons.DOCUMENT_TYPE_METADATA_INCOMPLETE]: triageFailureReasons.DOCUMENT_TYPE_METADATA_INCOMPLETE
-}
-
-const classifyTriageFailureReason = (err) => {
-  if (err?.triageFailureReason) {
-    return err.triageFailureReason
-  }
-
-  if (err?.message === 'Contact ID not found') {
-    return triageFailureReasons.CONTACT_NOT_FOUND_FOR_CRN
-  }
-
-  if (err?.message === 'Account ID not found') {
-    return triageFailureReasons.ACCOUNT_NOT_FOUND_FOR_SBI
-  }
-
-  return triageReasonFromTerminalReason[err?.retryMetadata?.terminalReason] ?? null
-}
+const classifyTriageFailureReason = (err) => err?.triageFailureReason ?? null
 
 const getConfiguredTriageProcessingEntity = () => {
   const rawValue = config.get('crm.integrationInboundFailureProcessingEntity')
