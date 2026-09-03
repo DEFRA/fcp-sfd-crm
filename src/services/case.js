@@ -27,7 +27,12 @@ const getConfiguredTriageProcessingEntity = () => {
   }
 
   const value = String(rawValue).trim()
-  return value.length ? value : null
+  if (!value.length) {
+    return null
+  }
+
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : null
 }
 
 const buildTriageErrorDetails = ({ correlationId, fileId, caseType, failureReason, errorMessage }) => JSON.stringify({
@@ -111,6 +116,7 @@ const reportInboundFailureForTriage = async ({ authToken, correlationId, fileId,
   const { triageRecordId, created, error: triageError } = await createIntegrationInboundQueueRecord({
     authToken,
     correlationId,
+    fileId,
     failureReason,
     processingEntity,
     errorDetails: buildTriageErrorDetails({
@@ -118,7 +124,7 @@ const reportInboundFailureForTriage = async ({ authToken, correlationId, fileId,
       fileId,
       caseType,
       failureReason,
-      errorMessage: err?.message
+      errorMessage: err?.cause?.message ?? err?.message
     })
   })
 

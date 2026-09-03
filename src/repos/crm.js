@@ -2,10 +2,11 @@ import { randomBytes, createHash } from 'node:crypto'
 import Joi from 'joi'
 import { HttpError } from '@fetchkit/ffetch'
 import { config } from '../config/index.js'
-import { httpClient } from '../http/client.js'
+import { httpClient, triageHttpClient } from '../http/client.js'
 import { createLogger } from '../logging/logger.js'
 import { toTenantMessage } from '../logging/tenant-message.js'
 import { buildChangesetRequest, parseBatchResponse } from './dataverse-batch.js'
+import { triageFailureReasons } from '../constants/integration-inbound-triage.js'
 
 const logger = createLogger()
 
@@ -248,7 +249,19 @@ const deriveCaseRecordId = (correlationId) => deriveRecordId('incident', correla
  * @returns {string} A deterministic RFC 4122 version 4 formatted GUID.
  */
 const deriveOnlineSubmissionRecordId = (correlationId) => deriveRecordId('onlinesubmission', correlationId)
-const deriveIntegrationInboundQueueRecordId = (correlationId, failureReason) => deriveRecordId('integrationinboundqueue', correlationId, failureReason)
+/**
+ * Derives a stable GUID-formatted key for a triage record in
+ * rpa_integrationinboundqueue. Keyed on correlationId + fileId +
+ * failureReason: this keeps retries of the same failure idempotent while still
+ * allowing different files, and different terminal reasons for the same file,
+ * to be recorded separately.
+ *
+ * @param {string} correlationId - GUID identifying the submission.
+ * @param {string} fileId - GUID identifying the file within that submission.
+ * @param {string} failureReason - Canonical triage classification reason.
+ * @returns {string} A deterministic RFC 4122 version 4 formatted GUID.
+ */
+const deriveIntegrationInboundQueueRecordId = (correlationId, fileId, failureReason) => deriveRecordId('integrationinboundqueue', correlationId, fileId, failureReason)
 
 /**
  * Writes a record as a conditional upsert, addressed by a derived key on its
@@ -266,9 +279,9 @@ const deriveIntegrationInboundQueueRecordId = (correlationId, failureReason) => 
  * @returns {Promise<boolean>} true when the record was created, false when an
  * identical write had already created it.
  */
-const upsertRecord = async (endpoint, authToken, payload) => {
+const upsertRecord = async (endpoint, authToken, payload, client = httpClient) => {
   try {
-    await httpClient(endpoint, {
+    await client(endpoint, {
       method: 'PATCH',
       headers: {
         Authorization: authToken,
@@ -361,18 +374,18 @@ const buildTriageRecordName = (correlationId) => (
 )
 
 const createIntegrationInboundQueueRecord = async (request) => {
-  const { authToken, correlationId, failureReason, errorDetails, processingEntity } = request
+  const { authToken, correlationId, fileId, failureReason, errorDetails, processingEntity } = request
 
   try {
-    if (!correlationId || !failureReason) {
-      throw new Error(`Cannot derive triage key: correlationId and failureReason are required, got '${correlationId}' and '${failureReason}'`)
+    if (!correlationId || !fileId || !failureReason) {
+      throw new Error(`Cannot derive triage key: correlationId, fileId and failureReason are required, got '${correlationId}', '${fileId}' and '${failureReason}'`)
     }
 
     if (!errorDetails) {
       throw new Error('Missing required triage errorDetails payload')
     }
 
-    const triageRecordId = deriveIntegrationInboundQueueRecordId(correlationId, failureReason)
+    const triageRecordId = deriveIntegrationInboundQueueRecordId(correlationId, fileId, failureReason)
     const baseUrl = getBaseUrl()
 
     const payload = {
@@ -381,16 +394,15 @@ const createIntegrationInboundQueueRecord = async (request) => {
       rpa_processingresult: TRIAGE_PROCESSING_RESULT_FAILED
     }
 
-    if (processingEntity !== null && processingEntity !== undefined && String(processingEntity).trim() !== '') {
-      const parsedProcessingEntity = Number(String(processingEntity).trim())
-      if (!Number.isSafeInteger(parsedProcessingEntity)) {
+    if (processingEntity !== null && processingEntity !== undefined) {
+      if (!Number.isSafeInteger(processingEntity)) {
         throw new TypeError(`Invalid processing entity value: '${processingEntity}'`)
       }
-      payload.rpa_processingentity = parsedProcessingEntity
+      payload.rpa_processingentity = processingEntity
     }
 
     const endpoint = `${baseUrl}/rpa_integrationinboundqueues(${triageRecordId})`
-    const created = await upsertRecord(endpoint, authToken, payload)
+    const created = await upsertRecord(endpoint, authToken, payload, triageHttpClient)
 
     return {
       triageRecordId,
@@ -455,7 +467,9 @@ const buildCaseChangeset = ({ correlationId, fileId, caseData, onlineSubmissionA
     .filter(([, value]) => !value)
     .map(([key]) => key)
   if (missing.length) {
-    throw new Error(`Incomplete documentTypeMetadata: ${missing.join(', ')} required`)
+    const err = new Error(`Incomplete documentTypeMetadata: ${missing.join(', ')} required`)
+    err.triageFailureReason = triageFailureReasons.DOCUMENT_TYPE_METADATA_INCOMPLETE
+    throw err
   }
 
   const caseId = deriveCaseRecordId(correlationId)

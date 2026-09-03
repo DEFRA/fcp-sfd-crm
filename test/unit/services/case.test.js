@@ -402,7 +402,11 @@ describe('case service', () => {
       const err = new Error('No document type metadata found for caseType: Document Upload')
       err.retryable = false
       err.triageFailureReason = 'document_type_not_found'
-      createCaseWithOnlineSubmissionInCrm.mockRejectedValue(err)
+      const wrappedErr = new Error('Unable to create case with online submission activity in CRM')
+      wrappedErr.retryable = false
+      wrappedErr.triageFailureReason = 'document_type_not_found'
+      wrappedErr.cause = err
+      createCaseWithOnlineSubmissionInCrm.mockRejectedValue(wrappedErr)
       mockConfigGet.mockReturnValue('927350008')
       createIntegrationInboundQueueRecord.mockResolvedValue({
         triageRecordId: 'e5f31d07-a1c6-4067-a8ce-7695e1453d96',
@@ -416,7 +420,11 @@ describe('case service', () => {
         authToken: 'mock-token',
         correlationId: 'corr-1',
         failureReason: 'document_type_not_found',
-        processingEntity: '927350008'
+        processingEntity: 927350008
+      }))
+      const triageWriteRequest = createIntegrationInboundQueueRecord.mock.calls[0][0]
+      expect(JSON.parse(triageWriteRequest.errorDetails)).toEqual(expect.objectContaining({
+        errorMessage: 'No document type metadata found for caseType: Document Upload'
       }))
       expect(mockLogger.info).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -442,7 +450,7 @@ describe('case service', () => {
 
       expect(createIntegrationInboundQueueRecord).toHaveBeenCalledWith(expect.objectContaining({
         failureReason: 'contact_not_found_for_crn',
-        processingEntity: '927350008'
+        processingEntity: 927350008
       }))
     })
 
@@ -461,7 +469,7 @@ describe('case service', () => {
       await createCase(validPayload).catch(() => {})
 
       expect(createIntegrationInboundQueueRecord).toHaveBeenCalledWith(expect.objectContaining({
-        processingEntity: '927350008'
+        processingEntity: 927350008
       }))
       expect(mockLogger.info).toHaveBeenCalledWith(
         expect.objectContaining({

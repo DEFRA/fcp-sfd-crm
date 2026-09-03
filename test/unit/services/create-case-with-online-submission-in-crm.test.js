@@ -389,7 +389,7 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     )
   })
 
-  test('marks incomplete document type metadata failures for terminal triage reporting', async () => {
+  test('forwards triage failure reason for terminal triage reporting', async () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: 'mock-contact-id' })
     getAccountIdFromSbi.mockResolvedValue({ accountId: 'mock-account-id' })
     getDocumentTypeMetadata.mockResolvedValue({
@@ -397,7 +397,12 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
       error: null
     })
 
-    const incompleteMetadataError = new Error('Incomplete documentTypeMetadata: teamRoutingValue required')
+    const incompleteMetadataError = new Error('anything')
+    incompleteMetadataError.triageFailureReason = 'document_type_metadata_incomplete'
+    incompleteMetadataError.retryMetadata = {
+      category: 'non-retryable',
+      terminalReason: 'document_type_metadata_incomplete'
+    }
     createCaseWithOnlineSubmission.mockResolvedValue({ caseId: null, error: incompleteMetadataError })
 
     await expect(createCaseWithOnlineSubmissionInCrm({

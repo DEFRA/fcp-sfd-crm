@@ -93,12 +93,6 @@
     },
     "neostandard": {
       "find-up": "5.0.0"
-    },
-    "@defra/fcp-audit-publisher": {
-      "joi": "18.2.5"
-    },
-    "@defra/hapi-auth-oidc": {
-      "joi": "18.2.5"
     }
   }
 }

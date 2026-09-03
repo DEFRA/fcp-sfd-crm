@@ -213,7 +213,7 @@ const onCompleteHook = (request, response, error, retryStateByRequest) => {
   }
 }
 
-const shouldRetryHook = (ctx, retryStateByRequest) => {
+const shouldRetryHook = (ctx, retryStateByRequest, retryLimits) => {
   if (!isRetryDecisionFailure(ctx)) {
     return false
   }
@@ -222,8 +222,8 @@ const shouldRetryHook = (ctx, retryStateByRequest) => {
   const category = toMetadataCategory(cls)
   const terminalReason = buildTerminalReason(ctx)
   const limit = cls === 'unknown'
-    ? config.get('retry.http.unknownMaxAttempts')
-    : config.get('retry.http.maxAttempts')
+    ? retryLimits.unknownMaxAttempts
+    : retryLimits.maxAttempts
   const willRetry = cls !== 'nonRetryable' && ctx.attempt < limit
 
   const existingState = retryStateByRequest.get(ctx.request) ?? buildRetryState()
@@ -275,30 +275,41 @@ const computeRetryDelay = (ctx) => {
   )
 }
 
-const makeClient = (timeout) => {
+const makeClient = (timeout, retryLimits) => {
   const retryStateByRequest = new Map()
 
   return createClient({
     timeout,
-    retries: Math.max(
-      config.get('retry.http.maxAttempts'),
-      config.get('retry.http.unknownMaxAttempts')
-    ) - 1,
+    retries: Math.max(retryLimits.maxAttempts, retryLimits.unknownMaxAttempts) - 1,
     throwOnHttpError: true,
     hooks: {
       before: (request) => beforeHook(request, retryStateByRequest),
       onComplete: (request, response, error) => onCompleteHook(request, response, error, retryStateByRequest)
     },
-    shouldRetry: (ctx) => shouldRetryHook(ctx, retryStateByRequest),
+    shouldRetry: (ctx) => shouldRetryHook(ctx, retryStateByRequest, retryLimits),
     retryDelay: computeRetryDelay
   })
 }
 
+const defaultRetryLimits = {
+  maxAttempts: config.get('retry.http.maxAttempts'),
+  unknownMaxAttempts: config.get('retry.http.unknownMaxAttempts')
+}
+
+const triageMaxAttempts = config.get('retry.http.triageMaxAttempts')
+const triageRetryLimits = {
+  maxAttempts: triageMaxAttempts,
+  unknownMaxAttempts: triageMaxAttempts
+}
+
 // Standard CRM API client
-export const httpClient = makeClient(config.get('retry.http.timeoutMs'))
+export const httpClient = makeClient(config.get('retry.http.timeoutMs'), defaultRetryLimits)
 
 // Shorter timeout for auth/token requests
-export const authHttpClient = makeClient(config.get('retry.http.authTimeoutMs'))
+export const authHttpClient = makeClient(config.get('retry.http.authTimeoutMs'), defaultRetryLimits)
+
+// Best-effort client for triage writes: intentionally fail fast.
+export const triageHttpClient = makeClient(config.get('retry.http.triageTimeoutMs'), triageRetryLimits)
 
 export { NetworkError, TimeoutError, AbortError }
 

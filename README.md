@@ -26,7 +26,7 @@ Set `CRM_WRITE_FILES_IN_SUBMISSION=true` to enable writing
 Terminal inbound failures can be written to CRM triage records in
 `rpa_integrationinboundqueues` for operations follow-up. Set `CRM_INTEGRATION_INBOUND_FAILURE_PROCESSING_ENTITY=927350008` to enable
 these triage writes and bind that value to `rpa_processingentity` on the
-triage record.
+triage record. Leave the value empty to opt out of triaging.
 
 ### Pre-commit hooks
 
@@ -239,16 +239,18 @@ Retry decisions, terminal failures, and retry recovery are logged from the HTTP 
 | Variable | Default | Description |
 |---|---|---|
 | `HTTP_RETRY_MAX_ATTEMPTS` | `3` | Total attempts (including first) for retryable errors |
+| `CRM_TRIAGE_HTTP_RETRY_MAX_ATTEMPTS` | `1` | Total attempts (including first) for best-effort triage record writes |
 | `HTTP_RETRY_BASE_DELAY_MS` | `500` | Initial backoff delay in milliseconds |
 | `HTTP_RETRY_BACKOFF_MULTIPLIER` | `1.5` | Multiplier applied each retry (500 → 750 → 1125 ms) |
 | `HTTP_RETRY_JITTER_PERCENTAGE` | `15` | ±% random jitter added to each delay to avoid thundering herd |
 | `HTTP_RETRY_MAX_DELAY_MS` | `15000` | Hard cap on any single retry delay |
 | `CRM_HTTP_TIMEOUT_MS` | `30000` | Per-attempt timeout for CRM API calls |
 | `CRM_AUTH_HTTP_TIMEOUT_MS` | `5000` | Per-attempt timeout for auth/token requests |
+| `CRM_TRIAGE_HTTP_TIMEOUT_MS` | `5000` | Per-attempt timeout for best-effort triage record writes |
 | `RETRY_UNKNOWN_MAX_ATTEMPTS` | `2` | Total attempts for unknown errors (1 retry) |
 | `RETRY_UNKNOWN_MAX_DELAY_MS` | `10000` | Hard cap on unknown-error retry delays |
 
-Two clients are exported: `httpClient` (CRM API) and `authHttpClient` (token endpoint) — both share the same retry policy but use different per-attempt timeouts.
+Three clients are exported: `httpClient` (CRM API), `authHttpClient` (token endpoint), and `triageHttpClient` (best-effort triage writes). The triage client has its own timeout and attempt budget.
 
 See [`src/config/retry.js`](src/config/retry.js) and [`src/http/client.js`](src/http/client.js) for implementation details.
 

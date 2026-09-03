@@ -100,15 +100,6 @@ function logCaseCreationOutcomeUnknown (caseError, { correlationId, fileId }) {
 
 function throwCaseCreationError (caseError, { correlationId, fileId }) {
   const isRetryable = caseError?.retryMetadata?.category === 'retryable'
-  const isIncompleteDocumentTypeMetadata = caseError?.message?.startsWith('Incomplete documentTypeMetadata:')
-
-  if (isIncompleteDocumentTypeMetadata) {
-    caseError.retryMetadata = {
-      ...(caseError?.retryMetadata ?? { category: NON_RETRYABLE }),
-      terminalReason: triageFailureReasons.DOCUMENT_TYPE_METADATA_INCOMPLETE
-    }
-    caseError.triageFailureReason = triageFailureReasons.DOCUMENT_TYPE_METADATA_INCOMPLETE
-  }
 
   logger.error({
     error: caseError,
@@ -127,7 +118,8 @@ function throwCaseCreationError (caseError, { correlationId, fileId }) {
     caseError.retryable = true
     throw caseError
   }
-  const err = internal('Unable to create case with online submission activity in CRM')
+  const err = internal('Unable to create case with online submission activity in CRM', { cause: caseError })
+  err.cause = caseError
   err.retryable = false
   err.retryMetadata = caseError?.retryMetadata ?? null
   err.triageFailureReason = caseError?.triageFailureReason ?? null

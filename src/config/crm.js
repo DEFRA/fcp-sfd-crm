@@ -21,10 +21,6 @@ export const crmConfig = {
     integrationInboundFailureProcessingEntity: {
       doc: 'When set, enable CRM triage writes for terminal inbound failures and bind this value to rpa_processingentity.',
       format: (value) => {
-        if (value === null || value === undefined) {
-          return
-        }
-
         const trimmed = String(value).trim()
         if (trimmed === '') {
           return
@@ -32,7 +28,7 @@ export const crmConfig = {
 
         const parsed = Number(trimmed)
         if (!Number.isSafeInteger(parsed)) {
-          throw new Error('must be an integer option-set value or empty')
+          throw new TypeError('must be an integer option-set value or empty')
         }
       },
       default: '',
