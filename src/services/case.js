@@ -10,7 +10,7 @@ import { metricsCounter } from '../api/common/helpers/metrics.js'
 import { caseCreationMetrics, caseActions } from '../constants/case-creation-metrics.js'
 import { isTerminalFailure } from '../utils/is-terminal-failure.js'
 import { config } from '../config/index.js'
-import { triageEventTypes, triageFailureReasons, triageSkipReasons } from '../constants/integration-inbound-triage.js'
+import { triageEventTypes, triageSkipReasons } from '../constants/integration-inbound-triage.js'
 import { emitAuditEvent } from '../messaging/outbound/audit/send-audit-event.js'
 import { buildDocumentCreatedEvent } from '../messaging/outbound/audit/build-audit-event.js'
 
