@@ -47,11 +47,14 @@ export const messagingConfig = {
       }
     },
     audit: {
+      // Not nullable: an unset ARN would be accepted by convict but rejected
+      // by the publisher's own config schema on every single event, silently
+      // discarding the entire audit stream. Failing at startup instead makes
+      // a misconfiguration impossible to mistake for transport noise.
       topicArn: {
         doc: 'ARN for the audit SNS topic',
         format: String,
         default: null,
-        nullable: true,
         env: 'AUDIT_TOPIC_ARN'
       }
     }
