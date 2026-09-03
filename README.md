@@ -380,7 +380,7 @@ Publishing the CRM event to SNS has its own safety net. [`publishWithDurability`
 | `SQS_CONSUMER_WAIT_TIME_SECONDS` | `10` | Long-poll wait for a message to arrive |
 | `SQS_CONSUMER_POLLING_WAIT_TIME` | `0` | Delay before the consumer polls again |
 
-See [`src/config/messaging.js`](src/config/messaging.js) and [`src/config/queue.js`](src/config/queue.js). `visibility_timeout_seconds` and `dlq_max_receive_count` are queue properties, not service configuration, and are set per environment in `cdp-tenant-config`.
+See [`src/config/messaging.js`](src/config/messaging.js). `visibility_timeout_seconds` and `dlq_max_receive_count` are queue properties, not service configuration, and are set per environment in `cdp-tenant-config`.
 
 ## Multi-file case creation
 
