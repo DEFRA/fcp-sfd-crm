@@ -346,7 +346,8 @@ async function createNewCase ({ authToken, transformedPayload, correlationId, fi
     correlationId,
     entityId: response.caseId,
     crn,
-    sbi
+    sbi,
+    details: { caseid: response.caseId, fileid: fileId }
   }))
 
   return response
@@ -411,7 +412,8 @@ async function addMetadataToExistingCase ({ authToken, caseId, correlationId, fi
     correlationId,
     entityId: metadataId,
     crn,
-    sbi
+    sbi,
+    details: { caseid: caseId, metadataid: metadataId, fileid: fileId }
   }))
   return { caseId }
 }
