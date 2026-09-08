@@ -1,6 +1,14 @@
 import { vi, describe, beforeEach, test, expect } from 'vitest'
 import { createLogger } from '../../../../../src/logging/logger.js'
 
+const { mockNetworkInterfaces } = vi.hoisted(() => ({
+  mockNetworkInterfaces: vi.fn()
+}))
+
+vi.mock('node:os', () => ({
+  networkInterfaces: mockNetworkInterfaces
+}))
+
 vi.mock('@defra/fcp-audit-publisher', () => ({
   publishAuditEvent: vi.fn().mockResolvedValue({ messageId: 'test-message-id' }),
   validateAuditEvent: vi.fn().mockReturnValue({ valid: true })
@@ -33,9 +41,24 @@ const mockAuditEvent = {
   }
 }
 
+// A single non-internal IPv4 interface, matching a typical container network setup.
+const externalIpv4Interfaces = {
+  eth0: [
+    { family: 'IPv4', internal: false, address: '10.1.2.3' }
+  ]
+}
+
+const loopbackOnlyInterfaces = {
+  lo: [
+    { family: 'IPv4', internal: true, address: '127.0.0.1' }
+  ]
+}
+
 describe('sendAuditEvent', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.resetModules()
+    mockNetworkInterfaces.mockReturnValue(externalIpv4Interfaces)
   })
 
   test('should call publishAuditEvent with event and service-level config when the event is structurally valid', async () => {
@@ -49,12 +72,61 @@ describe('sendAuditEvent', () => {
     expect(publishAuditEvent).toHaveBeenCalledWith(
       mockAuditEvent,
       expect.objectContaining({
-        application: 'fcp-sfd-crm',
+        application: 'Single Front Door',
         component: 'fcp-sfd-crm',
         version: '1.0.0',
         generateCorrelationId: true,
-        ip: '0.0.0.0'
+        ip: '10.1.2.3'
       })
+    )
+  })
+
+  test('should publish the loopback address when no external interface is found', async () => {
+    const { publishAuditEvent } = await import('@defra/fcp-audit-publisher')
+    const { sendAuditEvent } = await import('../../../../../src/messaging/outbound/audit/send-audit-event.js')
+
+    mockNetworkInterfaces.mockReturnValue(loopbackOnlyInterfaces)
+
+    await sendAuditEvent(mockAuditEvent)
+
+    expect(publishAuditEvent).toHaveBeenCalledWith(
+      mockAuditEvent,
+      expect.objectContaining({ ip: '127.0.0.1' })
+    )
+  })
+
+  test('should publish the loopback address and warn when interface resolution throws', async () => {
+    const { publishAuditEvent } = await import('@defra/fcp-audit-publisher')
+    const { sendAuditEvent } = await import('../../../../../src/messaging/outbound/audit/send-audit-event.js')
+
+    mockNetworkInterfaces.mockImplementation(() => { throw new TypeError('no interfaces') })
+
+    await sendAuditEvent(mockAuditEvent)
+
+    expect(publishAuditEvent).toHaveBeenCalledWith(
+      mockAuditEvent,
+      expect.objectContaining({ ip: '127.0.0.1' })
+    )
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: expect.objectContaining({ action: 'service_ip_resolution_failed', outcome: 'failure' }),
+        error: { type: 'TypeError' }
+      }),
+      expect.any(String)
+    )
+  })
+
+  test('should resolve the service IP once and reuse it on later events', async () => {
+    const { publishAuditEvent } = await import('@defra/fcp-audit-publisher')
+    const { sendAuditEvent } = await import('../../../../../src/messaging/outbound/audit/send-audit-event.js')
+
+    await sendAuditEvent(mockAuditEvent)
+    mockNetworkInterfaces.mockReturnValue(loopbackOnlyInterfaces)
+    await sendAuditEvent(mockAuditEvent)
+
+    expect(publishAuditEvent).toHaveBeenLastCalledWith(
+      mockAuditEvent,
+      expect.objectContaining({ ip: '10.1.2.3' })
     )
   })
 

@@ -1,27 +1,69 @@
 import crypto from 'node:crypto'
+import { networkInterfaces } from 'node:os'
 import { publishAuditEvent, validateAuditEvent } from '@defra/fcp-audit-publisher'
 import { snsClient } from '../../sns/client.js'
 import { config } from '../../../config/index.js'
 import { createLogger } from '../../../logging/logger.js'
-import { auditLogEventType, auditLogReasons } from '../../../constants/audit.js'
+import { auditLogEventType, auditLogReasons, serviceIpLogEventType } from '../../../constants/audit.js'
 
 const logger = createLogger()
 
-// Message consumers have no meaningful client IP; the schema requires the
-// field, so a sentinel is published in place of a real one. Agreed with the
-// fcp-audit team as the approach for non-HTTP-request audit events (see
-// FLS1-50 decision log).
-const CONSUMER_SENTINEL_IP = '0.0.0.0'
-
+// `application` names the programme rather than the service, so that audit
+// events from every Single Front Door service can be grouped together in the
+// audit store. `component` stays as the service name, which is what tells the
+// individual services apart. See src/config/messaging.js for the value itself.
 const auditPublishConfig = {
   snsClient,
   sns: { topicArn: config.get('messaging.audit.topicArn') },
-  application: config.get('serviceName'),
+  application: config.get('messaging.audit.application'),
   component: config.get('serviceName'),
   environment: config.get('cdpEnvironment'),
   version: '1.0.0',
-  generateCorrelationId: true,
-  ip: CONSUMER_SENTINEL_IP
+  generateCorrelationId: true
+}
+
+/**
+ * Resolves and caches this service's own non-internal IPv4 address, used as
+ * the audit `ip`. Every audit event here is raised while consuming an SQS
+ * message, so there is no inbound HTTP request to attribute and no client IP
+ * to record. Falls back to `127.0.0.1` if no external interface is found, so
+ * the mandatory `ip` field is always populated.
+ *
+ * This mirrors `getServiceIp` in fcp-sfd-object-processor, so both services
+ * record the same kind of address. That service also derives an IP from an
+ * inbound Hapi request where it has one; this service never has one, so that
+ * part is deliberately not carried over.
+ * @returns {string}
+ */
+let cachedServiceIp = null
+export const getServiceIp = () => {
+  if (cachedServiceIp) {
+    return cachedServiceIp
+  }
+  try {
+    const addresses = Object.values(networkInterfaces()).flatMap((addrs) => addrs ?? [])
+    const external = addresses.find((addr) => addr.family === 'IPv4' && !addr.internal)
+    if (external) {
+      cachedServiceIp = external.address
+      return cachedServiceIp
+    }
+  } catch (err) {
+    // Only the error class is logged, in keeping with the rest of this module.
+    logger.warn(
+      {
+        event: {
+          type: 'error',
+          action: serviceIpLogEventType,
+          category: 'process',
+          outcome: 'failure'
+        },
+        error: { type: err?.name ?? 'UnknownError' }
+      },
+      'Failed to resolve service IP from network interfaces, falling back to loopback'
+    )
+  }
+  cachedServiceIp = '127.0.0.1'
+  return cachedServiceIp
 }
 
 /**
@@ -38,7 +80,7 @@ const mergeWithPublishDefaults = (event) => ({
   ...(auditPublishConfig.application && { application: auditPublishConfig.application }),
   ...(auditPublishConfig.component && { component: auditPublishConfig.component }),
   ...(auditPublishConfig.environment && { environment: auditPublishConfig.environment }),
-  ...(auditPublishConfig.ip && { ip: auditPublishConfig.ip }),
+  ip: getServiceIp(),
   ...event
 })
 
@@ -95,7 +137,7 @@ export const sendAuditEvent = async (event) => {
   }
 
   try {
-    await publishAuditEvent(event, auditPublishConfig)
+    await publishAuditEvent(event, { ...auditPublishConfig, ip: getServiceIp() })
   } catch (err) {
     // Only the error class is logged. err.message here would contain the
     // topic ARN on a config failure, and could carry CRM or payload

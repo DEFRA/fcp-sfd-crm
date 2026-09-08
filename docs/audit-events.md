@@ -33,14 +33,30 @@ than omitted. Every other row carries `audit.status: "success"`.
 `crn` on rows 3 and 5, `sbi` on rows 4 and 6, both on rows 1 and 2. Absent keys
 are omitted rather than sent as null.
 
-## Values pending confirmation
+## Envelope values
 
-| Value | Setting | Status |
-|-------|---------|--------|
-| `ip` sentinel for message consumers | `0.0.0.0` | Agreed with fcp-audit (FLS1-50 decision log) |
+`application` is `Single Front Door` rather than the service name, so that audit
+events from every Single Front Door service group together in the audit store.
+`component` carries the service name, which is what distinguishes the services.
+The value matches the convention used by `fcp-audit`.
 
-A message consumer has no meaningful client IP, so the sentinel stands in for the
-schema's required `ip` field.
+It is settable via `AUDIT_APPLICATION`, defaulting to `Single Front Door` in
+`src/config/messaging.js`, so that a rename of the programme can be applied through
+`cdp-app-config` and a redeploy rather than a code release. The same value must be
+set for every Single Front Door service, `fcp-sfd-object-processor` included, or
+the events stop grouping.
+
+`ip` is this service's own non-internal IPv4 address, resolved once and cached,
+falling back to `127.0.0.1` when no external interface is found. Every event here
+is raised while consuming an SQS message, so there is no inbound HTTP request and
+no client IP to record, but the schema requires the field. This matches
+`getServiceIp` in `fcp-sfd-object-processor`. That service also derives an IP from
+an inbound Hapi request where it has one; this service never has one, so that part
+is not carried over.
+
+`user` and `sessionid` are not populated. The inbound CloudEvents message carries
+no user identity, so there is nothing to attribute the events to beyond the
+`accounts` identifiers.
 
 `mergeWithPublishDefaults` in `send-audit-event.js` mirrors the publisher's private
 `applyDefaults`, which version 1.0.7 does not export. Nothing detects drift if the
@@ -52,6 +68,7 @@ return a classified result rather than a generic `Error`.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `AUDIT_TOPIC_ARN` | none, **required** | ARN of the audit SNS topic |
+| `AUDIT_APPLICATION` | `Single Front Door` | Programme name published as `application`. Must match every other Single Front Door service |
 | `AWS_SNS_REQUEST_TIMEOUT_MS` | `3000` | Socket and connection timeout for SNS requests |
 | `AWS_SNS_MAX_ATTEMPTS` | `2` | Total attempts, including the first, for an SNS request |
 
