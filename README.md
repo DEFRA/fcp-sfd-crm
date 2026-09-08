@@ -425,6 +425,7 @@ This service publishes audit events to the shared `fcp-audit` SNS topic via `@de
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `AUDIT_TOPIC_ARN` | none — **required** | ARN of the audit SNS topic. The service will not start without it |
+| `AUDIT_APPLICATION` | `Single Front Door` | Programme name published as `application`. Must match every other Single Front Door service or audit events stop grouping |
 | `AWS_SNS_REQUEST_TIMEOUT_MS` | `3000` | Socket and connection timeout for SNS publishes |
 | `AWS_SNS_MAX_ATTEMPTS` | `2` | Total attempts (including the first) for an SNS publish |
 

@@ -22,6 +22,10 @@ export const auditFailureReasons = {
 // Structured log constants for audit publish failures (never for audit payload content)
 export const auditLogEventType = 'audit_publish_failed'
 
+// Raised when the service's own IP cannot be resolved and the audit `ip`
+// falls back to loopback
+export const serviceIpLogEventType = 'service_ip_resolution_failed'
+
 export const auditLogReasons = {
   SCHEMA_VALIDATION: 'schema_validation',
   TRANSPORT: 'transport',

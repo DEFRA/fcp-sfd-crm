@@ -56,6 +56,21 @@ export const messagingConfig = {
         format: String,
         default: null,
         env: 'AUDIT_TOPIC_ARN'
+      },
+      // Shared with fcp-sfd-object-processor, and with any other Single Front
+      // Door service that publishes audit events. The audit store groups events
+      // by this value, so every SFD service must send exactly the same string.
+      // The default is held here rather than in cdp-app-config so there is one
+      // definition per service and nothing to drift between environments. If the
+      // programme is renamed, set AUDIT_APPLICATION in every SFD service's
+      // defaults.env in cdp-app-config and redeploy, no code release needed.
+      // Nothing validates this value: a mismatch is accepted and simply fails to
+      // group, so it is not a value to vary casually.
+      application: {
+        doc: 'Programme name published as the audit `application`, shared across all Single Front Door services',
+        format: String,
+        default: 'Single Front Door',
+        env: 'AUDIT_APPLICATION'
       }
     }
   }
