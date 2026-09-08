@@ -63,7 +63,7 @@
     "undici": "8.10.0"
   },
   "devDependencies": {
-    "@fetchkit/chaos-fetch": "1.2.2",
+    "@fetchkit/chaos-fetch": "1.2.3",
     "@vitest/coverage-v8": "4.1.10",
     "autoprefixer": "10.5.4",
     "dotenv": "17.4.2",
