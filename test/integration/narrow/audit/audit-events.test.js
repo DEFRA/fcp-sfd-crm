@@ -76,11 +76,11 @@ describe('Integration - audit events conform to the fcp-audit-publisher schema',
 
     expect(events[0]).toMatchObject({
       correlationid: CORRELATION_ID,
-      audit: { entities: [{ entity: 'person', action: 'read', entityid: 'contact-1' }], status: 'success', accounts: { crn: 'crn-1' } }
+      audit: { entities: [{ entity: 'person', action: 'read', entityid: 'contact-1' }], status: 'success', accounts: { crn: 'crn-1' }, details: {} }
     })
     expect(events[1]).toMatchObject({
       correlationid: CORRELATION_ID,
-      audit: { entities: [{ entity: 'business', action: 'read', entityid: 'account-1' }], status: 'success', accounts: { sbi: 'sbi-1' } }
+      audit: { entities: [{ entity: 'business', action: 'read', entityid: 'account-1' }], status: 'success', accounts: { sbi: 'sbi-1' }, details: {} }
     })
   })
 
@@ -142,7 +142,7 @@ describe('Integration - audit events conform to the fcp-audit-publisher schema',
     const documentEvent = events.find(event => event.audit.entities[0].entity === 'document')
     expect(documentEvent).toMatchObject({
       correlationid: CORRELATION_ID,
-      audit: { entities: [{ entity: 'document', action: 'created', entityid: 'case-1' }], status: 'success', accounts: { crn: 'crn-1', sbi: 'sbi-1' } }
+      audit: { entities: [{ entity: 'document', action: 'created', entityid: 'case-1' }], status: 'success', accounts: { crn: 'crn-1', sbi: 'sbi-1' }, details: { caseid: 'case-1', fileid: 'file-1' } }
     })
   })
 
@@ -172,7 +172,7 @@ describe('Integration - audit events conform to the fcp-audit-publisher schema',
     expectAllValid(events)
     expect(events[0]).toMatchObject({
       correlationid: CORRELATION_ID,
-      audit: { entities: [{ entity: 'document', action: 'created', entityid: 'metadata-1' }], status: 'success', accounts: { crn: 'crn-1', sbi: 'sbi-1' } }
+      audit: { entities: [{ entity: 'document', action: 'created', entityid: 'metadata-1' }], status: 'success', accounts: { crn: 'crn-1', sbi: 'sbi-1' }, details: { caseid: 'case-2', metadataid: 'metadata-1', fileid: 'file-2' } }
     })
   })
 
