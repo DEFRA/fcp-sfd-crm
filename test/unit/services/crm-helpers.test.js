@@ -187,8 +187,9 @@ describe('ensureContactAndAccount', () => {
 
     await ensureContactAndAccount('token', '1050000001', 'sbi1', { correlationId: 'corr-1' }).catch(() => {})
 
+    // The correlation id is not passed here: the pino mixin in logger-options.js
+    // injects transaction.id into every record from the AsyncLocalStorage store.
     expect(mockLogger.error).toHaveBeenCalledWith(
-      { transaction: { id: 'corr-1' } },
       'No contact found for CRN: ******0001'
     )
   })
@@ -202,7 +203,6 @@ describe('ensureContactAndAccount', () => {
 
     const [logged, message] = mockLogger.error.mock.calls[0]
     expect(logged).toEqual({
-      transaction: { id: 'corr-1' },
       error: { type: 'Error', status: 400 }
     })
     expect(message).toBe('No contact found for CRN: ******0001')
@@ -260,7 +260,6 @@ describe('ensureContactAndAccount', () => {
     await ensureContactAndAccount('token', 'crn1', '106000001', { correlationId: 'corr-1' }).catch(() => {})
 
     expect(mockLogger.error).toHaveBeenCalledWith(
-      { transaction: { id: 'corr-1' } },
       'No account found for SBI: *****0001'
     )
   })
@@ -285,7 +284,6 @@ describe('ensureContactAndAccount', () => {
 
     const [logged] = mockLogger.error.mock.calls[0]
     expect(logged).toEqual({
-      transaction: { id: 'corr-1' },
       error: { type: 'Error', status: 400 }
     })
     expect(JSON.stringify(logged)).not.toContain('A Farm Ltd')

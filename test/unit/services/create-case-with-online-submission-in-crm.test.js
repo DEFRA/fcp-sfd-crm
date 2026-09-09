@@ -162,7 +162,6 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
 
     expect(mockLogger.error).toHaveBeenCalledWith(
       {
-        transaction: { id: 'mock-correlation-id' },
         error: { type: 'CrmLookupError', status: null }
       },
       'No contact found for CRN: ****-crn'
@@ -192,7 +191,6 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
 
     expect(mockLogger.error).toHaveBeenCalledWith(
       {
-        transaction: { id: 'mock-correlation-id' },
         error: { type: 'CrmLookupError', status: null }
       },
       'No account found for SBI: ****-sbi'

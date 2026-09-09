@@ -54,7 +54,6 @@ const ACCOUNT_NOT_FOUND = 'Account ID not found'
  * in the nouns they use.
  * @param {object} params
  * @param {object} params.error - error returned by the repo
- * @param {string} params.correlationId
  * @param {string} params.subject - "contact" or "account"
  * @param {string} params.identifierLabel - "CRN" or "SBI"
  * @param {string} params.masked - the masked identifier, safe to log
@@ -62,7 +61,7 @@ const ACCOUNT_NOT_FOUND = 'Account ID not found'
  * @param {string} params.triageFailureReason - mapped terminal triage reason
  * @throws always
  */
-const throwLookupFailure = ({ error, correlationId, subject, identifierLabel, masked, notFoundMessage, triageFailureReason }) => {
+const throwLookupFailure = ({ error, subject, identifierLabel, masked, notFoundMessage, triageFailureReason }) => {
   if (error.retryMetadata?.category === 'retryable') {
     const retryableErr = new Error(`Retryable error looking up ${subject} for ${identifierLabel}: ${masked}`)
     retryableErr.retryable = true
@@ -73,7 +72,6 @@ const throwLookupFailure = ({ error, correlationId, subject, identifierLabel, ma
   // Only the error classification is logged. The raw repo error can carry a
   // CRM API response body containing PII.
   logger.error({
-    transaction: { id: correlationId },
     error: { type: error.name ?? 'CrmLookupError', status: error.retryMetadata?.status ?? null }
   }, `No ${subject} found for ${identifierLabel}: ${masked}`)
 
@@ -87,7 +85,6 @@ const throwLookupFailure = ({ error, correlationId, subject, identifierLabel, ma
  * before the business error is thrown, and emission can never prevent it.
  * @param {object} params
  * @param {object} params.event - built audit event
- * @param {string} params.correlationId
  * @param {string} params.subject - "contact" or "account"
  * @param {string} params.identifierLabel - "CRN" or "SBI"
  * @param {string} params.masked - the masked identifier, safe to log
@@ -95,8 +92,8 @@ const throwLookupFailure = ({ error, correlationId, subject, identifierLabel, ma
  * @param {string} params.triageFailureReason - mapped terminal triage reason
  * @throws always
  */
-const throwNotFound = async ({ event, correlationId, subject, identifierLabel, masked, notFoundMessage, triageFailureReason }) => {
-  logger.error({ transaction: { id: correlationId } }, `No ${subject} found for ${identifierLabel}: ${masked}`)
+const throwNotFound = async ({ event, subject, identifierLabel, masked, notFoundMessage, triageFailureReason }) => {
+  logger.error(`No ${subject} found for ${identifierLabel}: ${masked}`)
   await emitAuditEvent(event)
   const err = unprocessableEntity(notFoundMessage)
   err.triageFailureReason = triageFailureReason
@@ -143,7 +140,7 @@ export async function ensureContactAndAccount (authToken, crn, sbi, { correlatio
   }
 
   if (contactError) {
-    throwLookupFailure({ error: contactError, correlationId, ...contact })
+    throwLookupFailure({ error: contactError, ...contact })
   }
 
   if (!contactId) {
@@ -154,7 +151,6 @@ export async function ensureContactAndAccount (authToken, crn, sbi, { correlatio
         status: auditStatuses.FAILURE,
         details: { reason: auditFailureReasons.CRN_NOT_FOUND }
       }),
-      correlationId,
       ...contact
     })
   }
@@ -172,7 +168,7 @@ export async function ensureContactAndAccount (authToken, crn, sbi, { correlatio
   }
 
   if (accountError) {
-    throwLookupFailure({ error: accountError, correlationId, ...account })
+    throwLookupFailure({ error: accountError, ...account })
   }
 
   if (!accountId) {
@@ -183,7 +179,6 @@ export async function ensureContactAndAccount (authToken, crn, sbi, { correlatio
         status: auditStatuses.FAILURE,
         details: { reason: auditFailureReasons.SBI_NOT_FOUND }
       }),
-      correlationId,
       ...account
     })
   }
