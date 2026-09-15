@@ -1,11 +1,12 @@
 import path from 'node:path'
 import hapi from '@hapi/hapi'
+import { secureContext } from '@defra/hapi-secure-context'
 import { config } from './config/index.js'
 import { requestLogger } from './logging/request-logger.js'
-import { secureContext } from './api/common/helpers/secure-context/secure-context.js'
 import { pulse } from './api/common/helpers/pulse.js'
 import { requestTracing } from './api/common/helpers/request-tracing.js'
 import { setupProxy } from './api/common/helpers/proxy/setup-proxy.js'
+import { connectDb } from './data/db.js'
 
 const createServer = async () => {
   setupProxy()
@@ -43,6 +44,8 @@ const createServer = async () => {
     secureContext,
     pulse
   ])
+
+  await connectDb(server.secureContext)
 
   // This service is driven entirely by the SQS consumer. It registers no
   // routes of its own: the HTTP server exists only to host the platform

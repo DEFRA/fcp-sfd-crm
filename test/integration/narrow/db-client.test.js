@@ -3,9 +3,9 @@ import { describe, test, expect } from 'vitest'
 let db
 let skipIntegration = false
 try {
-  // attempt to import DB; if Mongo is not available this will throw
-  const mod = await import('../../../src/data/db.js')
-  db = mod.default
+  // attempt to connect to DB; if Mongo is not available this will throw
+  const { connectDb } = await import('../../../src/data/db.js')
+  db = await connectDb()
 } catch (err) {
   // mark to skip integration tests that require MongoDB
 

@@ -28,18 +28,3 @@ export const createSecureContext = (logger) => {
 
   return null
 }
-
-export const secureContext = {
-  plugin: {
-    name: 'secure-context',
-    register (server) {
-      const context = createSecureContext(server.logger)
-
-      if (context) {
-        server.decorate('server', 'secureContext', context)
-      } else {
-        server.logger.info('Custom secure context is disabled')
-      }
-    }
-  }
-}

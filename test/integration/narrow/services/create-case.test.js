@@ -14,9 +14,11 @@ vi.mock('../../../../src/repos/crm.js', () => ({
   createMetadataForOnlineSubmission: vi.fn(async () => ({ metadataId: 'meta-int-1', error: null }))
 }))
 
-import db from '../../../../src/data/db.js'
+import db, { connectDb } from '../../../../src/data/db.js'
 import { createCase } from '../../../../src/services/case.js'
 import { createCaseWithOnlineSubmissionInCrm } from '../../../../src/services/create-case-with-online-submission-in-crm.js'
+
+await connectDb()
 
 const COLLECTION = 'cases'
 

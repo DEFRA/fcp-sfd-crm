@@ -17,6 +17,10 @@ vi.mock('../../src/config/index.js', () => ({
   }
 }))
 
+vi.mock('../../src/data/db.js', () => ({
+  connectDb: vi.fn().mockResolvedValue({})
+}))
+
 const { createServer } = await import('../../src/server.js')
 
 describe('createServer', () => {

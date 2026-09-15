@@ -7,7 +7,9 @@ import {
   claimCreatorRole,
   releaseCreator
 } from '../../../../src/repos/cases.js'
-import db from '../../../../src/data/db.js'
+import db, { connectDb } from '../../../../src/data/db.js'
+
+await connectDb()
 
 const COLLECTION = 'cases'
 
