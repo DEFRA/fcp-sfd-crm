@@ -23,7 +23,7 @@ const connectDb = async (secureContext) => {
 
 // Delegates to the connected instance so existing `import db from './db.js'` consumers keep working
 const db = new Proxy({}, {
-  get(_target, prop) {
+  get (_target, prop) {
     if (!dbInstance) {
       throw new Error('MongoDB has not been connected yet')
     }
