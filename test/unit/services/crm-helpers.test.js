@@ -253,25 +253,33 @@ describe('ensureContactAndAccount', () => {
     }))
   })
 
-  test('masks the SBI when logging a not-found, on the same terms as the CRN', async () => {
+  test('logs the SBI in full when logging a not-found', async () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: 'c1' })
     getAccountIdFromSbi.mockResolvedValue({ accountId: null })
 
     await ensureContactAndAccount('token', 'crn1', '106000001', { correlationId: 'corr-1' }).catch(() => {})
 
     expect(mockLogger.error).toHaveBeenCalledWith(
-      'No account found for SBI: *****0001'
+      'No account found for SBI: 106000001'
     )
   })
 
-  test('masks the SBI in the retryable account lookup error message', async () => {
+  test('includes the SBI in full in the retryable account lookup error message', async () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: 'c1' })
     getAccountIdFromSbi.mockResolvedValue({ accountId: null, error: makeRetryableError() })
 
     const thrown = await ensureContactAndAccount('token', 'crn1', '106000001').catch(e => e)
 
-    expect(thrown.message).toBe('Retryable error looking up account for SBI: *****0001')
-    expect(thrown.message).not.toContain('106000001')
+    expect(thrown.message).toBe('Retryable error looking up account for SBI: 106000001')
+  })
+
+  test('still masks the CRN in the retryable contact lookup error message', async () => {
+    getContactIdFromCrn.mockResolvedValue({ contactId: null, error: makeRetryableError() })
+
+    const thrown = await ensureContactAndAccount('token', '1050000001', '106000001').catch(e => e)
+
+    expect(thrown.message).toBe('Retryable error looking up contact for CRN: ******0001')
+    expect(thrown.message).not.toContain('1050000001')
   })
 
   test('logs only the error classification, never the repo error, when the account lookup fails', async () => {
@@ -282,10 +290,11 @@ describe('ensureContactAndAccount', () => {
 
     await ensureContactAndAccount('token', 'crn1', '106000001', { correlationId: 'corr-1' }).catch(() => {})
 
-    const [logged] = mockLogger.error.mock.calls[0]
+    const [logged, message] = mockLogger.error.mock.calls[0]
     expect(logged).toEqual({
       error: { type: 'Error', status: 400 }
     })
+    expect(message).toBe('No account found for SBI: 106000001')
     expect(JSON.stringify(logged)).not.toContain('A Farm Ltd')
   })
 })

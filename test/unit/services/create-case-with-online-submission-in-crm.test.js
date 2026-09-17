@@ -193,7 +193,7 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
       {
         error: { type: 'CrmLookupError', status: null }
       },
-      'No account found for SBI: ****-sbi'
+      'No account found for SBI: mock-sbi'
     )
   })
 
