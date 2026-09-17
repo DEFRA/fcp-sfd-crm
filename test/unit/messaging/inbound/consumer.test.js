@@ -584,6 +584,57 @@ describe('CRM request sqs consumer', () => {
           'Processing replayed DLQ message'
         )
       })
+
+      test('should NOT log crm.dlq.message_replayed for messages without replayed_from attribute', async () => {
+        const { startCRMListener: start, logger, createCase, sqsClient } = await setupAndImportConsumer()
+        start(sqsClient)
+        createCase.mockResolvedValueOnce({ caseId: 'case-first-time' })
+        const message = {
+          MessageId: 'msg-first-time-1',
+          MessageAttributes: undefined,
+          Body: JSON.stringify({ id: 'evt-first', source: '/test', specversion: '1.0', type: 'test.type', datacontenttype: 'application/json', time: new Date().toISOString(), data: { crn: '123', sbi: '321', file: { fileId: '550e8400-e29b-41d4-a716-446655440004', fileName: 'doc.pdf', url: 'https://example.com/api/v1/blob/550e8400-e29b-41d4-a716-446655440004' }, correlationId: '550e8400-e29b-41d4-a716-446655440000', sourceSystem: 'fcp-sfd-frontend', submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6' } })
+        }
+
+        await capturedHandleMessage(message)
+
+        const replayLogFound = mockLogger.info.mock.calls.some(
+          call => call[0]?.event?.type === 'crm.dlq.message_replayed'
+        )
+        expect(replayLogFound).toBe(false)
+        expect(createCase).toHaveBeenCalled()
+      })
+
+      test('should NOT log crm.dlq.message_replayed when replayed_from has non-DLQ value', async () => {
+        const { startCRMListener: start, logger, createCase, sqsClient } = await setupAndImportConsumer()
+        start(sqsClient)
+        createCase.mockResolvedValueOnce({ caseId: 'case-other-replay' })
+        const message = {
+          MessageId: 'msg-replay-other-1',
+          MessageAttributes: { replayed_from: { StringValue: 'OTHER_SOURCE', DataType: 'String' } },
+          Body: JSON.stringify({ id: 'evt-other', source: '/test', specversion: '1.0', type: 'test.type', datacontenttype: 'application/json', time: new Date().toISOString(), data: { crn: '123', sbi: '321', file: { fileId: '550e8400-e29b-41d4-a716-446655440005', fileName: 'doc.pdf', url: 'https://example.com/api/v1/blob/550e8400-e29b-41d4-a716-446655440005' }, correlationId: '550e8400-e29b-41d4-a716-446655440000', sourceSystem: 'fcp-sfd-frontend', submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6' } })
+        }
+
+        await capturedHandleMessage(message)
+
+        const replayLogFound = mockLogger.info.mock.calls.some(
+          call => call[0]?.event?.type === 'crm.dlq.message_replayed'
+        )
+        expect(replayLogFound).toBe(false)
+        expect(createCase).toHaveBeenCalled()
+      })
+    })
+
+    describe('Consumer.create configuration', () => {
+      test('should request replayed_from message attribute from SQS', async () => {
+        const { startCRMListener: start } = await setupAndImportConsumer()
+        const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
+        start(mockSqsClient)
+        const sqs = await import('sqs-consumer')
+        expect(sqs.Consumer.create).toHaveBeenCalled()
+        const opts = sqs.Consumer.create.mock.calls[0][0]
+        expect(opts).toHaveProperty('messageAttributeNames')
+        expect(opts.messageAttributeNames).toContain('replayed_from')
+      })
     })
 
     test('setLogger injection replaces internal logger used by events', async () => {
