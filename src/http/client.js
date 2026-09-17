@@ -2,18 +2,44 @@ import { createClient, NetworkError, TimeoutError, AbortError } from '@fetchkit/
 import { config } from '../config/index.js'
 import { createLogger } from '../logging/logger.js'
 import { toTenantMessage } from '../logging/tenant-message.js'
+import { HTTP_PRECONDITION_FAILED } from '../constants/http.js'
+import { toLogSafeUrl } from './log-safe-url.js'
+import { responseFromError } from './response-from-error.js'
 
 const logger = createLogger()
 
 // Matches node-level network error codes that are safe to retry
 const RETRYABLE_NETWORK_ERROR = /ECONNRESET|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|EPIPE|EAI_AGAIN/i
 
+// Node's fetch reports a refused, reset or unresolvable connection as a bare
+// `TypeError: fetch failed`, with the real reason attached as its cause. ffetch
+// then wraps that in a RetryLimitError, so the code can sit two links down.
+// Reading only the top-level message would classify every genuine connection
+// failure as unknown and hand it the smaller unknown retry budget.
+const ERROR_CAUSE_MAX_DEPTH = 5
+
+const hasRetryableNetworkCause = (error) => {
+  let current = error
+
+  for (let depth = 0; current && depth < ERROR_CAUSE_MAX_DEPTH; depth++) {
+    const { code, message } = current
+
+    if (typeof code === 'string' && RETRYABLE_NETWORK_ERROR.test(code)) {
+      return true
+    }
+    if (typeof message === 'string' && RETRYABLE_NETWORK_ERROR.test(message)) {
+      return true
+    }
+
+    current = current.cause
+  }
+
+  return false
+}
+
 const HTTP_TOO_MANY_REQUESTS = 429
 const HTTP_SERVER_ERROR_MIN = 500
 const HTTP_CLIENT_ERROR_MIN = 400
-// The designed idempotency response when a conditional upsert attempts to
-// recreate an already-existing record.
-const HTTP_PRECONDITION_FAILED = 412
 
 const classifyResponseStatus = (status) => {
   if (status === HTTP_TOO_MANY_REQUESTS || status >= HTTP_SERVER_ERROR_MIN) {
@@ -35,7 +61,7 @@ const classifyError = (ctx) => {
   if (error instanceof TimeoutError || error instanceof NetworkError) {
     return 'retryable'
   }
-  if (error instanceof Error && RETRYABLE_NETWORK_ERROR.test(error.message)) {
+  if (hasRetryableNetworkCause(error)) {
     return 'retryable'
   }
 
@@ -124,23 +150,20 @@ const isRetryDecisionFailure = (ctx) => {
   return Boolean(ctx.response && ctx.response.status >= HTTP_CLIENT_ERROR_MIN)
 }
 
-// throwOnHttpError constructs its HttpError after the onComplete hook has run,
-// so a failing response reaches that hook with no error argument. Reporting
-// such a request as recovered would be misleading.
-const isHttpFailureResponse = (response) =>
-  Boolean(response && response.status >= HTTP_CLIENT_ERROR_MIN)
-
-// On the no-retry path the hook is handed the HttpError alone, with the failing
-// response carried as its cause. Recovering it here is what lets a single-attempt
-// client classify the failure and name its status.
-const responseFromError = (error) => {
-  const cause = error?.cause
-  return typeof cause?.status === 'number' ? cause : undefined
-}
-
 const retryDurationNs = (startedAtMs) => (Date.now() - startedAtMs) * 1_000_000
 
+// A 412 from a conditional upsert is the designed idempotency signal rather
+// than a failure. Once the retry policy has settled on it there is nothing to
+// report, and logging a failure outcome would leave dashboards counting
+// duplicate suppression as an error.
+const isSuppressedFailure = (ctx, willRetry) =>
+  !willRetry && ctx.response?.status === HTTP_PRECONDITION_FAILED
+
 const logRetryDecision = ({ ctx, category, willRetry, limit, terminalReason, startedAtMs }) => {
+  if (isSuppressedFailure(ctx, willRetry)) {
+    return
+  }
+
   logger.warn({
     event: {
       type: 'http_retry_decision',
@@ -148,7 +171,7 @@ const logRetryDecision = ({ ctx, category, willRetry, limit, terminalReason, sta
       category: 'http',
       outcome: willRetry ? 'unknown' : 'failure',
       reason: terminalReason,
-      reference: ctx.request.url,
+      reference: toLogSafeUrl(ctx.request.url),
       duration: retryDurationNs(startedAtMs)
     },
     tenant: {
@@ -161,19 +184,19 @@ const beforeHook = (request, retryStateByRequest) => {
   retryStateByRequest.set(request, buildRetryState())
 }
 
-// When shouldRetry was never called (retries=0 in single-attempt clients), the
-// state still holds its defaults. Running the same classification shouldRetryHook
-// would have performed lets those clients report accurate terminal reasons and
-// HTTP statuses instead of 'unknown_error' and null.
-const populateStateFromNoRetryPath = (state, request, response, error) => {
-  if (!error || state.terminalReason !== 'unknown_error') {
+// shouldRetry is never called when a client is configured with zero retries, so
+// its state still holds the defaults. Running the same classification here lets
+// single-attempt clients report an accurate terminal reason and HTTP status
+// instead of 'unknown_error' and null. lastAttempt is the marker: shouldRetry
+// always records at least attempt 1 when it sees a failure.
+const classifyUnrecordedFailure = (state, request, response, error) => {
+  if (!error || state.lastAttempt > 0) {
     return
   }
 
   const ctx = { error, response: response ?? responseFromError(error), request, attempt: 1 }
   state.category = toMetadataCategory(classifyError(ctx))
   state.terminalReason = buildTerminalReason(ctx)
-  state.finalAttempt = 1
 }
 
 const buildRetryMetadata = (state) => {
@@ -199,12 +222,15 @@ const logTerminalFailure = (request, error, metadata, startedAtMs) => {
       category: 'http',
       outcome: 'failure',
       reason: metadata.terminalReason,
-      reference: request.url,
+      reference: toLogSafeUrl(request.url),
       duration: retryDurationNs(startedAtMs),
-      kind: error instanceof Error ? error.name : 'error'
+      // ECS restricts event.kind to a fixed vocabulary; the class of the
+      // failure belongs in error.type.
+      kind: 'event'
     },
     error: {
-      message: errorMessage(error)
+      message: errorMessage(error),
+      type: error instanceof Error ? error.name : 'error'
     },
     tenant: {
       message: toTenantMessage({ attempts: metadata.attempts, category: metadata.category, status: metadata.status })
@@ -216,23 +242,27 @@ const onCompleteHook = (request, response, error, retryStateByRequest) => {
   const state = retryStateByRequest.get(request) ?? buildRetryState()
   retryStateByRequest.delete(request)
 
-  populateStateFromNoRetryPath(state, request, response, error)
+  classifyUnrecordedFailure(state, request, response, error)
 
   const metadata = buildRetryMetadata(state)
 
   if (error) {
     attachRetryMetadata(error, metadata)
 
-    // A 412 is the intended behaviour rather than a failure, so logging it as an
-    // error would raise false alerts. The caller (upsertRecord) handles it
-    // silently and returns false.
+    // Any caller of these clients must handle 412 itself: it is the designed
+    // idempotency response to a conditional upsert, so it is never reported as
+    // a failure. The three call sites that can produce one are
+    // createMetadataForOnlineSubmission, createIntegrationInboundQueueRecord
+    // and writeCaseChangesetOrSuppress.
     if (metadata.status !== HTTP_PRECONDITION_FAILED) {
       logTerminalFailure(request, error, metadata, state.startedAtMs)
     }
     return
   }
 
-  if (metadata.attempts > 1 && !isHttpFailureResponse(response)) {
+  // Every client sets throwOnHttpError, so a failing response always arrives
+  // as an error and is handled above. Reaching here means a genuine success.
+  if (metadata.attempts > 1) {
     logger.info({
       event: {
         type: 'http_retry_recovered',
@@ -240,7 +270,7 @@ const onCompleteHook = (request, response, error, retryStateByRequest) => {
         category: 'http',
         outcome: 'success',
         reason: metadata.terminalReason,
-        reference: request.url,
+        reference: toLogSafeUrl(request.url),
         duration: retryDurationNs(state.startedAtMs)
       },
       tenant: {

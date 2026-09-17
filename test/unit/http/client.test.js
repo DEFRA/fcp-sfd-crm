@@ -612,8 +612,6 @@ describe('Single-attempt client (triageHttpClient) — zero retries, terminal re
       terminalReason: expect.stringMatching(/timed out/),
       status: null
     })
-    // Verify terminalReason is NOT the default 'unknown_error'
-    expect(thrown.retryMetadata.terminalReason).not.toBe('unknown_error')
   })
 
   test('HTTP 403 Forbidden on single-attempt extracts status as 403, not null', async () => {
@@ -637,8 +635,12 @@ describe('Single-attempt client (triageHttpClient) — zero retries, terminal re
       terminalReason: 'http_403',
       status: 403
     })
-    // Verify status is NOT the default null
-    expect(thrown.retryMetadata.status).not.toBeNull()
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: expect.objectContaining({ type: 'http_retry_terminal', reason: 'http_403' })
+      }),
+      'HTTP request failed after retry policy evaluation'
+    )
   })
 
   test('HTTP 412 Precondition Failed on single-attempt does not emit error-level log', async () => {
@@ -671,11 +673,16 @@ describe('Single-attempt client (triageHttpClient) — zero retries, terminal re
     expect(errorLogs).toHaveLength(0)
   })
 
-  test('Network error ECONNREFUSED on single-attempt populates terminalReason from error message', async () => {
+  test('Network error on single-attempt populates terminalReason from error message', async () => {
     let calls = 0
+    // Node's fetch surfaces a refused connection as `TypeError: fetch failed`
+    // with the underlying cause attached, not as an error whose own message
+    // carries the code. The classifier walks the cause chain to find it.
     const fetchHandler = async () => {
       calls++
-      throw Object.assign(new Error('ECONNREFUSED: connect ECONNREFUSED 127.0.0.1:9999'), { code: 'ECONNREFUSED' })
+      throw Object.assign(new TypeError('fetch failed'), {
+        cause: Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:9999'), { code: 'ECONNREFUSED' })
+      })
     }
 
     let thrown
@@ -689,11 +696,9 @@ describe('Single-attempt client (triageHttpClient) — zero retries, terminal re
     expect(thrown.retryMetadata).toMatchObject({
       attempts: 1,
       category: 'retryable',
-      terminalReason: expect.stringMatching(/ECONNREFUSED/),
+      terminalReason: 'fetch failed',
       status: null
     })
-    // Verify terminalReason is NOT the default 'unknown_error'
-    expect(thrown.retryMetadata.terminalReason).not.toBe('unknown_error')
   })
 
   test('HTTP 500 Server Error on single-attempt extracts status as 500, not null', async () => {
@@ -717,8 +722,12 @@ describe('Single-attempt client (triageHttpClient) — zero retries, terminal re
       terminalReason: 'http_500',
       status: 500
     })
-    // Verify status is NOT the default null
-    expect(thrown.retryMetadata.status).not.toBeNull()
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: expect.objectContaining({ type: 'http_retry_terminal', reason: 'http_500' })
+      }),
+      'HTTP request failed after retry policy evaluation'
+    )
   })
 
   test('Success on first attempt with triageHttpClient does not emit error log (sanity check)', async () => {
@@ -753,7 +762,225 @@ describe('Single-attempt client (triageHttpClient) — zero retries, terminal re
       terminalReason: expect.stringMatching(/mysterious error/),
       status: null
     })
-    // Verify terminalReason is NOT the default 'unknown_error'
-    expect(thrown.retryMetadata.terminalReason).not.toBe('unknown_error')
+  })
+})
+
+describe('412 Precondition Failed — duplicate suppression is never a failure', () => {
+  const retryDecisionLogs = () =>
+    mockLogger.warn.mock.calls.filter(
+      ([payload]) => payload?.event?.type === 'http_retry_decision'
+    )
+
+  const terminalFailureLogs = () =>
+    mockLogger.error.mock.calls.filter(
+      ([payload]) => payload?.event?.type === 'http_retry_terminal'
+    )
+
+  test('httpClient does not log a retry decision for a 412', async () => {
+    const fetchHandler = alwaysRespond(412, 'precondition failed')
+
+    await expect(httpClient(url, { fetchHandler })).rejects.toThrow('HTTP error: 412')
+
+    expect(retryDecisionLogs()).toHaveLength(0)
+  })
+
+  test('httpClient does not log a terminal failure for a 412', async () => {
+    const fetchHandler = alwaysRespond(412, 'precondition failed')
+
+    await expect(httpClient(url, { fetchHandler })).rejects.toThrow('HTTP error: 412')
+
+    expect(terminalFailureLogs()).toHaveLength(0)
+  })
+
+  test('httpClient still attaches retry metadata for a 412 so the caller can inspect it', async () => {
+    const fetchHandler = alwaysRespond(412, 'precondition failed')
+
+    let thrown
+    try {
+      await httpClient(url, { fetchHandler })
+    } catch (err) {
+      thrown = err
+    }
+
+    expect(thrown.retryMetadata).toMatchObject({
+      category: 'non-retryable',
+      terminalReason: 'http_412',
+      status: 412
+    })
+  })
+
+  test('does not suppress other non-retryable statuses', async () => {
+    const fetchHandler = alwaysRespond(403, 'forbidden')
+
+    await expect(httpClient(url, { fetchHandler })).rejects.toThrow('HTTP error: 403')
+
+    expect(retryDecisionLogs()).toHaveLength(1)
+    expect(terminalFailureLogs()).toHaveLength(1)
+  })
+
+  test('triageHttpClient also stays silent for a 412', async () => {
+    const fetchHandler = alwaysRespond(412, 'precondition failed')
+
+    await expect(triageHttpClient(url, { fetchHandler })).rejects.toThrow('HTTP error: 412')
+
+    expect(retryDecisionLogs()).toHaveLength(0)
+    expect(terminalFailureLogs()).toHaveLength(0)
+  })
+})
+
+describe('connection failures are classified from the error cause chain', () => {
+  const refusedConnection = () => Object.assign(new TypeError('fetch failed'), {
+    cause: Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:9999'), { code: 'ECONNREFUSED' })
+  })
+
+  test('spends the full retryable budget on a refused connection, not the unknown one', async () => {
+    let calls = 0
+    const fetchHandler = async () => {
+      calls++
+      throw refusedConnection()
+    }
+
+    await expect(httpClient(url, { fetchHandler })).rejects.toThrow()
+
+    // maxAttempts=3 for retryable, unknownMaxAttempts=2 for unknown
+    expect(calls).toBe(3)
+  })
+
+  test('finds a retryable code nested two levels down', async () => {
+    const fetchHandler = async () => {
+      throw Object.assign(new Error('Retry limit reached'), { cause: refusedConnection() })
+    }
+
+    let thrown
+    try {
+      await triageHttpClient(url, { fetchHandler })
+    } catch (err) {
+      thrown = err
+    }
+
+    expect(thrown.retryMetadata).toMatchObject({ category: 'retryable' })
+  })
+
+  test('matches on the cause message when no code is set', async () => {
+    const fetchHandler = async () => {
+      throw Object.assign(new TypeError('fetch failed'), { cause: new Error('getaddrinfo ENOTFOUND crm.example') })
+    }
+
+    let thrown
+    try {
+      await triageHttpClient(url, { fetchHandler })
+    } catch (err) {
+      thrown = err
+    }
+
+    expect(thrown.retryMetadata).toMatchObject({ category: 'retryable' })
+  })
+
+  test('still classifies an unrelated failure as unknown', async () => {
+    const fetchHandler = async () => {
+      throw Object.assign(new TypeError('fetch failed'), { cause: new Error('something else entirely') })
+    }
+
+    let thrown
+    try {
+      await triageHttpClient(url, { fetchHandler })
+    } catch (err) {
+      thrown = err
+    }
+
+    expect(thrown.retryMetadata).toMatchObject({ category: 'unknown' })
+  })
+
+  test('stops walking a cause chain that is too deep to be genuine', async () => {
+    // Six links: deeper than the walk is willing to follow.
+    let deepest = Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' })
+    for (let i = 0; i < 5; i++) {
+      deepest = Object.assign(new Error('wrapper'), { cause: deepest })
+    }
+    const fetchHandler = async () => { throw deepest }
+
+    let thrown
+    try {
+      await triageHttpClient(url, { fetchHandler })
+    } catch (err) {
+      thrown = err
+    }
+
+    expect(thrown.retryMetadata).toMatchObject({ category: 'unknown' })
+  })
+
+  test('survives a cause chain that loops back on itself', async () => {
+    const first = new Error('first')
+    const second = Object.assign(new Error('second'), { cause: first })
+    first.cause = second
+
+    const fetchHandler = async () => { throw first }
+
+    let thrown
+    try {
+      await triageHttpClient(url, { fetchHandler })
+    } catch (err) {
+      thrown = err
+    }
+
+    expect(thrown.retryMetadata).toMatchObject({ category: 'unknown' })
+  })
+})
+
+describe('logged URLs — CRN and SBI are masked', () => {
+  const crn = '1050000001'
+  const sbi = '123456789'
+  const contactsUrl = `http://test-crm/contacts?$select=contactid&$filter=${encodeURIComponent(`rpa_capcustomerid eq '${crn}'`)}`
+  const accountsUrl = `http://test-crm/accounts?$select=accountid&$filter=${encodeURIComponent(`rpa_sbinumber eq '${sbi}'`)}`
+
+  const loggedReferences = () => [
+    ...mockLogger.warn.mock.calls,
+    ...mockLogger.error.mock.calls,
+    ...mockLogger.info.mock.calls
+  ].map(([payload]) => payload?.event?.reference ?? '')
+
+  test('retry decision log does not carry a full CRN', async () => {
+    const fetchHandler = alwaysRespond(500, 'error')
+
+    await expect(httpClient(contactsUrl, { fetchHandler })).rejects.toThrow()
+
+    const references = loggedReferences()
+    expect(references.length).toBeGreaterThan(0)
+    for (const reference of references) {
+      expect(reference).not.toContain(crn)
+      expect(reference).not.toMatch(/\d{10}/)
+    }
+  })
+
+  test('terminal failure log masks the CRN but keeps the last four digits', async () => {
+    const fetchHandler = alwaysRespond(500, 'error')
+
+    await expect(httpClient(contactsUrl, { fetchHandler })).rejects.toThrow()
+
+    const [terminal] = mockLogger.error.mock.calls.filter(
+      ([payload]) => payload?.event?.type === 'http_retry_terminal'
+    )
+    expect(new URL(terminal[0].event.reference).searchParams.get('$filter')).toBe("rpa_capcustomerid eq '******0001'")
+  })
+
+  test('logs do not carry a full SBI', async () => {
+    const fetchHandler = alwaysRespond(500, 'error')
+
+    await expect(httpClient(accountsUrl, { fetchHandler })).rejects.toThrow()
+
+    for (const reference of loggedReferences()) {
+      expect(reference).not.toContain(sbi)
+    }
+  })
+
+  test('recovery log masks the CRN too', async () => {
+    const fetchHandler = failFirstNThenOk(1, 500)
+
+    await httpClient(contactsUrl, { fetchHandler })
+
+    const [recovered] = mockLogger.info.mock.calls.filter(
+      ([payload]) => payload?.event?.type === 'http_retry_recovered'
+    )
+    expect(recovered[0].event.reference).not.toContain(crn)
   })
 })
