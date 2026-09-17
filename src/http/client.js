@@ -11,6 +11,9 @@ const RETRYABLE_NETWORK_ERROR = /ECONNRESET|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|EPI
 const HTTP_TOO_MANY_REQUESTS = 429
 const HTTP_SERVER_ERROR_MIN = 500
 const HTTP_CLIENT_ERROR_MIN = 400
+// The designed idempotency response when a conditional upsert attempts to
+// recreate an already-existing record.
+const HTTP_PRECONDITION_FAILED = 412
 
 const classifyResponseStatus = (status) => {
   if (status === HTTP_TOO_MANY_REQUESTS || status >= HTTP_SERVER_ERROR_MIN) {
@@ -158,68 +161,78 @@ const beforeHook = (request, retryStateByRequest) => {
   retryStateByRequest.set(request, buildRetryState())
 }
 
-const onCompleteHook = (request, response, error, retryStateByRequest) => {
-  const state = retryStateByRequest.get(request) ?? buildRetryState()
-  retryStateByRequest.delete(request)
-
-  // When shouldRetry was never called (retries=0 in single-attempt clients), state
-  // has defaults. Populate it now by running the same classification that shouldRetryHook
-  // would have performed. This ensures single-attempt clients report accurate terminal
-  // reasons and HTTP statuses instead of 'unknown_error' and null.
-  if (error && state.terminalReason === 'unknown_error') {
-    const ctx = { error, response: response ?? responseFromError(error), request, attempt: 1 }
-    const cls = classifyError(ctx)
-    state.category = toMetadataCategory(cls)
-    state.terminalReason = buildTerminalReason(ctx)
-    state.finalAttempt = 1
+// When shouldRetry was never called (retries=0 in single-attempt clients), the
+// state still holds its defaults. Running the same classification shouldRetryHook
+// would have performed lets those clients report accurate terminal reasons and
+// HTTP statuses instead of 'unknown_error' and null.
+const populateStateFromNoRetryPath = (state, request, response, error) => {
+  if (!error || state.terminalReason !== 'unknown_error') {
+    return
   }
 
-  // finalAttempt is set when shouldRetry returned false on a failure (early
-  // exit path). In that case ctx.attempt is the real total. The +1 form
-  // covers the loop-exhausted path where shouldRetry was never called on
-  // the last failure, and the success path.
-  const attempts = state.finalAttempt ?? Math.max(1, state.lastAttempt + 1)
+  const ctx = { error, response: response ?? responseFromError(error), request, attempt: 1 }
+  state.category = toMetadataCategory(classifyError(ctx))
+  state.terminalReason = buildTerminalReason(ctx)
+  state.finalAttempt = 1
+}
+
+const buildRetryMetadata = (state) => {
   const httpStatusMatch = state.terminalReason?.match(/^http_(\d+)$/)
-  const metadata = {
-    attempts,
+
+  return {
+    // finalAttempt is set when shouldRetry returned false on a failure (early
+    // exit path). In that case ctx.attempt is the real total. The +1 form
+    // covers the loop-exhausted path where shouldRetry was never called on
+    // the last failure, and the success path.
+    attempts: state.finalAttempt ?? Math.max(1, state.lastAttempt + 1),
     category: state.category,
     terminalReason: state.terminalReason,
     status: httpStatusMatch ? Number.parseInt(httpStatusMatch[1], 10) : null
   }
+}
+
+const logTerminalFailure = (request, error, metadata, startedAtMs) => {
+  logger.error({
+    event: {
+      type: 'http_retry_terminal',
+      action: 'request_failed',
+      category: 'http',
+      outcome: 'failure',
+      reason: metadata.terminalReason,
+      reference: request.url,
+      duration: retryDurationNs(startedAtMs),
+      kind: error instanceof Error ? error.name : 'error'
+    },
+    error: {
+      message: errorMessage(error)
+    },
+    tenant: {
+      message: toTenantMessage({ attempts: metadata.attempts, category: metadata.category, status: metadata.status })
+    }
+  }, 'HTTP request failed after retry policy evaluation')
+}
+
+const onCompleteHook = (request, response, error, retryStateByRequest) => {
+  const state = retryStateByRequest.get(request) ?? buildRetryState()
+  retryStateByRequest.delete(request)
+
+  populateStateFromNoRetryPath(state, request, response, error)
+
+  const metadata = buildRetryMetadata(state)
 
   if (error) {
-    // 412 Precondition Failed is the designed idempotency response when a
-    // conditional upsert attempts to recreate an already-existing record. This is not
-    // an error — it is the intended behaviour. Do not log it as an error to avoid false
-    // alerts. The caller (upsertRecord) handles 412 silently and returns false.
-    if (metadata.status === 412) {
-      attachRetryMetadata(error, metadata)
-      return
-    }
-
     attachRetryMetadata(error, metadata)
-    logger.error({
-      event: {
-        type: 'http_retry_terminal',
-        action: 'request_failed',
-        category: 'http',
-        outcome: 'failure',
-        reason: metadata.terminalReason,
-        reference: request.url,
-        duration: retryDurationNs(state.startedAtMs),
-        kind: error instanceof Error ? error.name : 'error'
-      },
-      error: {
-        message: errorMessage(error)
-      },
-      tenant: {
-        message: toTenantMessage({ attempts: metadata.attempts, category: metadata.category, status: metadata.status })
-      }
-    }, 'HTTP request failed after retry policy evaluation')
+
+    // A 412 is the intended behaviour rather than a failure, so logging it as an
+    // error would raise false alerts. The caller (upsertRecord) handles it
+    // silently and returns false.
+    if (metadata.status !== HTTP_PRECONDITION_FAILED) {
+      logTerminalFailure(request, error, metadata, state.startedAtMs)
+    }
     return
   }
 
-  if (attempts > 1 && !isHttpFailureResponse(response)) {
+  if (metadata.attempts > 1 && !isHttpFailureResponse(response)) {
     logger.info({
       event: {
         type: 'http_retry_recovered',

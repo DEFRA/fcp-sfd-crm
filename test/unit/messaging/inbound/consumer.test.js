@@ -586,7 +586,7 @@ describe('CRM request sqs consumer', () => {
       })
 
       test('should NOT log crm.dlq.message_replayed for messages without replayed_from attribute', async () => {
-        const { startCRMListener: start, logger, createCase, sqsClient } = await setupAndImportConsumer()
+        const { startCRMListener: start, createCase, sqsClient } = await setupAndImportConsumer()
         start(sqsClient)
         createCase.mockResolvedValueOnce({ caseId: 'case-first-time' })
         const message = {
@@ -605,7 +605,7 @@ describe('CRM request sqs consumer', () => {
       })
 
       test('should NOT log crm.dlq.message_replayed when replayed_from has non-DLQ value', async () => {
-        const { startCRMListener: start, logger, createCase, sqsClient } = await setupAndImportConsumer()
+        const { startCRMListener: start, createCase, sqsClient } = await setupAndImportConsumer()
         start(sqsClient)
         createCase.mockResolvedValueOnce({ caseId: 'case-other-replay' })
         const message = {
