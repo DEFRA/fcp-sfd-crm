@@ -2,13 +2,15 @@
 
 ## Overview
 
-**fcp-sfd-crm** is a Node.js CRM orchestration service for the Single Front Door (SFD) platform. It handles case management, messaging (SQS/SNS), authentication with external CRM systems, and integrates with MongoDB for persistence.
+**fcp-sfd-crm** is a Node.js CRM orchestration service for the Single Front Door (SFD) platform. It consumes document upload events from SQS, orchestrates case creation in Dataverse CRM, publishes received and audit events to SNS, and uses MongoDB to coordinate idempotent case creation across multi-file submissions.
 
 **Tech Stack:**
 - Node.js 24+ (ES modules)
 - Hapi.js for HTTP API
 - MongoDB for data storage
+- Dataverse CRM Web API
 - AWS SQS/SNS for messaging
+- Vitest for unit and integration tests
 - Docker & Docker Compose for local development
 
 ## Running Commands
@@ -25,14 +27,14 @@ Watch mode in Docker (for TDD):
 npm run docker:test:watch
 ```
 
-Single test file (requires env vars from `.env` — run inside Docker or with env loaded):
+Single test file:
 ```bash
-npm run docker:test
+npx vitest run --no-coverage test/unit/server.test.js
 ```
 
-> **Note:** Do not run `npm test` or `npx vitest run` directly — the config validation requires env vars that are only available inside the Docker environment.
+> **Note:** `npm test` and `npx vitest run` work locally because `test/setup/env.js` seeds the minimum config required by Convict. Docker remains the standard path for full test runs and CI because it exercises the service with MongoDB and Floci.
 
-**Coverage Requirements:** 100% statements, lines, branches; 97% functions. Excluded files: `src/index.js`, `src/data/db.js`, `src/messaging/sqs/client.js`.
+**Coverage Requirements:** 90% statements, lines, branches, and functions. Excluded files: `src/index.js`, `src/data/db.js`, `src/messaging/sqs/client.js`.
 
 ### Linting
 
@@ -73,49 +75,59 @@ Debug mode:
 npm run docker:debug
 ```
 
+### CI Workflows
+
+- **`.github/workflows/check-pull-request.yml`** builds the Docker image, runs the Docker based test stack, then runs SonarQube Cloud and Snyk scans.
+- **`.github/workflows/publish.yml`** and **`publish-hotfix.yml`** rerun the Docker based tests before the CDP publish steps.
+
 ## Architecture
 
 ### Directory Structure
 
 - **`src/index.js`** - Application entry point; starts HTTP server and messaging consumers
-- **`src/server.js`** - Hapi server creation with security/logging plugins; registers no routes
-- **`src/api/`** - HTTP handlers and shared API utilities (plugins, middleware, helpers, proxy setup)
+- **`src/server.js`** - Hapi server creation with request logging, tracing, secure context, and pulse plugins; intentionally registers no business routes
+- **`src/api/`** - Shared Hapi helpers and Joi schemas for inbound, outbound, and HTTP payload validation; there are no application routes today
 - **`src/services/`** - Business logic layer:
   - **`case.js`** - Case operations and lifecycle management
   - **`create-case-with-online-submission-in-crm.js`** - CRM case creation with online submission
   - **`crm-helpers.js`** - CRM integration utilities
-- **`src/repos/`** - Data access layer for MongoDB:
+- **`src/repos/`** - Data access layer for MongoDB and Dataverse:
   - **`cases.js`** - Case repository with indexing
-  - **`crm.js`** - CRM-related data operations
+  - **`crm.js`** - Dataverse reads and writes
+  - **`dataverse-batch.js`** - `$batch` request construction and parsing
   - **`token.js`** - Authentication token storage
 - **`src/messaging/`** - Event-driven messaging:
   - **`inbound/`** - SQS consumer for incoming CRM messages
-  - **`outbound/`** - SNS publisher for case events
-  - **`outbound/received-event/`** - Event publishing utilities
+  - **`outbound/audit/`** - Audit event publishing
+  - **`outbound/received-event/`** - Received event publishing
   - **`sns/`** & **`sqs/`** - AWS client configuration
 - **`src/auth/`** - CRM authentication:
   - **`generate-crm-auth-token.js`** - Token generation (OAuth2 client credentials)
   - **`get-crm-auth-token.js`** - Token retrieval/caching
+  - **`strategies/`** - Client secret and federated credential auth strategies
 - **`src/config/`** - Configuration management using Convict (validates against schema):
   - **`index.js`** - Main config aggregator
-  - **`server.js`**, **`auth.js`**, **`crm.js`**, **`queue.js`**, **`aws.js`**, **`messaging.js`** - Config schemas
-- **`src/constants/`** - Constant definitions (events, source, environments, case-types)
+  - **`server.js`**, **`auth.js`**, **`crm.js`**, **`aws.js`**, **`messaging.js`**, **`retry.js`**, **`cases.js`** - Config schemas
+- **`src/http/`** - Outbound HTTP clients with retry policy for CRM and triage calls
+- **`src/constants/`** - Constant definitions (events, audit, messages, source, environments, case-types, metrics, triage values)
 - **`src/logging/`** - Pino logger setup with request/correlation tracking
-- **`src/data/`** - MongoDB client initialization
+- **`src/data/`** - MongoDB client initialization and index helpers
 - **`src/utils/`** - Shared utility functions
 - **`test/unit/`** - Unit tests (mirroring src structure)
-- **`test/integration/`** - Integration tests
+- **`test/integration/narrow/`** - Narrow integration tests for repo, audit, and service boundaries
+- **`test/setup/`** - Vitest environment bootstrapping
+- **`test/helpers/`** - Shared test helpers
 - **`test/mocks/`** - Shared test mocks
 
 ### Data Flow
 
-1. **Inbound:** SQS queue → `messaging/inbound/consumer` → `services/case.js` → MongoDB
-2. **Outbound:** Service → `messaging/outbound` → SNS topic
-3. **HTTP:** Route handler → Service layer → Repository → MongoDB
+1. **Inbound:** SQS queue → inbound CloudEvent validation → `services/case.js` → MongoDB creator-role state + Dataverse
+2. **Outbound:** Service → `messaging/outbound/received-event` and `messaging/outbound/audit` → SNS topics
+3. **HTTP:** Hapi server hosts platform plugins and pod liveness only; the service currently exposes no business routes
 
 ### Configuration
 
-Configuration is centralized in `src/config/index.js` and loaded via environment variables. Config schemas are defined in separate files (`server.js`, `auth.js`, `crm.js`, `queue.js`, `aws.js`, `messaging.js`). Validation is strict—all env vars must be declared in the schema.
+Configuration is centralized in `src/config/index.js` and loaded via environment variables. Config schemas are defined in separate files (`server.js`, `auth.js`, `crm.js`, `aws.js`, `messaging.js`, `retry.js`, `cases.js`). Validation uses `config.validate({ allowed: 'strict' })`, so undeclared config is rejected.
 
 ## Key Conventions
 
@@ -124,9 +136,9 @@ Configuration is centralized in `src/config/index.js` and loaded via environment
 - Prefer relative paths from `src/` (e.g., `import { config } from '../config/index.js'`)
 
 ### Error Handling
-- Use `@hapi/boom` for HTTP errors in route handlers
-- Validation uses Joi schemas defined in routes
-- Logs include correlation IDs for request tracing
+- Use Joi schemas in `src/api/schemas/` for inbound, outbound, and HTTP payload validation
+- If HTTP handlers are added later, use `@hapi/boom` for route errors
+- Logs include trace IDs and correlation IDs for request tracing
 
 ### Testing Patterns
 - **Setup:** Use `beforeEach(vi.clearAllMocks())` to reset mocks
@@ -137,7 +149,7 @@ Configuration is centralized in `src/config/index.js` and loaded via environment
 ### Logging
 - Create logger: `const logger = createLogger()`
 - Log events with context: `logger.info('message')`, `logger.error(error)`
-- Correlation ID is automatically attached from request context
+- Correlation ID is automatically attached from request or message context, alongside CDP trace IDs when present
 
 ### MongoDB
 - Database collection access: `db.collection('collectionName')`
@@ -145,38 +157,40 @@ Configuration is centralized in `src/config/index.js` and loaded via environment
 - Always create indexes for frequently queried fields
 
 ### AWS Integration
-- SQS/SNS clients are configured with environment endpoint (supports Floci)
-- Region and credentials from env vars (`AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`)
+- SQS/SNS clients can target real AWS endpoints or local Floci endpoints
+- CRM received events publish to `CRM_EVENTS_TOPIC_ARN`; audit events publish to `AUDIT_TOPIC_ARN`
+- Region, credentials, and SNS timeout or retry settings come from env vars
 
 ### Environment Variables
 Create a `.env` file from `.env.example`. Key variables:
-- `PORT` - HTTP port (default: 3009)
-- `MONGO_URI` - MongoDB connection string
-- `CRM_*` - CRM authentication and API endpoints
-- `CRM_QUEUE_URL` / `CRM_DEAD_LETTER_QUEUE_URL` - SQS queue URLs
-- `CRM_EVENTS_TOPIC_ARN` - SNS topic for publishing events
-- `AWS_*` - AWS credentials and region
+- `PORT`, `HOST`, `SERVICE_VERSION`, `ENVIRONMENT`, `LOG_*`
+- `MONGO_URI`, `MONGO_DATABASE`
+- `CRM_AUTH_*` plus `CRM_AUTH_FEDERATED_DISABLED`, `CRM_AUTH_FEDERATED_AUDIENCE`, `CRM_AUTH_FEDERATED_MOCK`
+- `CRM_API_BASE_URL`, `CRM_CASE_ORIGIN_CODE`, `CRM_WRITE_FILES_IN_SUBMISSION`, `CRM_INTEGRATION_INBOUND_FAILURE_PROCESSING_ENTITY`
+- `CRM_QUEUE_URL`, `CRM_DEAD_LETTER_QUEUE_URL`, `CRM_EVENTS_TOPIC_ARN`, `AUDIT_TOPIC_ARN`
+- `HTTP_RETRY_*`, `CRM_*_HTTP_TIMEOUT_MS`, `RETRY_UNKNOWN_*`, `RETRY_AFTER_MAX_DELAY_MS`, `CASE_CREATION_DEADLINE_MS`
+- `AWS_*`, plus optional `AWS_SNS_REQUEST_TIMEOUT_MS` and `AWS_SNS_MAX_ATTEMPTS`
 
 ### Docker Development
-- Source code volume-mounted for hot reload (`./src/:/home/node/src`)
-- Dependent services: MongoDB, Floci (mocks S3, SQS, SNS)
+- Source code and `package.json` are volume-mounted for local development; tests also mount `test/` and `coverage/`
+- Dependent services: MongoDB, Floci, and `floci-init` for local SQS/SNS setup
 - Tests run in isolated container with cleanup
 
 ## Common Tasks
 
 ### Adding a New Route
-1. Create handler in `src/routes/my-route.js`, export a route factory function
-2. Add Joi schema for validation in the route definition
-3. Call service layer for business logic
+1. This service currently registers no business routes; add one only if the service responsibility genuinely changes
+2. Define validation alongside `src/api/schemas/`
+3. Keep the handler thin and call the service layer for business logic
 4. Return payload or Boom error
-5. Register in `src/server.js`
-6. Add unit tests in `test/unit/routes/my-route.test.js`
+5. Register it in `src/server.js`
+6. Add `server.inject()` coverage in `test/unit/server.test.js` or a neighbouring route test
 
 ### Adding a Service
 1. Create `src/services/my-feature.js` with exported functions
 2. Call repository functions for data access
 3. Handle errors with context (use logger)
-4. Add unit tests in `test/unit/services/my-feature.test.js` with mocked repos
+4. Add unit tests in `test/unit/services/my-feature.test.js` with mocked repos and add narrow integration tests if the change crosses repo or messaging boundaries
 
 ### Querying MongoDB
 1. Use repository functions in `src/repos/` (cases.js, etc.)
@@ -184,8 +198,8 @@ Create a `.env` file from `.env.example`. Key variables:
 3. Create indexes if needed (see `setCorrelationIdIndex` in cases.js)
 
 ### Publishing Events
-- Use `publishMessage` from `src/messaging/outbound/` with SNS topic ARN
-- Include correlation ID in message metadata for tracing
+- Use `publishReceivedEvent` for CRM received events and `emitAuditEvent` for audit events
+- Include correlation ID in event payloads and metadata for tracing
 
 ### Debugging
 1. Start with `npm run start:debug` or `npm run docker:debug`
