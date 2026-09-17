@@ -1,0 +1,22 @@
+# Snyk (https://snyk.io) policy file, patches or ignores known vulnerabilities.
+version: v1.25.0
+ignore:
+  SNYK-JS-JOI-19778379:
+    - '*':
+        reason: >-
+          CVE-2026-90771 (prototype pollution in joi). The fixed releases
+          (joi 18.2.9 and 17.13.8, both published 2026-09-11) fall inside the
+          7-day supply-chain cooldown enforced by min-release-age=7 in .npmrc,
+          so `npm ci` rejects them with ETARGET. No joi version currently
+          satisfies both the advisory and the cooldown.
+
+          Exposure here is nil: the vulnerable code path is reached only via
+          attacker-controlled input to joi's .messages() API, which this
+          service never calls. All schemas under src/api/schemas use default
+          messages.
+
+          Remove this ignore and bump joi to 18.2.9 once the cooldown window
+          clears on 2026-09-18.
+        expires: 2026-09-24T00:00:00.000Z
+        created: 2026-09-17T00:00:00.000Z
+patch: {}

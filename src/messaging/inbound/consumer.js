@@ -156,6 +156,7 @@ const startCRMListener = (sqsClient) => {
     batchSize: config.get('messaging.batchSize'),
     waitTimeSeconds: config.get('messaging.waitTimeSeconds'),
     pollingWaitTime: config.get('messaging.pollingWaitTime'),
+    messageAttributeNames: ['replayed_from'],
     sqs: sqsClient,
     async handleMessage (message) {
       let payload
