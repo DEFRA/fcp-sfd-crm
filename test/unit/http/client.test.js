@@ -927,7 +927,7 @@ describe('connection failures are classified from the error cause chain', () => 
   })
 })
 
-describe('logged URLs — CRN and SBI are masked', () => {
+describe('logged URLs — the CRN is masked, the SBI is not', () => {
   const crn = '1050000001'
   const sbi = '123456789'
   const contactsUrl = `http://test-crm/contacts?$select=contactid&$filter=${encodeURIComponent(`rpa_capcustomerid eq '${crn}'`)}`
@@ -963,14 +963,15 @@ describe('logged URLs — CRN and SBI are masked', () => {
     expect(new URL(terminal[0].event.reference).searchParams.get('$filter')).toBe("rpa_capcustomerid eq '******0001'")
   })
 
-  test('logs do not carry a full SBI', async () => {
+  test('logs keep the SBI in full', async () => {
     const fetchHandler = alwaysRespond(500, 'error')
 
     await expect(httpClient(accountsUrl, { fetchHandler })).rejects.toThrow()
 
-    for (const reference of loggedReferences()) {
-      expect(reference).not.toContain(sbi)
-    }
+    const [terminal] = mockLogger.error.mock.calls.filter(
+      ([payload]) => payload?.event?.type === 'http_retry_terminal'
+    )
+    expect(new URL(terminal[0].event.reference).searchParams.get('$filter')).toBe(`rpa_sbinumber eq '${sbi}'`)
   })
 
   test('recovery log masks the CRN too', async () => {

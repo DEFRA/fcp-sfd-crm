@@ -1,11 +1,8 @@
 const MASK_VISIBLE_DIGITS = 4
 const NULL_IDENTIFIER_MASK = '*'.repeat(MASK_VISIBLE_DIGITS)
 
-// Generic identifier masker: safe for CRN, SBI or any other numeric/text
-// identifier where only the last few digits should be logged. Security treat
-// the CRN as half a login credential, so it must never appear in full in logs.
-// For a sole trader the SBI is effectively a personal identifier, so it is
-// masked on the same terms as the CRN.
+// Masks a CRN so only the last few digits are logged, because the CRN is
+// half of a login credential. The SBI is logged in full.
 export function maskIdentifier (identifier) {
   if (identifier === null || identifier === undefined) { return NULL_IDENTIFIER_MASK }
   const str = String(identifier)

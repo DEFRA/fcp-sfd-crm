@@ -44,14 +44,14 @@ const ACCOUNT_NOT_FOUND = 'Account ID not found'
  * @param {object} params.error - error returned by the repo
  * @param {string} params.subject - "contact" or "account"
  * @param {string} params.identifierLabel - "CRN" or "SBI"
- * @param {string} params.masked - the masked identifier, safe to log
+ * @param {string|number} params.loggedIdentifier - the identifier as logged: CRN masked, SBI in full
  * @param {string} params.notFoundMessage - message for the 422
  * @param {string} params.triageFailureReason - mapped terminal triage reason
  * @throws always
  */
-const throwLookupFailure = ({ error, subject, identifierLabel, masked, notFoundMessage, triageFailureReason }) => {
+const throwLookupFailure = ({ error, subject, identifierLabel, loggedIdentifier, notFoundMessage, triageFailureReason }) => {
   if (error.retryMetadata?.category === 'retryable') {
-    const retryableErr = new Error(`Retryable error looking up ${subject} for ${identifierLabel}: ${masked}`)
+    const retryableErr = new Error(`Retryable error looking up ${subject} for ${identifierLabel}: ${loggedIdentifier}`)
     retryableErr.retryable = true
     retryableErr.retryMetadata = error.retryMetadata
     throw retryableErr
@@ -61,7 +61,7 @@ const throwLookupFailure = ({ error, subject, identifierLabel, masked, notFoundM
   // CRM API response body containing PII.
   logger.error({
     error: { type: error.name ?? 'CrmLookupError', status: error.retryMetadata?.status ?? null }
-  }, `No ${subject} found for ${identifierLabel}: ${masked}`)
+  }, `No ${subject} found for ${identifierLabel}: ${loggedIdentifier}`)
 
   const err = unprocessableEntity(notFoundMessage)
   err.triageFailureReason = triageFailureReason
@@ -75,13 +75,13 @@ const throwLookupFailure = ({ error, subject, identifierLabel, masked, notFoundM
  * @param {object} params.event - built audit event
  * @param {string} params.subject - "contact" or "account"
  * @param {string} params.identifierLabel - "CRN" or "SBI"
- * @param {string} params.masked - the masked identifier, safe to log
+ * @param {string|number} params.loggedIdentifier - the identifier as logged: CRN masked, SBI in full
  * @param {string} params.notFoundMessage - message for the 422
  * @param {string} params.triageFailureReason - mapped terminal triage reason
  * @throws always
  */
-const throwNotFound = async ({ event, subject, identifierLabel, masked, notFoundMessage, triageFailureReason }) => {
-  logger.error(`No ${subject} found for ${identifierLabel}: ${masked}`)
+const throwNotFound = async ({ event, subject, identifierLabel, loggedIdentifier, notFoundMessage, triageFailureReason }) => {
+  logger.error(`No ${subject} found for ${identifierLabel}: ${loggedIdentifier}`)
   await emitAuditEvent(event)
   const err = unprocessableEntity(notFoundMessage)
   err.triageFailureReason = triageFailureReason
@@ -122,7 +122,7 @@ export async function ensureContactAndAccount (authToken, crn, sbi, { correlatio
   const contact = {
     subject: 'contact',
     identifierLabel: 'CRN',
-    masked: maskIdentifier(crn),
+    loggedIdentifier: maskIdentifier(crn),
     notFoundMessage: CONTACT_NOT_FOUND,
     triageFailureReason: triageFailureReasons.CONTACT_NOT_FOUND_FOR_CRN
   }
@@ -150,7 +150,7 @@ export async function ensureContactAndAccount (authToken, crn, sbi, { correlatio
   const account = {
     subject: 'account',
     identifierLabel: 'SBI',
-    masked: maskIdentifier(sbi),
+    loggedIdentifier: sbi,
     notFoundMessage: ACCOUNT_NOT_FOUND,
     triageFailureReason: triageFailureReasons.ACCOUNT_NOT_FOUND_FOR_SBI
   }

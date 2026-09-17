@@ -8,6 +8,7 @@ import { toTenantMessage } from '../logging/tenant-message.js'
 import { buildChangesetRequest, parseBatchResponse } from './dataverse-batch.js'
 import { triageFailureReasons } from '../constants/integration-inbound-triage.js'
 import { HTTP_PRECONDITION_FAILED } from '../constants/http.js'
+import { CRN_FILTER_FIELD } from '../constants/crm-fields.js'
 
 const logger = createLogger()
 
@@ -84,9 +85,11 @@ const buildQuery = (params) =>
 
 const getContactIdFromCrn = async (authToken, crn) => {
   const baseUrl = getBaseUrl()
+  // CRN_FILTER_FIELD marks this operand as a CRN, which is what tells the HTTP
+  // logger to mask it. Inlining the column name here would log it in full.
   const query = `/contacts?${buildQuery({
     $select: 'contactid',
-    $filter: `rpa_capcustomerid eq '${crn}'`
+    $filter: `${CRN_FILTER_FIELD} eq '${crn}'`
   })}`
 
   try {
