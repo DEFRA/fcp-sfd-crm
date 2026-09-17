@@ -127,6 +127,14 @@ const isRetryDecisionFailure = (ctx) => {
 const isHttpFailureResponse = (response) =>
   Boolean(response && response.status >= HTTP_CLIENT_ERROR_MIN)
 
+// On the no-retry path the hook is handed the HttpError alone, with the failing
+// response carried as its cause. Recovering it here is what lets a single-attempt
+// client classify the failure and name its status.
+const responseFromError = (error) => {
+  const cause = error?.cause
+  return typeof cause?.status === 'number' ? cause : undefined
+}
+
 const retryDurationNs = (startedAtMs) => (Date.now() - startedAtMs) * 1_000_000
 
 const logRetryDecision = ({ ctx, category, willRetry, limit, terminalReason, startedAtMs }) => {
@@ -154,6 +162,18 @@ const onCompleteHook = (request, response, error, retryStateByRequest) => {
   const state = retryStateByRequest.get(request) ?? buildRetryState()
   retryStateByRequest.delete(request)
 
+  // When shouldRetry was never called (retries=0 in single-attempt clients), state
+  // has defaults. Populate it now by running the same classification that shouldRetryHook
+  // would have performed. This ensures single-attempt clients report accurate terminal
+  // reasons and HTTP statuses instead of 'unknown_error' and null.
+  if (error && state.terminalReason === 'unknown_error') {
+    const ctx = { error, response: response ?? responseFromError(error), request, attempt: 1 }
+    const cls = classifyError(ctx)
+    state.category = toMetadataCategory(cls)
+    state.terminalReason = buildTerminalReason(ctx)
+    state.finalAttempt = 1
+  }
+
   // finalAttempt is set when shouldRetry returned false on a failure (early
   // exit path). In that case ctx.attempt is the real total. The +1 form
   // covers the loop-exhausted path where shouldRetry was never called on
@@ -168,6 +188,15 @@ const onCompleteHook = (request, response, error, retryStateByRequest) => {
   }
 
   if (error) {
+    // 412 Precondition Failed is the designed idempotency response when a
+    // conditional upsert attempts to recreate an already-existing record. This is not
+    // an error — it is the intended behaviour. Do not log it as an error to avoid false
+    // alerts. The caller (upsertRecord) handles 412 silently and returns false.
+    if (metadata.status === 412) {
+      attachRetryMetadata(error, metadata)
+      return
+    }
+
     attachRetryMetadata(error, metadata)
     logger.error({
       event: {

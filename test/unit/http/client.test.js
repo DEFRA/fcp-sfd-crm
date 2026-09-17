@@ -40,7 +40,7 @@ vi.mock('../../../src/logging/logger.js', () => ({
   createLogger: () => mockLogger
 }))
 
-const { httpClient, authHttpClient, AbortError, TimeoutError, computeRetryDelay, parseRetryAfterMs } = await import('../../../src/http/client.js')
+const { httpClient, authHttpClient, triageHttpClient, AbortError, TimeoutError, computeRetryDelay, parseRetryAfterMs } = await import('../../../src/http/client.js')
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -587,5 +587,173 @@ describe('retryMetadata.status field', () => {
       ([, message]) => message === 'HTTP request recovered after retry'
     )
     expect(recoveryLogs).toHaveLength(0)
+  })
+})
+
+describe('Single-attempt client (triageHttpClient) — zero retries, terminal reason populated', () => {
+  test('TimeoutError on single-attempt populates terminalReason as timeout, not unknown_error', async () => {
+    let calls = 0
+    const fetchHandler = async () => {
+      calls++
+      throw new TimeoutError('operation timed out after 1000ms')
+    }
+
+    let thrown
+    try {
+      await triageHttpClient(url, { fetchHandler })
+    } catch (err) {
+      thrown = err
+    }
+
+    expect(calls).toBe(1) // triageMaxAttempts=1, no retries
+    expect(thrown.retryMetadata).toMatchObject({
+      attempts: 1,
+      category: 'retryable',
+      terminalReason: expect.stringMatching(/timed out/),
+      status: null
+    })
+    // Verify terminalReason is NOT the default 'unknown_error'
+    expect(thrown.retryMetadata.terminalReason).not.toBe('unknown_error')
+  })
+
+  test('HTTP 403 Forbidden on single-attempt extracts status as 403, not null', async () => {
+    let calls = 0
+    const fetchHandler = async () => {
+      calls++
+      return new Response('forbidden', { status: 403 })
+    }
+
+    let thrown
+    try {
+      await triageHttpClient(url, { fetchHandler })
+    } catch (err) {
+      thrown = err
+    }
+
+    expect(calls).toBe(1) // triageMaxAttempts=1, no retries
+    expect(thrown.retryMetadata).toMatchObject({
+      attempts: 1,
+      category: 'non-retryable',
+      terminalReason: 'http_403',
+      status: 403
+    })
+    // Verify status is NOT the default null
+    expect(thrown.retryMetadata.status).not.toBeNull()
+  })
+
+  test('HTTP 412 Precondition Failed on single-attempt does not emit error-level log', async () => {
+    let calls = 0
+    const fetchHandler = async () => {
+      calls++
+      return new Response('precondition failed', { status: 412 })
+    }
+
+    let thrown
+    try {
+      await triageHttpClient(url, { fetchHandler })
+    } catch (err) {
+      thrown = err
+    }
+
+    expect(calls).toBe(1) // triageMaxAttempts=1, no retries
+    // 412 is the designed idempotency response — status must be captured
+    expect(thrown.retryMetadata).toMatchObject({
+      attempts: 1,
+      category: 'non-retryable',
+      terminalReason: 'http_412',
+      status: 412
+    })
+
+    // CRITICAL: 412 must not emit an error-level log (designed idempotency, not a failure)
+    const errorLogs = mockLogger.error.mock.calls.filter(
+      ([, message]) => message === 'HTTP request failed after retry policy evaluation'
+    )
+    expect(errorLogs).toHaveLength(0)
+  })
+
+  test('Network error ECONNREFUSED on single-attempt populates terminalReason from error message', async () => {
+    let calls = 0
+    const fetchHandler = async () => {
+      calls++
+      throw Object.assign(new Error('ECONNREFUSED: connect ECONNREFUSED 127.0.0.1:9999'), { code: 'ECONNREFUSED' })
+    }
+
+    let thrown
+    try {
+      await triageHttpClient(url, { fetchHandler })
+    } catch (err) {
+      thrown = err
+    }
+
+    expect(calls).toBe(1) // triageMaxAttempts=1, no retries
+    expect(thrown.retryMetadata).toMatchObject({
+      attempts: 1,
+      category: 'retryable',
+      terminalReason: expect.stringMatching(/ECONNREFUSED/),
+      status: null
+    })
+    // Verify terminalReason is NOT the default 'unknown_error'
+    expect(thrown.retryMetadata.terminalReason).not.toBe('unknown_error')
+  })
+
+  test('HTTP 500 Server Error on single-attempt extracts status as 500, not null', async () => {
+    let calls = 0
+    const fetchHandler = async () => {
+      calls++
+      return new Response('server error', { status: 500 })
+    }
+
+    let thrown
+    try {
+      await triageHttpClient(url, { fetchHandler })
+    } catch (err) {
+      thrown = err
+    }
+
+    expect(calls).toBe(1) // triageMaxAttempts=1, no retries
+    expect(thrown.retryMetadata).toMatchObject({
+      attempts: 1,
+      category: 'retryable',
+      terminalReason: 'http_500',
+      status: 500
+    })
+    // Verify status is NOT the default null
+    expect(thrown.retryMetadata.status).not.toBeNull()
+  })
+
+  test('Success on first attempt with triageHttpClient does not emit error log (sanity check)', async () => {
+    const fetchHandler = alwaysRespond(200, 'ok')
+    const res = await triageHttpClient(url, { fetchHandler })
+
+    expect(res.status).toBe(200)
+    const errorLogs = mockLogger.error.mock.calls.filter(
+      ([, message]) => message === 'HTTP request failed after retry policy evaluation'
+    )
+    expect(errorLogs).toHaveLength(0)
+  })
+
+  test('Single-attempt client with unknown error populates terminalReason, not left as default', async () => {
+    let calls = 0
+    const fetchHandler = async () => {
+      calls++
+      throw new Error('mysterious error')
+    }
+
+    let thrown
+    try {
+      await triageHttpClient(url, { fetchHandler })
+    } catch (err) {
+      thrown = err
+    }
+
+    expect(calls).toBe(1) // triageMaxAttempts=1, no retries
+    expect(thrown.retryMetadata).toMatchObject({
+      attempts: 1,
+      category: 'unknown',
+      terminalReason: expect.stringMatching(/mysterious error/),
+      status: null
+    })
+    // Verify terminalReason is NOT the default 'unknown_error'
+    expect(thrown.retryMetadata.terminalReason).not.toBe('unknown_error')
   })
 })
