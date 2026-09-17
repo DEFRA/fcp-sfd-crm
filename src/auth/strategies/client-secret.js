@@ -24,9 +24,9 @@ const generateTokenViaClientSecret = async () => {
     // ffetch carries the failing Response as the error's cause, not as a
     // `response` property. Reading the wrong one reported every rejected token
     // request as unreachable, hiding the actual 401 or 500.
-    const response = responseFromError(err)
-    if (response) {
-      throw new Error(`Auth failed: ${response.status} ${response.statusText}`)
+    const failedResponse = responseFromError(err)
+    if (failedResponse) {
+      throw new Error(`Auth failed: ${failedResponse.status} ${failedResponse.statusText}`)
     }
     throw new Error(`Unable to reach token endpoint: ${err.message}`)
   }

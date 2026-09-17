@@ -13,7 +13,7 @@ const ODATA_FILTER_PARAM = '$filter'
 
 // Matches `<field> eq '<value>'` and captures the quoted value. The character
 // class is bounded and cannot backtrack.
-const crnOperandPattern = (field) => new RegExp(`(${field}\\s+eq\\s+')([^']*)(')`, 'gi')
+const crnOperandPattern = (field) => new RegExp(String.raw`(${field}\s+eq\s+')([^']*)(')`, 'gi')
 
 const maskCrnOperands = (filter) =>
   CRN_FILTER_FIELDS.reduce(
