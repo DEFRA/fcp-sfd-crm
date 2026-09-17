@@ -225,8 +225,9 @@ describe('generateCrmAuthToken', () => {
     })
 
     test('throws when the response is not ok', async () => {
+      // ffetch attaches the failing Response as the error's cause.
       const httpError = new Error('HTTP error: 401 Unauthorized')
-      httpError.response = { status: 401, statusText: 'Unauthorized' }
+      httpError.cause = { status: 401, statusText: 'Unauthorized' }
       authHttpClient.mockRejectedValue(httpError)
 
       await expect(generateCrmAuthToken()).rejects.toThrow(
