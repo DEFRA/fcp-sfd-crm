@@ -11,20 +11,10 @@ import { emitAuditEvent } from '../messaging/outbound/audit/send-audit-event.js'
 import { buildPersonReadEvent, buildBusinessReadEvent } from '../messaging/outbound/audit/build-audit-event.js'
 import { auditStatuses, auditFailureReasons } from '../constants/audit.js'
 import { triageFailureReasons } from '../constants/integration-inbound-triage.js'
+import { maskIdentifier } from '../utils/mask-identifier.js'
 
 const logger = createLogger()
 const { constants: httpConstants } = http2
-
-const MASK_VISIBLE_DIGITS = 4
-
-// Masks a CRN so only the last few digits are logged, because the CRN is
-// half of a login credential. The SBI is logged in full.
-export function maskIdentifier (identifier) {
-  if (identifier === null || identifier === undefined) { return '****' }
-  const str = String(identifier)
-  if (str.length <= MASK_VISIBLE_DIGITS) { return str }
-  return '*'.repeat(str.length - MASK_VISIBLE_DIGITS) + str.slice(-MASK_VISIBLE_DIGITS)
-}
 
 const unprocessableEntity = (message) => {
   const error = new Error(message)
