@@ -140,7 +140,7 @@ describe('ensureContactAndAccount', () => {
           reason: 'http_400'
         },
         error: expect.objectContaining({ type: 'Error', status: 400 }),
-        tenant: expect.objectContaining({ message: expect.stringContaining('No contact found') })
+        tenant: { message: 'crn=crn1' }
       }),
       'CRM lookup failed'
     )
@@ -164,7 +164,7 @@ describe('ensureContactAndAccount', () => {
           outcome: 'failure',
           reason: 'contact_not_found_for_crn'
         },
-        tenant: expect.objectContaining({ message: expect.stringContaining('No contact found') })
+        tenant: { message: 'crn=crn1' }
       }),
       'CRM lookup returned no results'
     )
@@ -201,7 +201,7 @@ describe('ensureContactAndAccount', () => {
           outcome: 'failure',
           reason: 'contact_not_found_for_crn'
         },
-        tenant: { message: 'No contact found for CRN: ******0001' }
+        tenant: { message: 'crn=******0001' }
       }),
       'CRM lookup returned no results'
     )
@@ -224,7 +224,7 @@ describe('ensureContactAndAccount', () => {
         reason: 'http_400'
       },
       error: { type: 'Error', status: 400 },
-      tenant: { message: 'No contact found for CRN: ******0001' }
+      tenant: { message: 'crn=******0001' }
     }))
     expect(message).toBe('CRM lookup failed')
     expect(JSON.stringify(logged)).not.toContain('A Farmer')
@@ -263,7 +263,7 @@ describe('ensureContactAndAccount', () => {
           reason: 'http_400'
         },
         error: expect.objectContaining({ type: 'Error', status: 400 }),
-        tenant: expect.objectContaining({ message: expect.stringContaining('No account found') })
+        tenant: { message: 'sbi=sbi1' }
       }),
       'CRM lookup failed'
     )
@@ -288,7 +288,7 @@ describe('ensureContactAndAccount', () => {
           outcome: 'failure',
           reason: 'account_not_found_for_sbi'
         },
-        tenant: expect.objectContaining({ message: expect.stringContaining('No account found') })
+        tenant: { message: 'sbi=sbi1' }
       }),
       'CRM lookup returned no results'
     )
@@ -318,7 +318,7 @@ describe('ensureContactAndAccount', () => {
           outcome: 'failure',
           reason: 'account_not_found_for_sbi'
         },
-        tenant: { message: 'No account found for SBI: 106000001' }
+        tenant: { message: 'sbi=106000001' }
       }),
       'CRM lookup returned no results'
     )
@@ -360,7 +360,7 @@ describe('ensureContactAndAccount', () => {
         reason: 'http_400'
       },
       error: { type: 'Error', status: 400 },
-      tenant: { message: 'No account found for SBI: 106000001' }
+      tenant: { message: 'sbi=106000001' }
     }))
     expect(message).toBe('CRM lookup failed')
     expect(JSON.stringify(logged)).not.toContain('A Farm Ltd')

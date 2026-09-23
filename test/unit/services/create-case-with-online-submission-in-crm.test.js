@@ -170,7 +170,7 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
           reason: 'unknown_error'
         },
         error: { type: 'CrmLookupError', status: null },
-        tenant: expect.objectContaining({ message: expect.stringContaining('No contact found') })
+        tenant: { message: 'crn=****-crn' }
       }),
       'CRM lookup failed'
     )
@@ -207,7 +207,7 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
           reason: 'unknown_error'
         },
         error: { type: 'CrmLookupError', status: null },
-        tenant: expect.objectContaining({ message: expect.stringContaining('No account found') })
+        tenant: { message: 'sbi=mock-sbi' }
       }),
       'CRM lookup failed'
     )

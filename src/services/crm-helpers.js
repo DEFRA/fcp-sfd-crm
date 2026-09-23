@@ -11,7 +11,9 @@ import { emitAuditEvent } from '../messaging/outbound/audit/send-audit-event.js'
 import { buildPersonReadEvent, buildBusinessReadEvent } from '../messaging/outbound/audit/build-audit-event.js'
 import { auditStatuses, auditFailureReasons } from '../constants/audit.js'
 import { triageFailureReasons } from '../constants/integration-inbound-triage.js'
+import { crmLookupEventTypes, crmLookupActions, crmLookupCategories, crmLookupOutcomes } from '../constants/crm-lookup-events.js'
 import { maskIdentifier } from '../utils/mask-identifier.js'
+import { toTenantMessage } from '../logging/tenant-message.js'
 
 const logger = createLogger()
 const { constants: httpConstants } = http2
@@ -34,6 +36,14 @@ export function assertRequiredParams (requiredParams) {
 
 const CONTACT_NOT_FOUND = 'Contact ID not found'
 const ACCOUNT_NOT_FOUND = 'Account ID not found'
+
+/**
+ * Map subject identifier to lookup action event field
+ */
+const LOOKUP_ACTION_BY_SUBJECT = {
+  contact: crmLookupActions.LOOKUP_CONTACT,
+  account: crmLookupActions.LOOKUP_ACCOUNT
+}
 
 /**
  * Handle a failed CRM identity lookup. A retryable CRM failure is rethrown as
@@ -59,17 +69,16 @@ const throwLookupFailure = ({ error, subject, identifierLabel, loggedIdentifier,
 
   // Only the error classification is logged. The raw repo error can carry a
   // CRM API response body containing PII.
-  const eventAction = subject === 'contact' ? 'lookup_contact' : 'lookup_account'
   logger.error({
     event: {
-      type: 'crm.lookup.failed',
-      action: eventAction,
-      category: 'crm',
-      outcome: 'failure',
+      type: crmLookupEventTypes.FAILED,
+      action: LOOKUP_ACTION_BY_SUBJECT[subject],
+      category: crmLookupCategories.CRM,
+      outcome: crmLookupOutcomes.FAILURE,
       reason: error.retryMetadata?.terminalReason ?? 'unknown_error'
     },
     error: { type: error.name ?? 'CrmLookupError', status: error.retryMetadata?.status ?? null },
-    tenant: { message: `No ${subject} found for ${identifierLabel}: ${loggedIdentifier}` }
+    tenant: { message: toTenantMessage({ [identifierLabel.toLowerCase()]: loggedIdentifier }) }
   }, 'CRM lookup failed')
 
   const err = unprocessableEntity(notFoundMessage)
@@ -90,16 +99,15 @@ const throwLookupFailure = ({ error, subject, identifierLabel, loggedIdentifier,
  * @throws always
  */
 const throwNotFound = async ({ event, subject, identifierLabel, loggedIdentifier, notFoundMessage, triageFailureReason }) => {
-  const eventAction = subject === 'contact' ? 'lookup_contact' : 'lookup_account'
   logger.error({
     event: {
-      type: 'crm.lookup.identifier_not_found',
-      action: eventAction,
-      category: 'crm',
-      outcome: 'failure',
+      type: crmLookupEventTypes.IDENTIFIER_NOT_FOUND,
+      action: LOOKUP_ACTION_BY_SUBJECT[subject],
+      category: crmLookupCategories.CRM,
+      outcome: crmLookupOutcomes.FAILURE,
       reason: triageFailureReason
     },
-    tenant: { message: `No ${subject} found for ${identifierLabel}: ${loggedIdentifier}` }
+    tenant: { message: toTenantMessage({ [identifierLabel.toLowerCase()]: loggedIdentifier }) }
   }, 'CRM lookup returned no results')
   await emitAuditEvent(event)
   const err = unprocessableEntity(notFoundMessage)
