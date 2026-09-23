@@ -161,10 +161,18 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     })
 
     expect(mockLogger.error).toHaveBeenCalledWith(
-      {
-        error: { type: 'CrmLookupError', status: null }
-      },
-      'No contact found for CRN: ****-crn'
+      expect.objectContaining({
+        event: {
+          type: 'crm.lookup.failed',
+          action: 'lookup_contact',
+          category: 'crm',
+          outcome: 'failure',
+          reason: 'unknown_error'
+        },
+        error: { type: 'CrmLookupError', status: null },
+        tenant: expect.objectContaining({ message: expect.stringContaining('No contact found') })
+      }),
+      'CRM lookup failed'
     )
   })
 
@@ -190,10 +198,18 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     })
 
     expect(mockLogger.error).toHaveBeenCalledWith(
-      {
-        error: { type: 'CrmLookupError', status: null }
-      },
-      'No account found for SBI: mock-sbi'
+      expect.objectContaining({
+        event: {
+          type: 'crm.lookup.failed',
+          action: 'lookup_account',
+          category: 'crm',
+          outcome: 'failure',
+          reason: 'unknown_error'
+        },
+        error: { type: 'CrmLookupError', status: null },
+        tenant: expect.objectContaining({ message: expect.stringContaining('No account found') })
+      }),
+      'CRM lookup failed'
     )
   })
 

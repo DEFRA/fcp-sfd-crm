@@ -59,9 +59,18 @@ const throwLookupFailure = ({ error, subject, identifierLabel, loggedIdentifier,
 
   // Only the error classification is logged. The raw repo error can carry a
   // CRM API response body containing PII.
+  const eventAction = subject === 'contact' ? 'lookup_contact' : 'lookup_account'
   logger.error({
-    error: { type: error.name ?? 'CrmLookupError', status: error.retryMetadata?.status ?? null }
-  }, `No ${subject} found for ${identifierLabel}: ${loggedIdentifier}`)
+    event: {
+      type: 'crm.lookup.failed',
+      action: eventAction,
+      category: 'crm',
+      outcome: 'failure',
+      reason: error.retryMetadata?.terminalReason ?? 'unknown_error'
+    },
+    error: { type: error.name ?? 'CrmLookupError', status: error.retryMetadata?.status ?? null },
+    tenant: { message: `No ${subject} found for ${identifierLabel}: ${loggedIdentifier}` }
+  }, 'CRM lookup failed')
 
   const err = unprocessableEntity(notFoundMessage)
   err.triageFailureReason = triageFailureReason
@@ -81,7 +90,17 @@ const throwLookupFailure = ({ error, subject, identifierLabel, loggedIdentifier,
  * @throws always
  */
 const throwNotFound = async ({ event, subject, identifierLabel, loggedIdentifier, notFoundMessage, triageFailureReason }) => {
-  logger.error(`No ${subject} found for ${identifierLabel}: ${loggedIdentifier}`)
+  const eventAction = subject === 'contact' ? 'lookup_contact' : 'lookup_account'
+  logger.error({
+    event: {
+      type: 'crm.lookup.identifier_not_found',
+      action: eventAction,
+      category: 'crm',
+      outcome: 'failure',
+      reason: triageFailureReason
+    },
+    tenant: { message: `No ${subject} found for ${identifierLabel}: ${loggedIdentifier}` }
+  }, 'CRM lookup returned no results')
   await emitAuditEvent(event)
   const err = unprocessableEntity(notFoundMessage)
   err.triageFailureReason = triageFailureReason

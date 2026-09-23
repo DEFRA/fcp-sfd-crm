@@ -116,6 +116,8 @@ describe('ensureContactAndAccount', () => {
     expect(thrown.retryable).toBe(true)
     expect(thrown.retryMetadata).toEqual(err.retryMetadata)
     expect(thrown.message).toContain('Retryable error looking up contact')
+    // Verify that no lookup_failed event log was emitted (retryable errors don't log the event)
+    expect(mockLogger.error).not.toHaveBeenCalled()
     expect(mockEmitAuditEvent).not.toHaveBeenCalled()
   })
 
@@ -128,6 +130,20 @@ describe('ensureContactAndAccount', () => {
     expect(thrown.output.statusCode).toBe(422)
     expect(thrown.retryable).toBeUndefined()
     expect(thrown.triageFailureReason).toBe('contact_not_found_for_crn')
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: {
+          type: 'crm.lookup.failed',
+          action: 'lookup_contact',
+          category: 'crm',
+          outcome: 'failure',
+          reason: 'http_400'
+        },
+        error: expect.objectContaining({ type: 'Error', status: 400 }),
+        tenant: expect.objectContaining({ message: expect.stringContaining('No contact found') })
+      }),
+      'CRM lookup failed'
+    )
     expect(mockEmitAuditEvent).not.toHaveBeenCalled()
   })
 
@@ -139,6 +155,19 @@ describe('ensureContactAndAccount', () => {
     expect(thrown.isBoom).toBe(true)
     expect(thrown.output.statusCode).toBe(422)
     expect(thrown.triageFailureReason).toBe('contact_not_found_for_crn')
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: {
+          type: 'crm.lookup.identifier_not_found',
+          action: 'lookup_contact',
+          category: 'crm',
+          outcome: 'failure',
+          reason: 'contact_not_found_for_crn'
+        },
+        tenant: expect.objectContaining({ message: expect.stringContaining('No contact found') })
+      }),
+      'CRM lookup returned no results'
+    )
     expect(mockEmitAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
       correlationid: 'corr-1',
       audit: expect.objectContaining({
@@ -164,7 +193,17 @@ describe('ensureContactAndAccount', () => {
     // The correlation id is not passed here: the pino mixin in logger-options.js
     // injects transaction.id into every record from the AsyncLocalStorage store.
     expect(mockLogger.error).toHaveBeenCalledWith(
-      'No contact found for CRN: ******0001'
+      expect.objectContaining({
+        event: {
+          type: 'crm.lookup.identifier_not_found',
+          action: 'lookup_contact',
+          category: 'crm',
+          outcome: 'failure',
+          reason: 'contact_not_found_for_crn'
+        },
+        tenant: { message: 'No contact found for CRN: ******0001' }
+      }),
+      'CRM lookup returned no results'
     )
   })
 
@@ -176,10 +215,18 @@ describe('ensureContactAndAccount', () => {
     await ensureContactAndAccount('token', '1050000001', 'sbi1', { correlationId: 'corr-1' }).catch(() => {})
 
     const [logged, message] = mockLogger.error.mock.calls[0]
-    expect(logged).toEqual({
-      error: { type: 'Error', status: 400 }
-    })
-    expect(message).toBe('No contact found for CRN: ******0001')
+    expect(logged).toEqual(expect.objectContaining({
+      event: {
+        type: 'crm.lookup.failed',
+        action: 'lookup_contact',
+        category: 'crm',
+        outcome: 'failure',
+        reason: 'http_400'
+      },
+      error: { type: 'Error', status: 400 },
+      tenant: { message: 'No contact found for CRN: ******0001' }
+    }))
+    expect(message).toBe('CRM lookup failed')
     expect(JSON.stringify(logged)).not.toContain('A Farmer')
   })
 
@@ -193,6 +240,8 @@ describe('ensureContactAndAccount', () => {
     expect(thrown.retryable).toBe(true)
     expect(thrown.retryMetadata).toEqual(err.retryMetadata)
     expect(thrown.message).toContain('Retryable error looking up account')
+    // Verify that no lookup_failed event log was emitted (retryable errors don't log the event)
+    expect(mockLogger.error).not.toHaveBeenCalled()
   })
 
   test('throws 422 when account lookup gets a non-retryable HTTP error, without emitting a not-found event', async () => {
@@ -204,6 +253,20 @@ describe('ensureContactAndAccount', () => {
     expect(thrown.isBoom).toBe(true)
     expect(thrown.output.statusCode).toBe(422)
     expect(thrown.triageFailureReason).toBe('account_not_found_for_sbi')
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: {
+          type: 'crm.lookup.failed',
+          action: 'lookup_account',
+          category: 'crm',
+          outcome: 'failure',
+          reason: 'http_400'
+        },
+        error: expect.objectContaining({ type: 'Error', status: 400 }),
+        tenant: expect.objectContaining({ message: expect.stringContaining('No account found') })
+      }),
+      'CRM lookup failed'
+    )
     expect(mockEmitAuditEvent).toHaveBeenCalledTimes(1) // only the person/read success event
   })
 
@@ -216,6 +279,19 @@ describe('ensureContactAndAccount', () => {
     expect(thrown.isBoom).toBe(true)
     expect(thrown.output.statusCode).toBe(422)
     expect(thrown.triageFailureReason).toBe('account_not_found_for_sbi')
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: {
+          type: 'crm.lookup.identifier_not_found',
+          action: 'lookup_account',
+          category: 'crm',
+          outcome: 'failure',
+          reason: 'account_not_found_for_sbi'
+        },
+        tenant: expect.objectContaining({ message: expect.stringContaining('No account found') })
+      }),
+      'CRM lookup returned no results'
+    )
     expect(mockEmitAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
       correlationid: 'corr-1',
       audit: expect.objectContaining({
@@ -234,7 +310,17 @@ describe('ensureContactAndAccount', () => {
     await ensureContactAndAccount('token', 'crn1', '106000001', { correlationId: 'corr-1' }).catch(() => {})
 
     expect(mockLogger.error).toHaveBeenCalledWith(
-      'No account found for SBI: 106000001'
+      expect.objectContaining({
+        event: {
+          type: 'crm.lookup.identifier_not_found',
+          action: 'lookup_account',
+          category: 'crm',
+          outcome: 'failure',
+          reason: 'account_not_found_for_sbi'
+        },
+        tenant: { message: 'No account found for SBI: 106000001' }
+      }),
+      'CRM lookup returned no results'
     )
   })
 
@@ -265,10 +351,18 @@ describe('ensureContactAndAccount', () => {
     await ensureContactAndAccount('token', 'crn1', '106000001', { correlationId: 'corr-1' }).catch(() => {})
 
     const [logged, message] = mockLogger.error.mock.calls[0]
-    expect(logged).toEqual({
-      error: { type: 'Error', status: 400 }
-    })
-    expect(message).toBe('No account found for SBI: 106000001')
+    expect(logged).toEqual(expect.objectContaining({
+      event: {
+        type: 'crm.lookup.failed',
+        action: 'lookup_account',
+        category: 'crm',
+        outcome: 'failure',
+        reason: 'http_400'
+      },
+      error: { type: 'Error', status: 400 },
+      tenant: { message: 'No account found for SBI: 106000001' }
+    }))
+    expect(message).toBe('CRM lookup failed')
     expect(JSON.stringify(logged)).not.toContain('A Farm Ltd')
   })
 })
