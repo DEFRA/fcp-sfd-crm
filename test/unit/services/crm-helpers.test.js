@@ -129,7 +129,7 @@ describe('ensureContactAndAccount', () => {
     expect(thrown.isBoom).toBe(true)
     expect(thrown.output.statusCode).toBe(422)
     expect(thrown.retryable).toBeUndefined()
-    expect(thrown.triageFailureReason).toBe('contact_not_found_for_crn')
+    expect(thrown.triageFailureReason).toBe('crm_lookup_failed')
     expect(mockLogger.error).toHaveBeenCalledWith(
       expect.objectContaining({
         event: {
@@ -142,7 +142,7 @@ describe('ensureContactAndAccount', () => {
         error: expect.objectContaining({ type: 'Error', status: 400 }),
         tenant: { message: 'crn=crn1' }
       }),
-      'CRM lookup failed'
+      'CRM contact lookup failed for CRN: crn1'
     )
     expect(mockEmitAuditEvent).not.toHaveBeenCalled()
   })
@@ -155,7 +155,7 @@ describe('ensureContactAndAccount', () => {
     expect(thrown.isBoom).toBe(true)
     expect(thrown.output.statusCode).toBe(422)
     expect(thrown.triageFailureReason).toBe('contact_not_found_for_crn')
-    expect(mockLogger.error).toHaveBeenCalledWith(
+    expect(mockLogger.warn).toHaveBeenCalledWith(
       expect.objectContaining({
         event: {
           type: 'crm.lookup.identifier_not_found',
@@ -166,7 +166,7 @@ describe('ensureContactAndAccount', () => {
         },
         tenant: { message: 'crn=crn1' }
       }),
-      'CRM lookup returned no results'
+      'No contact found for CRN: crn1'
     )
     expect(mockEmitAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
       correlationid: 'corr-1',
@@ -192,7 +192,7 @@ describe('ensureContactAndAccount', () => {
 
     // The correlation id is not passed here: the pino mixin in logger-options.js
     // injects transaction.id into every record from the AsyncLocalStorage store.
-    expect(mockLogger.error).toHaveBeenCalledWith(
+    expect(mockLogger.warn).toHaveBeenCalledWith(
       expect.objectContaining({
         event: {
           type: 'crm.lookup.identifier_not_found',
@@ -203,8 +203,11 @@ describe('ensureContactAndAccount', () => {
         },
         tenant: { message: 'crn=******0001' }
       }),
-      'CRM lookup returned no results'
+      'No contact found for CRN: ******0001'
     )
+
+    const [logged, message] = mockLogger.warn.mock.calls[0]
+    expect(JSON.stringify([logged, message])).not.toContain('1050000001')
   })
 
   test('logs only the error classification, never the repo error, when the contact lookup fails', async () => {
@@ -215,7 +218,7 @@ describe('ensureContactAndAccount', () => {
     await ensureContactAndAccount('token', '1050000001', 'sbi1', { correlationId: 'corr-1' }).catch(() => {})
 
     const [logged, message] = mockLogger.error.mock.calls[0]
-    expect(logged).toEqual(expect.objectContaining({
+    expect(logged).toEqual({
       event: {
         type: 'crm.lookup.failed',
         action: 'lookup_contact',
@@ -225,8 +228,8 @@ describe('ensureContactAndAccount', () => {
       },
       error: { type: 'Error', status: 400 },
       tenant: { message: 'crn=******0001' }
-    }))
-    expect(message).toBe('CRM lookup failed')
+    })
+    expect(message).toBe('CRM contact lookup failed for CRN: ******0001')
     expect(JSON.stringify(logged)).not.toContain('A Farmer')
   })
 
@@ -252,7 +255,7 @@ describe('ensureContactAndAccount', () => {
 
     expect(thrown.isBoom).toBe(true)
     expect(thrown.output.statusCode).toBe(422)
-    expect(thrown.triageFailureReason).toBe('account_not_found_for_sbi')
+    expect(thrown.triageFailureReason).toBe('crm_lookup_failed')
     expect(mockLogger.error).toHaveBeenCalledWith(
       expect.objectContaining({
         event: {
@@ -265,7 +268,7 @@ describe('ensureContactAndAccount', () => {
         error: expect.objectContaining({ type: 'Error', status: 400 }),
         tenant: { message: 'sbi=sbi1' }
       }),
-      'CRM lookup failed'
+      'CRM account lookup failed for SBI: sbi1'
     )
     expect(mockEmitAuditEvent).toHaveBeenCalledTimes(1) // only the person/read success event
   })
@@ -279,7 +282,7 @@ describe('ensureContactAndAccount', () => {
     expect(thrown.isBoom).toBe(true)
     expect(thrown.output.statusCode).toBe(422)
     expect(thrown.triageFailureReason).toBe('account_not_found_for_sbi')
-    expect(mockLogger.error).toHaveBeenCalledWith(
+    expect(mockLogger.warn).toHaveBeenCalledWith(
       expect.objectContaining({
         event: {
           type: 'crm.lookup.identifier_not_found',
@@ -290,7 +293,7 @@ describe('ensureContactAndAccount', () => {
         },
         tenant: { message: 'sbi=sbi1' }
       }),
-      'CRM lookup returned no results'
+      'No account found for SBI: sbi1'
     )
     expect(mockEmitAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
       correlationid: 'corr-1',
@@ -309,7 +312,7 @@ describe('ensureContactAndAccount', () => {
 
     await ensureContactAndAccount('token', 'crn1', '106000001', { correlationId: 'corr-1' }).catch(() => {})
 
-    expect(mockLogger.error).toHaveBeenCalledWith(
+    expect(mockLogger.warn).toHaveBeenCalledWith(
       expect.objectContaining({
         event: {
           type: 'crm.lookup.identifier_not_found',
@@ -320,7 +323,7 @@ describe('ensureContactAndAccount', () => {
         },
         tenant: { message: 'sbi=106000001' }
       }),
-      'CRM lookup returned no results'
+      'No account found for SBI: 106000001'
     )
   })
 
@@ -351,7 +354,7 @@ describe('ensureContactAndAccount', () => {
     await ensureContactAndAccount('token', 'crn1', '106000001', { correlationId: 'corr-1' }).catch(() => {})
 
     const [logged, message] = mockLogger.error.mock.calls[0]
-    expect(logged).toEqual(expect.objectContaining({
+    expect(logged).toEqual({
       event: {
         type: 'crm.lookup.failed',
         action: 'lookup_account',
@@ -361,9 +364,19 @@ describe('ensureContactAndAccount', () => {
       },
       error: { type: 'Error', status: 400 },
       tenant: { message: 'sbi=106000001' }
-    }))
-    expect(message).toBe('CRM lookup failed')
+    })
+    expect(message).toBe('CRM account lookup failed for SBI: 106000001')
     expect(JSON.stringify(logged)).not.toContain('A Farm Ltd')
+  })
+
+  test('falls back to the error name when a lookup fault has no HTTP status, e.g. a malformed response body', async () => {
+    const err = new SyntaxError('Unexpected token')
+    getContactIdFromCrn.mockResolvedValue({ contactId: null, error: err })
+
+    await ensureContactAndAccount('token', 'crn1', 'sbi1').catch(() => {})
+
+    const [logged] = mockLogger.error.mock.calls[0]
+    expect(logged.event.reason).toBe('SyntaxError')
   })
 })
 

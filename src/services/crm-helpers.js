@@ -46,20 +46,49 @@ const LOOKUP_ACTION_BY_SUBJECT = {
 }
 
 /**
+ * Build the shared event fields for a lookup failure log record, so action,
+ * category and outcome cannot drift between the failed and not-found cases.
+ * @param {object} params
+ * @param {string} params.type - crmLookupEventTypes value
+ * @param {string} params.subject - "contact" or "account"
+ * @param {string} params.reason - event.reason value
+ */
+const lookupEvent = ({ type, subject, reason }) => ({
+  type,
+  action: LOOKUP_ACTION_BY_SUBJECT[subject],
+  category: crmLookupCategories.CRM,
+  outcome: crmLookupOutcomes.FAILURE,
+  reason
+})
+
+/**
+ * Classify a non-retryable lookup error for the event.reason field. HTTP
+ * failures are classified by status; anything else (for example a
+ * SyntaxError from parsing a malformed response body) falls back to the
+ * error's own name rather than a generic string.
+ * @param {object} error - error returned by the repo
+ * @returns {string}
+ */
+const lookupFailureReason = (error) => {
+  const status = error.retryMetadata?.status
+  return status ? `http_${status}` : (error.name ?? 'unknown_error')
+}
+
+/**
  * Handle a failed CRM identity lookup. A retryable CRM failure is rethrown as
  * retryable so the message stays on the queue; anything else is terminal and
  * becomes a 422. Shared by the contact and account lookups, which differ only
- * in the nouns they use.
+ * in the nouns they use. This is a lookup fault (the CRM call itself failed),
+ * distinct from a genuine not-found, so it is reported to triage under its
+ * own reason rather than the subject's not-found reason.
  * @param {object} params
  * @param {object} params.error - error returned by the repo
  * @param {string} params.subject - "contact" or "account"
  * @param {string} params.identifierLabel - "CRN" or "SBI"
  * @param {string|number} params.loggedIdentifier - the identifier as logged: CRN masked, SBI in full
- * @param {string} params.notFoundMessage - message for the 422
- * @param {string} params.triageFailureReason - mapped terminal triage reason
  * @throws always
  */
-const throwLookupFailure = ({ error, subject, identifierLabel, loggedIdentifier, notFoundMessage, triageFailureReason }) => {
+const throwLookupFailure = ({ error, subject, identifierLabel, loggedIdentifier }) => {
   if (error.retryMetadata?.category === 'retryable') {
     const retryableErr = new Error(`Retryable error looking up ${subject} for ${identifierLabel}: ${loggedIdentifier}`)
     retryableErr.retryable = true
@@ -70,25 +99,21 @@ const throwLookupFailure = ({ error, subject, identifierLabel, loggedIdentifier,
   // Only the error classification is logged. The raw repo error can carry a
   // CRM API response body containing PII.
   logger.error({
-    event: {
-      type: crmLookupEventTypes.FAILED,
-      action: LOOKUP_ACTION_BY_SUBJECT[subject],
-      category: crmLookupCategories.CRM,
-      outcome: crmLookupOutcomes.FAILURE,
-      reason: error.retryMetadata?.terminalReason ?? 'unknown_error'
-    },
+    event: lookupEvent({ type: crmLookupEventTypes.FAILED, subject, reason: lookupFailureReason(error) }),
     error: { type: error.name ?? 'CrmLookupError', status: error.retryMetadata?.status ?? null },
     tenant: { message: toTenantMessage({ [identifierLabel.toLowerCase()]: loggedIdentifier }) }
-  }, 'CRM lookup failed')
+  }, `CRM ${subject} lookup failed for ${identifierLabel}: ${loggedIdentifier}`)
 
-  const err = unprocessableEntity(notFoundMessage)
-  err.triageFailureReason = triageFailureReason
+  const err = unprocessableEntity(`CRM ${subject} lookup failed`)
+  err.triageFailureReason = triageFailureReasons.CRM_LOOKUP_FAILED
   throw err
 }
 
 /**
  * Record a lookup that found no match: the not-found audit event is emitted
  * before the business error is thrown, and emission can never prevent it.
+ * This is a handled data condition rather than a service fault, so it is
+ * logged at warn rather than error.
  * @param {object} params
  * @param {object} params.event - built audit event
  * @param {string} params.subject - "contact" or "account"
@@ -99,16 +124,10 @@ const throwLookupFailure = ({ error, subject, identifierLabel, loggedIdentifier,
  * @throws always
  */
 const throwNotFound = async ({ event, subject, identifierLabel, loggedIdentifier, notFoundMessage, triageFailureReason }) => {
-  logger.error({
-    event: {
-      type: crmLookupEventTypes.IDENTIFIER_NOT_FOUND,
-      action: LOOKUP_ACTION_BY_SUBJECT[subject],
-      category: crmLookupCategories.CRM,
-      outcome: crmLookupOutcomes.FAILURE,
-      reason: triageFailureReason
-    },
+  logger.warn({
+    event: lookupEvent({ type: crmLookupEventTypes.IDENTIFIER_NOT_FOUND, subject, reason: triageFailureReason }),
     tenant: { message: toTenantMessage({ [identifierLabel.toLowerCase()]: loggedIdentifier }) }
-  }, 'CRM lookup returned no results')
+  }, `No ${subject} found for ${identifierLabel}: ${loggedIdentifier}`)
   await emitAuditEvent(event)
   const err = unprocessableEntity(notFoundMessage)
   err.triageFailureReason = triageFailureReason

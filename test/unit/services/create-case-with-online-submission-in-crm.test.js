@@ -156,7 +156,7 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
       })
     ).rejects.toMatchObject({
       isBoom: true,
-      message: 'Contact ID not found',
+      message: 'CRM contact lookup failed',
       output: { statusCode: 422 }
     })
 
@@ -172,7 +172,7 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
         error: { type: 'CrmLookupError', status: null },
         tenant: { message: 'crn=****-crn' }
       }),
-      'CRM lookup failed'
+      'CRM contact lookup failed for CRN: ****-crn'
     )
   })
 
@@ -193,7 +193,7 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
       })
     ).rejects.toMatchObject({
       isBoom: true,
-      message: 'Account ID not found',
+      message: 'CRM account lookup failed',
       output: { statusCode: 422 }
     })
 
@@ -209,7 +209,7 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
         error: { type: 'CrmLookupError', status: null },
         tenant: { message: 'sbi=mock-sbi' }
       }),
-      'CRM lookup failed'
+      'CRM account lookup failed for SBI: mock-sbi'
     )
   })
 
