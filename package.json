@@ -75,10 +75,10 @@
   },
   "overrides": {
     "@defra/fcp-audit-publisher": {
-      "joi": "18.2.8"
+      "joi": "18.2.9"
     },
     "@defra/hapi-auth-oidc": {
-      "joi": "18.2.8"
+      "joi": "18.2.9"
     },
     "@hapi/jwt": {
       "joi": "17.13.7"
