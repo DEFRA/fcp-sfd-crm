@@ -60,7 +60,7 @@ describe('createCaseWithOnlineSubmissionInCrm edge cases', () => {
       correlationId: 'test-correlation-id',
       fileId: 'test-file-id'
     }))
-      .rejects.toMatchObject({ isBoom: true, message: expect.stringContaining('Contact ID not found') })
+      .rejects.toMatchObject({ isBoom: true, message: expect.stringContaining('CRM contact lookup failed') })
     getContactIdFromCrn.mockResolvedValue({ contactId: 'id' })
     getAccountIdFromSbi.mockResolvedValue({ accountId: null, error: 'err' })
     await expect(createCaseWithOnlineSubmissionInCrm({
@@ -73,7 +73,7 @@ describe('createCaseWithOnlineSubmissionInCrm edge cases', () => {
       correlationId: 'test-correlation-id',
       fileId: 'test-file-id'
     }))
-      .rejects.toMatchObject({ isBoom: true, message: expect.stringContaining('Account ID not found') })
+      .rejects.toMatchObject({ isBoom: true, message: expect.stringContaining('CRM account lookup failed') })
   })
 
   test('should throw Boom internal if createCaseWithOnlineSubmission returns error', async () => {
