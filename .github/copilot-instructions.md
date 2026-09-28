@@ -153,7 +153,7 @@ Create a `.env` file from `.env.example`. Key variables:
 - `PORT` - HTTP port (default: 3009)
 - `MONGO_URI` - MongoDB connection string
 - `CRM_*` - CRM authentication and API endpoints
-- `CRM_QUEUE_URL` / `CRM_DEAD_LETTER_QUEUE_URL` - SQS queue URLs
+- `CRM_QUEUE_URL` / `CRM_REQUEST_DLQ_URL` - SQS queue URLs
 - `CRM_EVENTS_TOPIC_ARN` - SNS topic for publishing events
 - `AWS_*` - AWS credentials and region
 

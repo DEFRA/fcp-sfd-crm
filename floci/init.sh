@@ -37,5 +37,6 @@ create_topic() {
 create_queue "fcp_sfd_crm_requests"
 create_topic "fcp_sfd_crm_events"
 create_topic "fcp_audit_fcp_sfd_crm"
+create_queue "fcp_sfd_crm_events_publish_failures"
 
 echo "SQS and SNS configuration complete."
