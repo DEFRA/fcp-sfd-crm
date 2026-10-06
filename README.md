@@ -374,7 +374,7 @@ Retryable failures are bounded by the queue rather than by application configura
 
 ### Outbound publish failures
 
-Publishing the CRM event to SNS has its own safety net. [`publishWithDurability`](src/messaging/outbound/durable-publish.js) wraps the publish and, on failure, sends an envelope to `fcp_sfd_crm_events_publish_failures` (a dead letter queue) containing the original payload plus metadata: `caseId`, `correlationId`, `topicArn`, `failedAt`, `errorMessage`, `errorName` and `source`. The envelope carries `eventType`, `source` and `failureReason` message attributes (see [`src/messaging/sqs/send-to-dlq.js`](src/messaging/sqs/send-to-dlq.js)) so failures can be filtered without opening each body. There is no in-process retry loophere. The publish either succeeds or is captured for later replay. Failure to reach the dead letter queue is logged as a critical error, and the event may then be lost.
+Publishing the CRM event to SNS has its own safety net. [`publishWithDurability`](src/messaging/outbound/durable-publish.js) wraps the publish and, on failure, sends an envelope to `fcp_sfd_crm_events_publish_failures` (a dead letter queue) containing the original payload plus metadata: `caseId`, `correlationId`, `topicArn`, `failedAt`, `errorMessage`, `errorName` and `source`. The envelope carries `eventType`, `source` and `failureReason` message attributes (see [`src/messaging/sqs/send-to-dlq.js`](src/messaging/sqs/send-to-dlq.js)) so failures can be filtered without opening each body. There is no in-process retry loop here. The publish either succeeds or is captured for later replay. Failure to reach the dead letter queue is logged as a critical error, and the event may then be lost.
 
 ### Configuration
 
