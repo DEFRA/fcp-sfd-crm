@@ -44,7 +44,7 @@ const emit = async (method, metricName, value, dimensions) => {
   try {
     await method(metricName, value, sanitiseDimensions(dimensions))
   } catch (error) {
-    logger.warn(error, error.message)
+    logger.warn(error, error?.message ?? String(error))
   }
 
   return undefined

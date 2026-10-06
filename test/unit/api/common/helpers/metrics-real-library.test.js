@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeAll, afterAll, beforeEach, afterEach } from 'vitest'
+import { describe, test, expect, vi, afterAll, beforeEach, afterEach } from 'vitest'
 
 import { config } from '../../../../../src/config/index.js'
 
@@ -13,14 +13,24 @@ import { config } from '../../../../../src/config/index.js'
 const originalEmfEnvironment = process.env.AWS_EMF_ENVIRONMENT
 const originalEmfAgentEndpoint = process.env.AWS_EMF_AGENT_ENDPOINT
 
-beforeAll(() => {
-  process.env.AWS_EMF_ENVIRONMENT = 'Agent'
-  process.env.AWS_EMF_AGENT_ENDPOINT = 'tcp://127.0.0.1:1'
-})
+// Set at module scope, before the dynamic imports below, rather than in beforeAll: the
+// imports run during file collection, ahead of any test lifecycle hook, so a beforeAll
+// assignment here would not reliably apply before the helper (and the real library) load.
+process.env.AWS_EMF_ENVIRONMENT = 'Agent'
+process.env.AWS_EMF_AGENT_ENDPOINT = 'tcp://127.0.0.1:1'
 
 afterAll(() => {
-  process.env.AWS_EMF_ENVIRONMENT = originalEmfEnvironment
-  process.env.AWS_EMF_AGENT_ENDPOINT = originalEmfAgentEndpoint
+  if (originalEmfEnvironment === undefined) {
+    delete process.env.AWS_EMF_ENVIRONMENT
+  } else {
+    process.env.AWS_EMF_ENVIRONMENT = originalEmfEnvironment
+  }
+
+  if (originalEmfAgentEndpoint === undefined) {
+    delete process.env.AWS_EMF_AGENT_ENDPOINT
+  } else {
+    process.env.AWS_EMF_AGENT_ENDPOINT = originalEmfAgentEndpoint
+  }
 })
 
 vi.mock('../../../../../src/logging/logger.js', () => ({
