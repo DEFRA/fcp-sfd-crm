@@ -374,20 +374,23 @@ Retryable failures are bounded by the queue rather than by application configura
 
 ### Outbound publish failures
 
-Publishing the CRM event to SNS has its own safety net. [`publishWithDurability`](src/messaging/outbound/durable-publish.js) wraps the publish and, on failure, sends an envelope to a dead letter queue containing the original payload plus metadata: `caseId`, `correlationId`, `topicArn`, `failedAt`, `errorMessage`, `errorName` and `source`. The envelope carries `eventType`, `source` and `failureReason` message attributes (see [`src/messaging/sqs/send-to-dlq.js`](src/messaging/sqs/send-to-dlq.js)) so failures can be filtered without opening each body. There is no in-process retry loop here. The publish either succeeds or is captured for later replay. Failure to reach the dead letter queue is logged as a critical error, and the event may then be lost.
+Publishing the CRM event to SNS has its own safety net. [`publishWithDurability`](src/messaging/outbound/durable-publish.js) wraps the publish and, on failure, sends an envelope to `fcp_sfd_crm_events_publish_failures` (a dead letter queue) containing the original payload plus metadata: `caseId`, `correlationId`, `topicArn`, `failedAt`, `errorMessage`, `errorName` and `source`. The envelope carries `eventType`, `source` and `failureReason` message attributes (see [`src/messaging/sqs/send-to-dlq.js`](src/messaging/sqs/send-to-dlq.js)) so failures can be filtered without opening each body. There is no in-process retry loop here. The publish either succeeds or is captured for later replay. Failure to reach the dead letter queue is logged as a critical error, and the event may then be lost.
 
 ### Configuration
 
 | Variable | Default | Description |
 |---|---|---|
 | `CRM_QUEUE_URL` | none — **required** | URL of the inbound CRM request queue |
-| `CRM_DEAD_LETTER_QUEUE_URL` | none — **required** | URL of the dead letter queue, used both for discarded inbound messages and for failed outbound SNS publishes |
+| `CRM_REQUEST_DLQ_URL` | none — **required** | URL of `fcp_sfd_crm_requests-deadletter`, for discarded inbound CRM request messages |
+| `CRM_EVENTS_DLQ_URL` | none — **required** | URL of `fcp_sfd_crm_events_publish_failures`, for envelopes from failed outbound SNS publishes |
 | `CRM_EVENTS_TOPIC_ARN` | none — **required** | ARN of the CRM events SNS topic |
 | `SQS_CONSUMER_BATCH_SIZE` | `10` | Maximum messages returned per receive call |
 | `SQS_CONSUMER_WAIT_TIME_SECONDS` | `10` | Long-poll wait for a message to arrive |
 | `SQS_CONSUMER_POLLING_WAIT_TIME` | `0` | Delay before the consumer polls again |
 
 See [`src/config/messaging.js`](src/config/messaging.js). `visibility_timeout_seconds` and `dlq_max_receive_count` are queue properties, not service configuration, and are set per environment in `cdp-tenant-config`.
+
+The replay script handles only inbound messages from `CRM_REQUEST_DLQ_URL`. Do not point it at `CRM_EVENTS_DLQ_URL`: outbound queue entries are failure envelopes, not valid inbound requests, and would fail validation if sent to `CRM_QUEUE_URL`. Outbound failures cannot yet be replayed.
 
 ## Multi-file case creation
 
