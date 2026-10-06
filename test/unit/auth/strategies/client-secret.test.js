@@ -64,12 +64,23 @@ describe('generateTokenViaClientSecret', () => {
   })
 
   test('throws when the response is not ok', async () => {
+    // ffetch attaches the failing Response as the error's cause.
     const httpError = new Error('HTTP error: 401 Unauthorized')
-    httpError.response = { status: 401, statusText: 'Unauthorized' }
+    httpError.cause = { status: 401, statusText: 'Unauthorized' }
     mockAuthHttpClient.mockRejectedValue(httpError)
 
     await expect(generateTokenViaClientSecret()).rejects.toThrow(
       'Auth failed: 401 Unauthorized'
+    )
+  })
+
+  test('reports an unreachable endpoint when the error carries no response', async () => {
+    const networkError = new Error('fetch failed')
+    networkError.cause = Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' })
+    mockAuthHttpClient.mockRejectedValue(networkError)
+
+    await expect(generateTokenViaClientSecret()).rejects.toThrow(
+      'Unable to reach token endpoint: fetch failed'
     )
   })
 })

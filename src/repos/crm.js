@@ -7,6 +7,8 @@ import { createLogger } from '../logging/logger.js'
 import { toTenantMessage } from '../logging/tenant-message.js'
 import { buildChangesetRequest, parseBatchResponse } from './dataverse-batch.js'
 import { triageFailureReasons } from '../constants/integration-inbound-triage.js'
+import { HTTP_PRECONDITION_FAILED } from '../constants/http.js'
+import { CRN_FILTER_FIELD } from '../constants/crm-fields.js'
 
 const logger = createLogger()
 
@@ -21,7 +23,6 @@ const guidSchema = Joi.string().guid().required()
 const CRM_ERROR_BODY_MAX_LENGTH = 2000
 const TRUNCATION_SUFFIX = '... (truncated)'
 
-const HTTP_PRECONDITION_FAILED = 412
 // A successful conditional upsert with no Prefer: return=representation
 // answers 204. Anything else on a $batch part — including a 2xx that is not
 // 204 — is treated as unexpected rather than assumed benign.
@@ -84,9 +85,11 @@ const buildQuery = (params) =>
 
 const getContactIdFromCrn = async (authToken, crn) => {
   const baseUrl = getBaseUrl()
+  // CRN_FILTER_FIELD marks this operand as a CRN, which is what tells the HTTP
+  // logger to mask it. Inlining the column name here would log it in full.
   const query = `/contacts?${buildQuery({
     $select: 'contactid',
-    $filter: `rpa_capcustomerid eq '${crn}'`
+    $filter: `${CRN_FILTER_FIELD} eq '${crn}'`
   })}`
 
   try {

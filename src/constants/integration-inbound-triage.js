@@ -1,6 +1,7 @@
 export const triageFailureReasons = {
   CONTACT_NOT_FOUND_FOR_CRN: 'contact_not_found_for_crn',
   ACCOUNT_NOT_FOUND_FOR_SBI: 'account_not_found_for_sbi',
+  CRM_LOOKUP_FAILED: 'crm_lookup_failed',
   DOCUMENT_TYPE_NOT_FOUND: 'document_type_not_found',
   DOCUMENT_TYPE_METADATA_INCOMPLETE: 'document_type_metadata_incomplete'
 }

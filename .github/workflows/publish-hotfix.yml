@@ -37,12 +37,12 @@ jobs:
           docker compose -f compose.yaml -f compose.test.yaml run --rm "fcp-sfd-crm"
 
       - name: Publish Hot Fix
-        uses: DEFRA/cdp-build-action/build-hotfix@edfaffa943acc06adad3cf971d391922ae1a75af # main
+        uses: DEFRA/cdp-build-action/build-hotfix@99f1b3c7c622347a66476a8c659189f832701bd8 # main
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: SonarQube Cloud Scan
         if: github.actor != 'dependabot[bot]'
-        uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f # v8
+        uses: SonarSource/sonarqube-scan-action@ba9859eae8dd6bd29e412f25ddbbef3d032000f4 # v8
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

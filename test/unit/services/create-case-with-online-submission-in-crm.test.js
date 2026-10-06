@@ -156,15 +156,23 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
       })
     ).rejects.toMatchObject({
       isBoom: true,
-      message: 'Contact ID not found',
+      message: 'CRM contact lookup failed',
       output: { statusCode: 422 }
     })
 
     expect(mockLogger.error).toHaveBeenCalledWith(
-      {
-        error: { type: 'CrmLookupError', status: null }
-      },
-      'No contact found for CRN: ****-crn'
+      expect.objectContaining({
+        event: {
+          type: 'crm.lookup.failed',
+          action: 'lookup_contact',
+          category: 'crm',
+          outcome: 'failure',
+          reason: 'unknown_error'
+        },
+        error: { type: 'CrmLookupError', status: null },
+        tenant: { message: 'crn=****-crn' }
+      }),
+      'CRM contact lookup failed for CRN: ****-crn'
     )
   })
 
@@ -185,15 +193,23 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
       })
     ).rejects.toMatchObject({
       isBoom: true,
-      message: 'Account ID not found',
+      message: 'CRM account lookup failed',
       output: { statusCode: 422 }
     })
 
     expect(mockLogger.error).toHaveBeenCalledWith(
-      {
-        error: { type: 'CrmLookupError', status: null }
-      },
-      'No account found for SBI: mock-sbi'
+      expect.objectContaining({
+        event: {
+          type: 'crm.lookup.failed',
+          action: 'lookup_account',
+          category: 'crm',
+          outcome: 'failure',
+          reason: 'unknown_error'
+        },
+        error: { type: 'CrmLookupError', status: null },
+        tenant: { message: 'sbi=mock-sbi' }
+      }),
+      'CRM account lookup failed for SBI: mock-sbi'
     )
   })
 

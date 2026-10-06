@@ -1,5 +1,6 @@
 import { config } from '../../config/index.js'
 import { authHttpClient } from '../../http/client.js'
+import { responseFromError } from '../../http/response-from-error.js'
 
 const generateTokenViaClientSecret = async () => {
   const { tokenEndpoint, clientId, clientSecret, scope } = config.get('auth')
@@ -20,9 +21,12 @@ const generateTokenViaClientSecret = async () => {
       body: form.toString()
     })
   } catch (err) {
-    const status = err.response?.status
-    if (status) {
-      throw new Error(`Auth failed: ${status} ${err.response.statusText}`)
+    // ffetch carries the failing Response as the error's cause, not as a
+    // `response` property. Reading the wrong one reported every rejected token
+    // request as unreachable, hiding the actual 401 or 500.
+    const failedResponse = responseFromError(err)
+    if (failedResponse) {
+      throw new Error(`Auth failed: ${failedResponse.status} ${failedResponse.statusText}`)
     }
     throw new Error(`Unable to reach token endpoint: ${err.message}`)
   }
