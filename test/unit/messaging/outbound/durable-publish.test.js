@@ -94,7 +94,7 @@ describe('publishWithDurability', () => {
     )
   })
 
-  test('logs publish failure with event.type crm.events.publish_failed', async () => {
+  test('logs publish failure with structured event object', async () => {
     publish.mockRejectedValue(new Error('SNS down'))
     sendToDlq.mockResolvedValue()
 
@@ -102,7 +102,13 @@ describe('publishWithDurability', () => {
 
     expect(mockLogger.error).toHaveBeenCalledWith(
       expect.objectContaining({
-        event: expect.objectContaining({ type: 'crm.events.publish_failed', reference: 'case-1' })
+        event: {
+          type: 'crm.events.publish_failed',
+          action: 'publish',
+          category: 'messaging',
+          outcome: 'failure',
+          reference: 'case-1'
+        }
       }),
       'SNS publish failed, routing to DLQ'
     )
@@ -116,7 +122,13 @@ describe('publishWithDurability', () => {
 
     expect(mockLogger.fatal).toHaveBeenCalledWith(
       expect.objectContaining({
-        event: expect.objectContaining({ type: 'crm.events.dlq_send_failed', reference: 'case-1' })
+        event: {
+          type: 'crm.events.dlq_send_failed',
+          action: 'publish',
+          category: 'messaging',
+          outcome: 'failure',
+          reference: 'case-1'
+        }
       }),
       expect.stringContaining('CRITICAL')
     )
@@ -151,5 +163,18 @@ describe('publishWithDurability', () => {
     const [, , envelope] = sendToDlq.mock.calls[0]
     expect(envelope.metadata.errorMessage).toBe('something broke')
     expect(envelope.metadata.errorName).toBe('Error')
+  })
+
+  test('does not log the payload or envelope on either failure path', async () => {
+    publish.mockRejectedValue(new Error('SNS down'))
+    sendToDlq.mockRejectedValue(new Error('SQS also down'))
+
+    await publishWithDurability(mockSnsClient, topicArn, payload, context)
+
+    for (const call of [...mockLogger.error.mock.calls, ...mockLogger.fatal.mock.calls]) {
+      expect(call[0]).not.toHaveProperty('payload')
+      expect(call[0]).not.toHaveProperty('envelope')
+      expect(JSON.stringify(call[0])).not.toContain('originalPayload')
+    }
   })
 })
