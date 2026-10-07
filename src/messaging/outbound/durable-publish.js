@@ -13,7 +13,17 @@ export const publishWithDurability = async (snsClient, topicArn, payload, contex
     await publish(snsClient, topicArn, payload)
   } catch (err) {
     logger.error(
-      { err, event: { reference: context?.caseId }, topicArn },
+      {
+        err,
+        event: {
+          type: 'crm.events.publish_failed',
+          action: 'publish',
+          category: 'messaging',
+          outcome: 'failure',
+          reference: context?.caseId
+        },
+        topicArn
+      },
       'SNS publish failed, routing to DLQ'
     )
 
@@ -37,8 +47,18 @@ export const publishWithDurability = async (snsClient, topicArn, payload, contex
         'Failed SNS publish routed to DLQ'
       )
     } catch (dlqErr) {
-      logger.error(
-        { err: dlqErr, originalErr: err, event: { reference: context?.caseId } },
+      logger.fatal(
+        {
+          err: dlqErr,
+          originalErr: err,
+          event: {
+            type: 'crm.events.dlq_send_failed',
+            action: 'publish',
+            category: 'messaging',
+            outcome: 'failure',
+            reference: context?.caseId
+          }
+        },
         'CRITICAL: Failed to route SNS publish failure to DLQ — event may be lost'
       )
     }

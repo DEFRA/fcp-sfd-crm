@@ -1,6 +1,6 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
 
-const mockLogger = { error: vi.fn(), info: vi.fn() }
+const mockLogger = { error: vi.fn(), info: vi.fn(), fatal: vi.fn() }
 
 vi.mock('../../../../src/logging/logger.js', () => ({
   createLogger: vi.fn().mockReturnValue(mockLogger)
@@ -94,14 +94,42 @@ describe('publishWithDurability', () => {
     )
   })
 
+  test('logs publish failure with structured event object', async () => {
+    publish.mockRejectedValue(new Error('SNS down'))
+    sendToDlq.mockResolvedValue()
+
+    await publishWithDurability(mockSnsClient, topicArn, payload, context)
+
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: {
+          type: 'crm.events.publish_failed',
+          action: 'publish',
+          category: 'messaging',
+          outcome: 'failure',
+          reference: 'case-1'
+        }
+      }),
+      'SNS publish failed, routing to DLQ'
+    )
+  })
+
   test('logs CRITICAL and does not throw when DLQ send also fails', async () => {
     publish.mockRejectedValue(new Error('SNS down'))
     sendToDlq.mockRejectedValue(new Error('SQS also down'))
 
     await expect(publishWithDurability(mockSnsClient, topicArn, payload, context)).resolves.toBeUndefined()
 
-    expect(mockLogger.error).toHaveBeenCalledWith(
-      expect.objectContaining({ event: { reference: 'case-1' } }),
+    expect(mockLogger.fatal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: {
+          type: 'crm.events.dlq_send_failed',
+          action: 'publish',
+          category: 'messaging',
+          outcome: 'failure',
+          reference: 'case-1'
+        }
+      }),
       expect.stringContaining('CRITICAL')
     )
   })
@@ -135,5 +163,18 @@ describe('publishWithDurability', () => {
     const [, , envelope] = sendToDlq.mock.calls[0]
     expect(envelope.metadata.errorMessage).toBe('something broke')
     expect(envelope.metadata.errorName).toBe('Error')
+  })
+
+  test('does not log the payload or envelope on either failure path', async () => {
+    publish.mockRejectedValue(new Error('SNS down'))
+    sendToDlq.mockRejectedValue(new Error('SQS also down'))
+
+    await publishWithDurability(mockSnsClient, topicArn, payload, context)
+
+    for (const call of [...mockLogger.error.mock.calls, ...mockLogger.fatal.mock.calls]) {
+      expect(call[0]).not.toHaveProperty('payload')
+      expect(call[0]).not.toHaveProperty('envelope')
+      expect(JSON.stringify(call[0])).not.toContain('originalPayload')
+    }
   })
 })
