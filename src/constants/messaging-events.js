@@ -1,12 +1,16 @@
 export const messagingEventTypes = {
   CASE_CREATION_RETRYABLE: 'crm_case_creation_retryable',
   CASE_CREATION_FAILED: 'crm_case_creation_failed',
-  METADATA_ATTACHMENT_FAILED: 'crm_metadata_attachment_failed'
+  METADATA_ATTACHMENT_FAILED: 'crm_metadata_attachment_failed',
+  SNS_PUBLISH_FAILED: 'crm.events.publish_failed',
+  DLQ_SEND_FAILED: 'crm.events.dlq_send_failed'
 }
 
 export const messagingActions = {
   LEAVE_ON_QUEUE: 'leave_on_queue',
-  DISCARD_MESSAGE: 'discard_message'
+  DISCARD_MESSAGE: 'discard_message',
+  PUBLISH: 'publish',
+  SEND_TO_DLQ: 'send_to_dlq'
 }
 
 export const messagingCategories = {

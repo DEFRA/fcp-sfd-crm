@@ -3,6 +3,12 @@ import { config } from '../../config/index.js'
 import { publish } from '../sns/publish.js'
 import { sqsClient } from '../sqs/client.js'
 import { sendToDlq } from '../sqs/send-to-dlq.js'
+import {
+  messagingActions,
+  messagingCategories,
+  messagingEventTypes,
+  messagingOutcomes
+} from '../../constants/messaging-events.js'
 
 const logger = createLogger()
 
@@ -16,10 +22,10 @@ export const publishWithDurability = async (snsClient, topicArn, payload, contex
       {
         err,
         event: {
-          type: 'crm.events.publish_failed',
-          action: 'publish',
-          category: 'messaging',
-          outcome: 'failure',
+          type: messagingEventTypes.SNS_PUBLISH_FAILED,
+          action: messagingActions.PUBLISH,
+          category: messagingCategories.MESSAGING,
+          outcome: messagingOutcomes.FAILURE,
           reference: context?.caseId
         },
         topicArn
@@ -52,10 +58,10 @@ export const publishWithDurability = async (snsClient, topicArn, payload, contex
           err: dlqErr,
           originalErr: err,
           event: {
-            type: 'crm.events.dlq_send_failed',
-            action: 'send_to_dlq',
-            category: 'messaging',
-            outcome: 'failure',
+            type: messagingEventTypes.DLQ_SEND_FAILED,
+            action: messagingActions.SEND_TO_DLQ,
+            category: messagingCategories.MESSAGING,
+            outcome: messagingOutcomes.FAILURE,
             reference: context?.caseId
           }
         },
