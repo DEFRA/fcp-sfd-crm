@@ -3,6 +3,12 @@ import { config } from '../../config/index.js'
 import { publish } from '../sns/publish.js'
 import { sqsClient } from '../sqs/client.js'
 import { sendToDlq } from '../sqs/send-to-dlq.js'
+import {
+  messagingActions,
+  messagingCategories,
+  messagingEventTypes,
+  messagingOutcomes
+} from '../../constants/messaging-events.js'
 
 const logger = createLogger()
 
@@ -13,7 +19,17 @@ export const publishWithDurability = async (snsClient, topicArn, payload, contex
     await publish(snsClient, topicArn, payload)
   } catch (err) {
     logger.error(
-      { err, event: { reference: context?.caseId }, topicArn },
+      {
+        err,
+        event: {
+          type: messagingEventTypes.SNS_PUBLISH_FAILED,
+          action: messagingActions.PUBLISH,
+          category: messagingCategories.MESSAGING,
+          outcome: messagingOutcomes.FAILURE,
+          reference: context?.caseId
+        },
+        topicArn
+      },
       'SNS publish failed, routing to DLQ'
     )
 
@@ -37,8 +53,18 @@ export const publishWithDurability = async (snsClient, topicArn, payload, contex
         'Failed SNS publish routed to DLQ'
       )
     } catch (dlqErr) {
-      logger.error(
-        { err: dlqErr, originalErr: err, event: { reference: context?.caseId } },
+      logger.fatal(
+        {
+          err: dlqErr,
+          originalErr: err,
+          event: {
+            type: messagingEventTypes.DLQ_SEND_FAILED,
+            action: messagingActions.SEND_TO_DLQ,
+            category: messagingCategories.MESSAGING,
+            outcome: messagingOutcomes.FAILURE,
+            reference: context?.caseId
+          }
+        },
         'CRITICAL: Failed to route SNS publish failure to DLQ — event may be lost'
       )
     }
