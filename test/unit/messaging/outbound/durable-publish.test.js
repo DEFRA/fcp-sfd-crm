@@ -124,7 +124,7 @@ describe('publishWithDurability', () => {
       expect.objectContaining({
         event: {
           type: 'crm.events.dlq_send_failed',
-          action: 'publish',
+          action: 'send_to_dlq',
           category: 'messaging',
           outcome: 'failure',
           reference: 'case-1'

@@ -53,7 +53,7 @@ export const publishWithDurability = async (snsClient, topicArn, payload, contex
           originalErr: err,
           event: {
             type: 'crm.events.dlq_send_failed',
-            action: 'publish',
+            action: 'send_to_dlq',
             category: 'messaging',
             outcome: 'failure',
             reference: context?.caseId
