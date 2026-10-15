@@ -190,7 +190,7 @@ Create a `.env` file from `.env.example`. Key variables:
 ### Debugging
 1. Start with `npm run start:debug` or `npm run docker:debug`
 2. Attach debugger to localhost:9232 (VS Code/Chrome DevTools)
-3. Use `node_modules/.bin/nodemon` for file watching during debugging
+3. File watching uses Node's built-in `--watch-path=src`
 
 
 ---
