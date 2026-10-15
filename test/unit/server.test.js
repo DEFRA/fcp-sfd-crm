@@ -17,28 +17,9 @@ vi.mock('../../src/config/index.js', () => ({
   }
 }))
 
-const { registeredSecureContext } = vi.hoisted(() => ({
-  registeredSecureContext: { context: 'from-secure-context-plugin' }
-}))
-
 vi.mock('../../src/data/db.js', () => ({
   connectDb: vi.fn(),
   closeDb: vi.fn()
-}))
-
-// The real plugin decorates server.secureContext only when the custom secure
-// context is enabled, which it is not in tests. This stand-in always decorates
-// a known object, so the test fails if mongoDb is registered before it and
-// receives undefined.
-vi.mock('../../src/api/common/helpers/secure-context/secure-context.js', () => ({
-  secureContext: {
-    plugin: {
-      name: 'secure-context',
-      register (server) {
-        server.decorate('server', 'secureContext', registeredSecureContext)
-      }
-    }
-  }
 }))
 
 const { createServer } = await import('../../src/server.js')
@@ -63,9 +44,12 @@ describe('createServer', () => {
     expect(server.table()).toHaveLength(0)
   })
 
+  // @defra/hapi-secure-context always decorates server.secureContext. If mongoDb
+  // were registered before it, connectDb would receive undefined and this fails.
   test('connects to MongoDB with the secure context registered before it', () => {
+    expect(server.secureContext).toBeDefined()
     expect(connectDb).toHaveBeenCalledTimes(1)
-    expect(connectDb).toHaveBeenCalledWith(registeredSecureContext)
+    expect(connectDb).toHaveBeenCalledWith(server.secureContext)
   })
 
   test('applies the platform security headers to every response', async () => {
