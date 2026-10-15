@@ -57,7 +57,7 @@ services:
       - fcp-sfd
 
   floci:
-    image: floci/floci:2.1.0
+    image: floci/floci:2.2.0
     environment:
       FLOCI_HOSTNAME: floci
       FLOCI_DEFAULT_REGION: ${AWS_REGION:-eu-west-2}
