@@ -108,6 +108,10 @@ The message this service consumes is defined in [`docs/asyncapi/v1.yml`](docs/as
 
 Create a `.env` file in the root of the project based on `.env.example`.
 
+Custom CA certificates for outbound TLS connections, including MongoDB, are
+loaded from `TRUSTSTORE_` environment variables by the shared
+`@defra/hapi-secure-context` plugin. None are needed for local development.
+
 CRM uses federated credentials when `CRM_AUTH_FEDERATED_AUDIENCE` is configured.
 Set `CRM_AUTH_FEDERATED_DISABLED=true` to opt out and use the client-credentials
 flow with `CRM_AUTH_ENDPOINT` and `CRM_AUTH_CLIENT_SECRET` instead. The flag
