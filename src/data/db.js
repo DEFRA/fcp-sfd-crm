@@ -15,7 +15,7 @@ const mongo = {}
  * Connects to MongoDB once per process. Later calls keep the existing
  * connection, so a second caller cannot replace the client already in use.
  *
- * @param {import('node:tls').SecureContext} [secureContext] - omitted when the custom secure context is disabled
+ * @param {import('node:tls').SecureContext} [secureContext] - decorated on the server by the secureContext plugin
  */
 const connectDb = async (secureContext) => {
   if (mongo.client) {
