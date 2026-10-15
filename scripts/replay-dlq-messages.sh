@@ -1,5 +1,7 @@
 #!/usr/bin/env sh
-# Replay messages from the CRM inbound DLQ back to the main queue.
+# Replay inbound messages from fcp_sfd_crm_requests-deadletter back to the main queue only.
+# Never point this script at fcp_sfd_crm_events_publish_failures: its failure envelopes
+# are not inbound messages and would fail validation if sent to CRM_QUEUE_URL.
 #
 # Each replayed message is annotated with:
 #   replayed_from = DLQ
@@ -10,7 +12,7 @@
 #
 # Usage:
 #   CRM_QUEUE_URL=<main-queue-url> \
-#   CRM_DEAD_LETTER_QUEUE_URL=<dlq-url> \
+#   CRM_REQUEST_DLQ_URL=<dlq-url> \
 #     ./scripts/replay-dlq-messages.sh
 #
 # Optional env vars:
@@ -29,8 +31,8 @@ if [ -z "$CRM_QUEUE_URL" ]; then
   exit 1
 fi
 
-if [ -z "$CRM_DEAD_LETTER_QUEUE_URL" ]; then
-  echo "ERROR: CRM_DEAD_LETTER_QUEUE_URL is required" >&2
+if [ -z "$CRM_REQUEST_DLQ_URL" ]; then
+  echo "ERROR: CRM_REQUEST_DLQ_URL is required" >&2
   exit 1
 fi
 
@@ -41,7 +43,7 @@ fi
 
 REPLAY_TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-echo "Replaying DLQ messages from: $CRM_DEAD_LETTER_QUEUE_URL"
+echo "Replaying DLQ messages from: $CRM_REQUEST_DLQ_URL"
 echo "Destination queue:           $CRM_QUEUE_URL"
 echo "Replay timestamp:            $REPLAY_TIMESTAMP"
 echo ""
@@ -62,7 +64,7 @@ while true; do
 
   # shellcheck disable=SC2086
   RESPONSE=$(aws sqs receive-message $AWS_ARGS \
-    --queue-url "$CRM_DEAD_LETTER_QUEUE_URL" \
+    --queue-url "$CRM_REQUEST_DLQ_URL" \
     --max-number-of-messages "$BATCH_SIZE" \
     --visibility-timeout 30 \
     --attribute-names All \
@@ -98,7 +100,7 @@ while true; do
     # Delete from DLQ only after successful send
     # shellcheck disable=SC2086
     aws sqs delete-message $AWS_ARGS \
-      --queue-url "$CRM_DEAD_LETTER_QUEUE_URL" \
+      --queue-url "$CRM_REQUEST_DLQ_URL" \
       --receipt-handle "$RECEIPT"
 
     echo "Replayed: $MSG_ID"
