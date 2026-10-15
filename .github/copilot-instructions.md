@@ -140,6 +140,7 @@ Configuration is centralized in `src/config/index.js` and loaded via environment
 - Correlation ID is automatically attached from request context
 
 ### MongoDB
+- The shared `@defra/hapi-secure-context` plugin loads `TRUSTSTORE_` CA certificates. The `mongoDb` plugin must be registered after it
 - Database collection access: `db.collection('collectionName')`
 - Use `findOneAndUpdate` with `returnDocument: 'after'` for atomic operations
 - Always create indexes for frequently queried fields
@@ -156,6 +157,7 @@ Create a `.env` file from `.env.example`. Key variables:
 - `CRM_QUEUE_URL` / `CRM_REQUEST_DLQ_URL` / `CRM_EVENTS_DLQ_URL` - SQS queue URLs
 - `CRM_EVENTS_TOPIC_ARN` - SNS topic for publishing events
 - `AWS_*` - AWS credentials and region
+- `TRUSTSTORE_*` - Base64 CA certificates, set by CDP; not needed locally
 
 ### Docker Development
 - Source code volume-mounted for hot reload (`./src/:/home/node/src`)
