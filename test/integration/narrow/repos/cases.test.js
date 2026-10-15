@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach } from 'vitest'
+import { describe, test, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest'
 import {
   setCorrelationIdIndex as ensureIndex,
   upsertCase,
@@ -7,11 +7,19 @@ import {
   claimCreatorRole,
   releaseCreator
 } from '../../../../src/repos/cases.js'
-import db from '../../../../src/data/db.js'
+import db, { connectDb, closeDb } from '../../../../src/data/db.js'
 
 const COLLECTION = 'cases'
 
 describe('Cases repository - Database integration', () => {
+  beforeAll(async () => {
+    await connectDb()
+  })
+
+  afterAll(async () => {
+    await closeDb()
+  })
+
   beforeEach(async () => {
     await db.collection(COLLECTION).deleteMany({})
     await db.collection(COLLECTION).dropIndexes()

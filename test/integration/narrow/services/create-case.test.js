@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest'
+import { describe, test, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest'
 
 vi.mock('../../../../src/auth/get-crm-auth-token.js', () => ({
   getCrmAuthToken: vi.fn(async () => 'mock-token')
@@ -14,11 +14,19 @@ vi.mock('../../../../src/repos/crm.js', () => ({
   createMetadataForOnlineSubmission: vi.fn(async () => ({ metadataId: 'meta-int-1', error: null }))
 }))
 
-import db from '../../../../src/data/db.js'
+import db, { connectDb, closeDb } from '../../../../src/data/db.js'
 import { createCase } from '../../../../src/services/case.js'
 import { createCaseWithOnlineSubmissionInCrm } from '../../../../src/services/create-case-with-online-submission-in-crm.js'
 
 const COLLECTION = 'cases'
+
+beforeAll(async () => {
+  await connectDb()
+})
+
+afterAll(async () => {
+  await closeDb()
+})
 
 describe('Integration - createCase first request processing', () => {
   beforeEach(async () => {
