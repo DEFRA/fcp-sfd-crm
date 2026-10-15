@@ -1,6 +1,7 @@
 import hapiPulse from 'hapi-pulse'
 import { createLogger } from '../../../logging/logger.js'
 import { closeDb } from '../../../data/db.js'
+import { stopMessaging } from '../../../messaging/inbound/index.js'
 
 const tenSeconds = 10 * 1000
 
@@ -9,10 +10,11 @@ const pulse = {
   options: {
     logger: createLogger(),
     timeout: tenSeconds,
-    // Runs only on a shutdown signal; server.stop() in tests does not trigger
-    // it. hapi-pulse awaits server.stop() before postServerStop, and hapi emits
-    // the server 'stop' event, whose listener stops SQS messaging, during
-    // server.stop(). The consumer is therefore told to stop before closeDb runs.
+    // Both hooks run only on a shutdown signal; server.stop() in tests does not
+    // trigger them. hapi-pulse awaits preServerStop before postServerStop, and
+    // stopMessaging resolves only once in-flight messages have finished or the
+    // drain window has passed, so closeDb does not run under a live handler.
+    preServerStop: stopMessaging,
     postServerStop: closeDb
   }
 }

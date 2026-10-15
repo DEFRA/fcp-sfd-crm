@@ -27,10 +27,14 @@ let capturedHandleMessage = null
 const mockConsumer = {
   start: vi.fn(),
   stop: vi.fn(),
+  status: { isRunning: true },
   _listeners: {},
   on (event, fn) {
     if (!this._listeners[event]) this._listeners[event] = []
     this._listeners[event].push(fn)
+  },
+  once (event, fn) {
+    this.on(event, fn)
   },
   emit (event, ...args) {
     if (this._listeners[event]) {
@@ -105,6 +109,45 @@ describe('CRM request sqs consumer', () => {
     expect(mockConsumer.stop).toHaveBeenCalled()
   })
 
+  test('should give in-flight messages a drain window when stopping', async () => {
+    const { Consumer } = await import('sqs-consumer')
+    startCRMListener({ config: { endpoint: 'mock-endpoint' } })
+
+    expect(Consumer.create).toHaveBeenLastCalledWith(expect.objectContaining({ pollingCompleteWaitTimeMs: 15000 }))
+  })
+
+  test('should resolve stopping only once the consumer has stopped', async () => {
+    mockConsumer._listeners = {}
+    startCRMListener({ config: { endpoint: 'mock-endpoint' } })
+
+    let resolved = false
+    const stopping = stopCRMListener().then(() => { resolved = true })
+
+    await Promise.resolve()
+    expect(resolved).toBe(false)
+
+    mockConsumer.emit('stopped')
+    await stopping
+    expect(resolved).toBe(true)
+  })
+
+  test('should resolve at once when the consumer is not running', async () => {
+    mockConsumer.stop.mockClear()
+    startCRMListener({ config: { endpoint: 'mock-endpoint' } })
+    mockConsumer.status.isRunning = false
+
+    try {
+      await expect(stopCRMListener()).resolves.toBeUndefined()
+      expect(mockConsumer.stop).not.toHaveBeenCalled()
+    } finally {
+      mockConsumer.status.isRunning = true
+    }
+  })
+
+  test('should resolve at once when the consumer was never started', async () => {
+    await expect(stopCRMListener()).resolves.toBeUndefined()
+  })
+
   describe('event listeners', () => {
     beforeEach(() => {
       vi.clearAllMocks()
@@ -124,6 +167,7 @@ describe('CRM request sqs consumer', () => {
             if (key === 'messaging.batchSize') return 1
             if (key === 'messaging.waitTimeSeconds') return 1
             if (key === 'messaging.pollingWaitTime') return 1
+            if (key === 'messaging.pollingCompleteWaitTimeMs') return 15000
             return undefined
           })
         }

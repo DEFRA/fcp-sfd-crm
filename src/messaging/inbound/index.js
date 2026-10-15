@@ -5,8 +5,6 @@ const startMessaging = () => {
   startCRMListener(sqsClient)
 }
 
-const stopMessaging = () => {
-  stopCRMListener()
-}
+const stopMessaging = () => stopCRMListener()
 
 export { startMessaging, stopMessaging }

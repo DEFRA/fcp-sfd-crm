@@ -156,6 +156,9 @@ const startCRMListener = (sqsClient) => {
     batchSize: config.get('messaging.batchSize'),
     waitTimeSeconds: config.get('messaging.waitTimeSeconds'),
     pollingWaitTime: config.get('messaging.pollingWaitTime'),
+    // Without this, stop() emits 'stopped' at once and does not wait for
+    // handlers still in flight.
+    pollingCompleteWaitTimeMs: config.get('messaging.pollingCompleteWaitTimeMs'),
     messageAttributeNames: ['replayed_from'],
     sqs: sqsClient,
     async handleMessage (message) {
@@ -228,8 +231,17 @@ const startCRMListener = (sqsClient) => {
   crmRequestConsumer.start()
 }
 
-const stopCRMListener = () => {
+// Resolves once in-flight messages have finished, or the drain window has
+// passed, so MongoDB is not closed under a handler that is still running.
+const stopCRMListener = () => new Promise((resolve) => {
+  // stop() on a consumer that has already stopped returns without emitting 'stopped'.
+  if (!crmRequestConsumer?.status.isRunning) {
+    resolve()
+    return
+  }
+
+  crmRequestConsumer.once('stopped', resolve)
   crmRequestConsumer.stop()
-}
+})
 
 export { startCRMListener, stopCRMListener, setLogger }
