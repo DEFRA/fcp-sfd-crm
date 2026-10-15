@@ -51,8 +51,8 @@ const connectDb = async (secureContext) => {
 const closeDb = async () => {
   const openClient = mongo.client
 
-  mongo.client = undefined
-  mongo.db = undefined
+  mongo.client = null
+  mongo.db = null
 
   try {
     await openClient?.close()
