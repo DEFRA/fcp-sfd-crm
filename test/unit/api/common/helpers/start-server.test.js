@@ -54,8 +54,8 @@ describe('#startServer', () => {
       createServer.mockRejectedValue(Error('Server failed to start'))
     })
 
-    test('Should log failed startup message', async () => {
-      await startServer()
+    test('Should log failed startup message and rethrow the error', async () => {
+      await expect(startServer()).rejects.toThrow('Server failed to start')
 
       expect(mockLogger.info).toHaveBeenCalledWith('Server failed to start :(')
       expect(mockLogger.error).toHaveBeenCalledWith(

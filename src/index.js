@@ -6,7 +6,14 @@ import { setCorrelationIdIndex } from './repos/cases.js'
 
 const logger = createLogger()
 
-await startServer()
+try {
+  await startServer()
+} catch {
+  // startServer has already logged the reason. Exit now rather than carry on
+  // without a server or database, which would only fail later with a
+  // misleading error.
+  process.exit(1)
+}
 
 logger.info('HTTP server started')
 
