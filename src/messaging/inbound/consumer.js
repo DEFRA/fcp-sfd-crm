@@ -141,6 +141,28 @@ const processValidatedMessage = async (sqsClient, dlqUrl, payload, message) => {
   }
 }
 
+const logConsumerEvents = (consumer) => {
+  consumer.on('started', () => {
+    logger.info('CRM request consumer started')
+  })
+
+  consumer.on('stopped', () => {
+    logger.info('CRM request consumer stopped')
+  })
+
+  consumer.on('error', (error) => {
+    logger.error(error, 'Unhandled SQS error in CRM request consumer')
+  })
+
+  consumer.on('processing_error', (error) => {
+    logger.error(error, 'Unhandled error during CRM request message processing')
+  })
+
+  consumer.on('timeout_error', (error) => {
+    logger.error(error, 'CRM request processing has reached configured timeout')
+  })
+}
+
 const startCRMListener = (sqsClient) => {
   const queueUrl = config.get('messaging.crmRequest.queueUrl')
   const dlqUrl = config.get('messaging.crmRequest.deadLetterUrl')
@@ -156,6 +178,9 @@ const startCRMListener = (sqsClient) => {
     batchSize: config.get('messaging.batchSize'),
     waitTimeSeconds: config.get('messaging.waitTimeSeconds'),
     pollingWaitTime: config.get('messaging.pollingWaitTime'),
+    // Without this, stop() emits 'stopped' at once and does not wait for
+    // handlers still in flight.
+    pollingCompleteWaitTimeMs: config.get('messaging.pollingCompleteWaitTimeMs'),
     messageAttributeNames: ['replayed_from'],
     sqs: sqsClient,
     async handleMessage (message) {
@@ -205,31 +230,22 @@ const startCRMListener = (sqsClient) => {
     }
   })
 
-  crmRequestConsumer.on('started', () => {
-    logger.info('CRM request consumer started')
-  })
-
-  crmRequestConsumer.on('stopped', () => {
-    logger.info('CRM request consumer stopped')
-  })
-
-  crmRequestConsumer.on('error', (error) => {
-    logger.error(error, 'Unhandled SQS error in CRM request consumer')
-  })
-
-  crmRequestConsumer.on('processing_error', (error) => {
-    logger.error(error, 'Unhandled error during CRM request message processing')
-  })
-
-  crmRequestConsumer.on('timeout_error', (error) => {
-    logger.error(error, 'CRM request processing has reached configured timeout')
-  })
+  logConsumerEvents(crmRequestConsumer)
 
   crmRequestConsumer.start()
 }
 
-const stopCRMListener = () => {
+// Resolves once in-flight messages have finished, or the drain window has
+// passed, so MongoDB is not closed under a handler that is still running.
+const stopCRMListener = () => new Promise((resolve) => {
+  // stop() on a consumer that has already stopped returns without emitting 'stopped'.
+  if (!crmRequestConsumer?.status.isRunning) {
+    resolve()
+    return
+  }
+
+  crmRequestConsumer.once('stopped', resolve)
   crmRequestConsumer.stop()
-}
+})
 
 export { startCRMListener, stopCRMListener, setLogger }
