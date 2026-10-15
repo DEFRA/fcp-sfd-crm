@@ -22,9 +22,9 @@ const connectDb = async (secureContext) => {
     if (secureContext) {
       logger.warn({
         event: {
-          type: 'mongo_connect',
+          type: 'crm.mongo.connect',
           action: 'connect',
-          outcome: 'success',
+          outcome: 'unknown',
           reason: 'connection already open, supplied secure context ignored'
         }
       }, 'connectDb called with a secure context after the connection was opened')
@@ -62,13 +62,15 @@ const closeDb = async () => {
     // A connection we are discarding anyway is not worth failing shutdown over.
     logger.warn({
       err: error,
-      event: { type: 'mongo_close', action: 'close', outcome: 'failure' }
+      event: { type: 'crm.mongo.close', action: 'close', outcome: 'failure' }
     }, 'Failed to close the MongoDB client')
   }
 }
 
 // Repositories bind this at import, before connectDb has run, so each property
 // read is forwarded to the Db instance connected at the time of the read.
+// vi.spyOn(db, 'collection') has no effect on this export, because reads never
+// reach the proxy target. Mock the module with vi.mock instead.
 const db = new Proxy({}, {
   get (_target, property) {
     if (!mongo.db) {

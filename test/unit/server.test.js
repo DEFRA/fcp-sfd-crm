@@ -5,6 +5,7 @@ vi.mock('../../src/config/index.js', () => ({
     get: vi.fn().mockImplementation((key) => {
       if (key === 'port') return 0
       if (key === 'root') return process.cwd()
+      if (key === 'cdpEnvironment') return 'local'
       if (key === 'log') {
         return {
           isEnabled: true,
