@@ -781,6 +781,7 @@ describe('case service', () => {
       expect(thrown.retryable).toBe(true)
       expect(thrown.retryMetadata).toEqual(retryErr.retryMetadata)
       expect(thrown.message).toBe('Failed to add metadata for additional file')
+      expect(thrown.dlqReason).toBe('metadata_attachment_failed')
       expect(markFileProcessed).not.toHaveBeenCalled()
     })
 
@@ -795,6 +796,7 @@ describe('case service', () => {
 
       expect(thrown.retryable).toBe(false)
       expect(thrown.message).toBe('Failed to add metadata for additional file')
+      expect(thrown.dlqReason).toBe('metadata_attachment_failed')
       expect(markFileProcessed).not.toHaveBeenCalled()
     })
 

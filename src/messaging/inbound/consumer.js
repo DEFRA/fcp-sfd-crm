@@ -9,7 +9,8 @@ import { logInboundValidationFailure } from '../../utils/validation-logger.js'
 import { isTerminalFailure } from '../../utils/is-terminal-failure.js'
 import { runWithCorrelationId } from '../../logging/correlation-id-store.js'
 import { toTenantMessage } from '../../logging/tenant-message.js'
-import { messages } from '../../constants/messages.js'
+import { metricsCounter } from '../../api/common/helpers/metrics.js'
+import { dlqRoutingMetric, dlqRoutingReasons } from '../../constants/dlq-routing.js'
 import {
   messagingEventTypes,
   messagingActions,
@@ -25,23 +26,12 @@ const setLogger = (customLogger) => {
   logger = customLogger
 }
 
-const sendToDlq = async (sqsClient, dlqUrl, message, { error, tenant } = {}) => {
+const sendToDlq = async (sqsClient, dlqUrl, message, { error, tenant, reason }) => {
   try {
     await sqsClient.send(new SendMessageCommand({
       QueueUrl: dlqUrl,
       MessageBody: message.Body
     }))
-    logger.error({
-      event: {
-        type: 'crm.dlq.message_received',
-        action: 'send_to_dlq',
-        category: 'messaging',
-        outcome: 'failure',
-        reference: message.MessageId
-      },
-      error,
-      tenant
-    }, 'Message routed to DLQ')
   } catch (dlqErr) {
     logger.fatal({
       event: {
@@ -53,7 +43,26 @@ const sendToDlq = async (sqsClient, dlqUrl, message, { error, tenant } = {}) => 
       },
       error: { message: dlqErr.message }
     }, 'Failed to send message to DLQ — message will be deleted from main queue')
+    return
   }
+
+  try {
+    await metricsCounter(dlqRoutingMetric, 1, { reason })
+  } catch (metricError) {
+    logger.error({ error: { message: metricError.message } }, 'Failed to emit crm.dlq.routed metric')
+  }
+
+  logger.error({
+    event: {
+      type: 'crm.dlq.message_received',
+      action: 'send_to_dlq',
+      category: 'messaging',
+      outcome: 'failure',
+      reference: message.MessageId
+    },
+    error,
+    tenant
+  }, 'Message routed to DLQ')
 }
 
 let crmRequestConsumer
@@ -89,7 +98,7 @@ const discardFailedMessage = async (sqsClient, dlqUrl, payload, message, err) =>
   const { status, category, attempts } = getRetryDetails(err)
 
   const fileId = payload?.data?.file?.fileId ?? null
-  const isMetadataFailure = err.message === messages.METADATA_FAILURE
+  const isMetadataFailure = err.dlqReason === dlqRoutingReasons.METADATA_ATTACHMENT_FAILED
   const errorType = isMetadataFailure
     ? messagingEventTypes.METADATA_ATTACHMENT_FAILED
     : messagingEventTypes.CASE_CREATION_FAILED
@@ -106,6 +115,9 @@ const discardFailedMessage = async (sqsClient, dlqUrl, payload, message, err) =>
   const tenantContext = toTenantMessage({ fileId, attempts, cause: err.cause?.message })
 
   await sendToDlq(sqsClient, dlqUrl, message, {
+    reason: isMetadataFailure
+      ? dlqRoutingReasons.METADATA_ATTACHMENT_FAILED
+      : dlqRoutingReasons.CASE_CREATION_FAILED,
     error: errorContext,
     tenant: { message: tenantContext }
   })
@@ -165,6 +177,7 @@ const startCRMListener = (sqsClient) => {
       } catch (err) {
         return runWithCorrelationId(message.MessageId, async () => {
           await sendToDlq(sqsClient, dlqUrl, message, {
+            reason: dlqRoutingReasons.INVALID_JSON,
             error: {
               message: err.message,
               type: messagingErrorClassifications.INVALID_JSON
@@ -192,6 +205,7 @@ const startCRMListener = (sqsClient) => {
         if (error) {
           logInboundValidationFailure(logger, error, payload)
           await sendToDlq(sqsClient, dlqUrl, message, {
+            reason: dlqRoutingReasons.SCHEMA_INVALID,
             error: {
               message: error.message,
               type: messagingErrorClassifications.SCHEMA_INVALID

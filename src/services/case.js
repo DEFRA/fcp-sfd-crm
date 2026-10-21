@@ -8,6 +8,7 @@ import { fetchOnlineSubmissionActivityIdOrThrow } from './crm-helpers.js'
 import { messages } from '../constants/messages.js'
 import { metricsCounter } from '../api/common/helpers/metrics.js'
 import { caseCreationMetrics, caseActions } from '../constants/case-creation-metrics.js'
+import { dlqRoutingReasons } from '../constants/dlq-routing.js'
 import { isTerminalFailure } from '../utils/is-terminal-failure.js'
 import { config } from '../config/index.js'
 import { triageEventTypes, triageSkipReasons } from '../constants/integration-inbound-triage.js'
@@ -380,6 +381,7 @@ async function addMetadataToExistingCase ({ authToken, caseId, correlationId, fi
       const retryableErr = new Error(messages.METADATA_FAILURE, { cause: metadataError })
       retryableErr.retryable = true
       retryableErr.retryMetadata = metadataError.retryMetadata
+      retryableErr.dlqReason = dlqRoutingReasons.METADATA_ATTACHMENT_FAILED
       throw retryableErr
     }
     logger.error({
@@ -394,6 +396,7 @@ async function addMetadataToExistingCase ({ authToken, caseId, correlationId, fi
     const error = new Error(messages.METADATA_FAILURE, { cause: metadataError })
     error.retryable = false
     error.retryMetadata = metadataError.retryMetadata ?? null
+    error.dlqReason = dlqRoutingReasons.METADATA_ATTACHMENT_FAILED
     throw error
   }
 
