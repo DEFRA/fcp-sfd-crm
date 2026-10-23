@@ -61,6 +61,10 @@ vi.mock('../../../../src/utils/validation-logger.js', () => ({
   logInboundValidationFailure: vi.fn()
 }))
 
+vi.mock('../../../../src/api/common/helpers/metrics.js', () => ({
+  metricsCounter: vi.fn()
+}))
+
 vi.mock('../../../../src/logging/logger.js', () => ({
   createLogger: vi.fn(() => ({ info: vi.fn(), error: vi.fn(), fatal: vi.fn() }))
 }))
@@ -132,7 +136,8 @@ describe('CRM request sqs consumer', () => {
       const consumerModule = await import('../../../../src/messaging/inbound/consumer.js')
       consumerModule.setLogger(logger)
       const { createCase } = await import('../../../../src/services/case.js')
-      return { startCRMListener: consumerModule.startCRMListener, logger, createCase, sqsClient }
+      const { metricsCounter } = await import('../../../../src/api/common/helpers/metrics.js')
+      return { startCRMListener: consumerModule.startCRMListener, logger, createCase, sqsClient, metricsCounter }
     }
 
     test('should log consumer start', async () => {
@@ -471,6 +476,77 @@ describe('CRM request sqs consumer', () => {
     })
 
     describe('DLQ routing', () => {
+      const makeValidMessage = (MessageId) => ({
+        MessageId,
+        Body: JSON.stringify({
+          id: 'evt-dlq-reason',
+          source: '/test',
+          specversion: '1.0',
+          type: 'test.type',
+          datacontenttype: 'application/json',
+          time: new Date().toISOString(),
+          data: {
+            crn: '123',
+            sbi: '321',
+            file: {
+              fileId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
+              fileName: 'doc.pdf',
+              url: 'https://example.com/api/v1/blob/f47ac10b-58cc-4372-a567-0e02b2c3d479'
+            },
+            correlationId: '550e8400-e29b-41d4-a716-446655440000',
+            sourceSystem: 'fcp-sfd-frontend',
+            submissionId: '3fa85f64-5717-4562-b3fc-2c963f66afa6'
+          }
+        })
+      })
+
+      test.each([
+        ['invalid_json', 'not-valid-json{{'],
+        ['schema_invalid', JSON.stringify({ invalid: true })]
+      ])('emits crm.dlq.routed with reason %s after a successful send', async (reason, body) => {
+        const { startCRMListener: start, sqsClient, metricsCounter } = await setupAndImportConsumer()
+        start(sqsClient)
+
+        await capturedHandleMessage({ MessageId: 'message-id', Body: body })
+
+        expect(metricsCounter).toHaveBeenCalledTimes(1)
+        expect(metricsCounter).toHaveBeenCalledWith('crm.dlq.routed', 1, { reason })
+      })
+
+      test('keeps the DLQ route successful when metric emission fails', async () => {
+        const { startCRMListener: start, logger, sqsClient, metricsCounter } = await setupAndImportConsumer()
+        start(sqsClient)
+        metricsCounter.mockRejectedValueOnce(new Error('Metrics unavailable'))
+        const message = { MessageId: 'msg-metric-failure', Body: 'not-valid-json{{' }
+
+        const result = await capturedHandleMessage(message)
+
+        expect(sqsClient.send).toHaveBeenCalled()
+        expect(result).toEqual(message)
+        expect(logger.error).toHaveBeenCalledWith(
+          { error: { message: 'Metrics unavailable' } },
+          'Failed to emit crm.dlq.routed metric'
+        )
+      })
+
+      test.each([
+        ['case_creation_failed', 'Non-retryable CRM failure'],
+        ['metadata_attachment_failed', 'Failed to add metadata for additional file']
+      ])('emits crm.dlq.routed with reason %s after a successful send', async (reason, errorMessage) => {
+        const { startCRMListener: start, createCase, sqsClient, metricsCounter } = await setupAndImportConsumer()
+        start(sqsClient)
+        const error = new Error(errorMessage)
+        if (reason === 'metadata_attachment_failed') {
+          error.dlqReason = reason
+        }
+        createCase.mockRejectedValueOnce(error)
+
+        await capturedHandleMessage(makeValidMessage('message-id'))
+
+        expect(metricsCounter).toHaveBeenCalledTimes(1)
+        expect(metricsCounter).toHaveBeenCalledWith('crm.dlq.routed', 1, { reason })
+      })
+
       test('sends non-retryable message to DLQ and logs crm.dlq.message_received', async () => {
         const { startCRMListener: start, logger, createCase, sqsClient } = await setupAndImportConsumer()
         start(sqsClient)
@@ -499,7 +575,7 @@ describe('CRM request sqs consumer', () => {
       })
 
       test('still deletes from main queue when DLQ send fails', async () => {
-        const { startCRMListener: start, logger, createCase, sqsClient } = await setupAndImportConsumer()
+        const { startCRMListener: start, logger, createCase, sqsClient, metricsCounter } = await setupAndImportConsumer()
         start(sqsClient)
         sqsClient.send.mockRejectedValueOnce(new Error('DLQ unavailable'))
         const err = new Error('Non-retryable')
@@ -512,6 +588,7 @@ describe('CRM request sqs consumer', () => {
         const result = await capturedHandleMessage(message)
 
         expect(result).toEqual(message)
+        expect(metricsCounter).not.toHaveBeenCalled()
         expect(logger.fatal).toHaveBeenCalledWith(
           expect.objectContaining({ event: expect.objectContaining({ type: 'crm.dlq.send_failed' }) }),
           'Failed to send message to DLQ — message will be deleted from main queue'
