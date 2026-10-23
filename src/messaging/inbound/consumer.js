@@ -170,76 +170,81 @@ const startCRMListener = (sqsClient) => {
     pollingWaitTime: config.get('messaging.pollingWaitTime'),
     messageAttributeNames: ['replayed_from'],
     sqs: sqsClient,
-    async handleMessage (message) {
-      let payload
-      try {
-        payload = JSON.parse(message.Body)
-      } catch (err) {
-        return runWithCorrelationId(message.MessageId, async () => {
-          await sendToDlq(sqsClient, dlqUrl, message, {
-            reason: dlqRoutingReasons.INVALID_JSON,
-            error: {
-              message: err.message,
-              type: messagingErrorClassifications.INVALID_JSON
-            }
-          })
-          return message
-        })
-      }
-
-      return runWithCorrelationId(payload?.data?.correlationId ?? message.MessageId, async () => {
-        if (message.MessageAttributes?.replayed_from?.StringValue === 'DLQ') {
-          logger.info({
-            event: {
-              type: 'crm.dlq.message_replayed',
-              action: 'process_replayed_message',
-              category: 'messaging',
-              outcome: 'unknown',
-              reference: message.MessageId,
-              reason: 'recovery_attempt'
-            }
-          }, 'Processing replayed DLQ message')
-        }
-
-        const { error } = inboundCloudEventSchema.validate(payload, validationOptions)
-        if (error) {
-          logInboundValidationFailure(logger, error, payload)
-          await sendToDlq(sqsClient, dlqUrl, message, {
-            reason: dlqRoutingReasons.SCHEMA_INVALID,
-            error: {
-              message: error.message,
-              type: messagingErrorClassifications.SCHEMA_INVALID
-            }
-          })
-          return message
-        }
-
-        return processValidatedMessage(sqsClient, dlqUrl, payload, message)
-      })
-    }
+    handleMessage: (message) => handleCRMMessage(sqsClient, dlqUrl, message)
   })
 
-  crmRequestConsumer.on('started', () => {
+  registerConsumerEventHandlers(crmRequestConsumer)
+  crmRequestConsumer.start()
+}
+
+const handleCRMMessage = async (sqsClient, dlqUrl, message) => {
+  let payload
+  try {
+    payload = JSON.parse(message.Body)
+  } catch (err) {
+    return runWithCorrelationId(message.MessageId, async () => {
+      await sendToDlq(sqsClient, dlqUrl, message, {
+        reason: dlqRoutingReasons.INVALID_JSON,
+        error: {
+          message: err.message,
+          type: messagingErrorClassifications.INVALID_JSON
+        }
+      })
+      return message
+    })
+  }
+
+  return runWithCorrelationId(payload?.data?.correlationId ?? message.MessageId, async () => {
+    if (message.MessageAttributes?.replayed_from?.StringValue === 'DLQ') {
+      logger.info({
+        event: {
+          type: 'crm.dlq.message_replayed',
+          action: 'process_replayed_message',
+          category: 'messaging',
+          outcome: 'unknown',
+          reference: message.MessageId,
+          reason: 'recovery_attempt'
+        }
+      }, 'Processing replayed DLQ message')
+    }
+
+    const { error } = inboundCloudEventSchema.validate(payload, validationOptions)
+    if (error) {
+      logInboundValidationFailure(logger, error, payload)
+      await sendToDlq(sqsClient, dlqUrl, message, {
+        reason: dlqRoutingReasons.SCHEMA_INVALID,
+        error: {
+          message: error.message,
+          type: messagingErrorClassifications.SCHEMA_INVALID
+        }
+      })
+      return message
+    }
+
+    return processValidatedMessage(sqsClient, dlqUrl, payload, message)
+  })
+}
+
+const registerConsumerEventHandlers = (consumer) => {
+  consumer.on('started', () => {
     logger.info('CRM request consumer started')
   })
 
-  crmRequestConsumer.on('stopped', () => {
+  consumer.on('stopped', () => {
     logger.info('CRM request consumer stopped')
   })
 
-  crmRequestConsumer.on('error', (error) => {
+  consumer.on('error', (error) => {
     logger.error(error, 'Unhandled SQS error in CRM request consumer')
   })
 
-  crmRequestConsumer.on('processing_error', (error) => {
+  consumer.on('processing_error', (error) => {
     logger.error(error, 'Unhandled error during CRM request message processing')
   })
 
-  crmRequestConsumer.on('timeout_error', (error) => {
+  consumer.on('timeout_error', (error) => {
     logger.error(error, 'CRM request processing has reached configured timeout')
   })
-
-  crmRequestConsumer.start()
 }
 
 const stopCRMListener = () => {
