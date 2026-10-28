@@ -8,6 +8,11 @@ updates:
   commit-message:
     prefix: chore
   open-pull-requests-limit: 5
+  ignore:
+  # mongo is pinned to 7.0.x. MongoDB 8.0+ will not start on Linux kernel 6.19
+  # to 7.0.13; see compose.yaml.
+  - dependency-name: mongo
+    versions: [">= 8.0.0"]
 - package-ecosystem: npm
   directory: "/"
   schedule:
