@@ -31,6 +31,21 @@ jobs:
       - run: |
           npm ci
 
+      # global-agent 4.x breaks outbound HTTPS through the CDP proxy; see .snyk
+      - name: Check global-agent Pin
+        env:
+          GLOBAL_AGENT_VERSION: 3.0.0
+        run: |
+          node -e '
+            const expected = process.env.GLOBAL_AGENT_VERSION
+            const declared = require("./package.json").dependencies["global-agent"]
+            const installed = require("global-agent/package.json").version
+            if (declared !== expected || installed !== expected) {
+              console.error(`global-agent must be ${expected} (package.json: ${declared}, installed: ${installed})`)
+              process.exit(1)
+            }
+          '
+
       - name: Lint
         run: npm run lint
 
