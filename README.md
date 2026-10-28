@@ -94,6 +94,7 @@ src/http/         → Outbound HTTP clients with retry policy
 src/config/       → Convict configuration, split by concern
 src/logging/      → Pino/ECS logger, correlation ID store, tenant message redaction
 src/data/         → MongoDB client and index creation
+src/plugins/      → Hapi plugins (opens the MongoDB connection at server start)
 src/constants/    → Shared enums and literals
 ```
 

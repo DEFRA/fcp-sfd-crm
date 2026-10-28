@@ -1,12 +1,20 @@
-import { describe, test, expect, beforeEach, afterEach } from 'vitest'
+import { describe, test, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest'
 import { setToken, getToken } from '../../../../src/repos/token.js'
-import db from '../../../../src/data/db.js'
+import db, { connectDb, closeDb } from '../../../../src/data/db.js'
 import { config } from '../../../../src/config/index.js'
 
 describe('Token repository - Database integration', () => {
   const tokenId = config.get('auth.tokenId')
   const testTokenValue = 'Bearer test-integration-token-12345'
   const expiresInSeconds = 3600
+
+  beforeAll(async () => {
+    await connectDb()
+  })
+
+  afterAll(async () => {
+    await closeDb()
+  })
 
   // Clean up test data before and after tests
   beforeEach(async () => {

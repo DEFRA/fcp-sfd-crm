@@ -18,6 +18,12 @@ export const messagingConfig = {
       default: 0,
       env: 'SQS_CONSUMER_POLLING_WAIT_TIME'
     },
+    pollingCompleteWaitTimeMs: {
+      doc: 'How long (in milliseconds) shutdown waits for in-flight messages to finish before MongoDB is closed. Keep it below the platform stop timeout',
+      format: Number,
+      default: 20000,
+      env: 'SQS_CONSUMER_POLLING_COMPLETE_WAIT_TIME_MS'
+    },
     crmRequest: {
       queueUrl: {
         doc: 'URL for the CRM ingest queue',

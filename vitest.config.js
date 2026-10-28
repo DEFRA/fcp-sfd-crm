@@ -14,7 +14,6 @@ export default defineConfig({
         '**/test/**',
         '.server',
         'src/index.js',
-        'src/data/db.js',
         'src/messaging/sqs/client.js'
       ],
       // as documented here:

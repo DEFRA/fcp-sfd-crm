@@ -17,7 +17,32 @@ vi.mock('../../src/config/index.js', () => ({
   }
 }))
 
+const { registeredSecureContext } = vi.hoisted(() => ({
+  registeredSecureContext: { context: 'from-secure-context-plugin' }
+}))
+
+vi.mock('../../src/data/db.js', () => ({
+  connectDb: vi.fn(),
+  closeDb: vi.fn()
+}))
+
+// The real plugin decorates server.secureContext only when the custom secure
+// context is enabled, which it is not in tests. This stand-in always decorates
+// a known object, so the test fails if mongoDb is registered before it and
+// receives undefined.
+vi.mock('../../src/api/common/helpers/secure-context/secure-context.js', () => ({
+  secureContext: {
+    plugin: {
+      name: 'secure-context',
+      register (server) {
+        server.decorate('server', 'secureContext', registeredSecureContext)
+      }
+    }
+  }
+}))
+
 const { createServer } = await import('../../src/server.js')
+const { connectDb } = await import('../../src/data/db.js')
 
 describe('createServer', () => {
   let server
@@ -36,6 +61,11 @@ describe('createServer', () => {
 
   test('starts a server that registers no routes of its own', () => {
     expect(server.table()).toHaveLength(0)
+  })
+
+  test('connects to MongoDB with the secure context registered before it', () => {
+    expect(connectDb).toHaveBeenCalledTimes(1)
+    expect(connectDb).toHaveBeenCalledWith(registeredSecureContext)
   })
 
   test('applies the platform security headers to every response', async () => {
