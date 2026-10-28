@@ -157,7 +157,7 @@ Create a `.env` file from `.env.example`. Key variables:
 - `CRM_QUEUE_URL` / `CRM_REQUEST_DLQ_URL` / `CRM_EVENTS_DLQ_URL` - SQS queue URLs
 - `CRM_EVENTS_TOPIC_ARN` - SNS topic for publishing events
 - `AWS_*` - AWS credentials and region
-- `TRUSTSTORE_*` - Base64 CA certificates, set by CDP; not needed locally
+- `TRUSTSTORE_*` - Base64 CA certificates, set by CDP; not needed locally. The `trustStoreCheck` plugin stops startup if one is invalid, or if none load outside `local`
 
 ### Docker Development
 - Source code volume-mounted for hot reload (`./src/:/home/node/src`)

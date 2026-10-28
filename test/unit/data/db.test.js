@@ -111,9 +111,9 @@ describe('data/db', () => {
     expect(mocks.connect).toHaveBeenCalledTimes(1)
     expect(mocks.loggerWarn).toHaveBeenCalledWith({
       event: {
-        type: 'mongo_connect',
+        type: 'crm.mongo.connect',
         action: 'connect',
-        outcome: 'success',
+        outcome: 'unknown',
         reason: 'connection already open, supplied secure context ignored'
       }
     }, 'connectDb called with a secure context after the connection was opened')
@@ -143,7 +143,7 @@ describe('data/db', () => {
     await expect(closeDb()).resolves.toBeUndefined()
     expect(mocks.loggerWarn).toHaveBeenCalledWith({
       err: closeError,
-      event: { type: 'mongo_close', action: 'close', outcome: 'failure' }
+      event: { type: 'crm.mongo.close', action: 'close', outcome: 'failure' }
     }, 'Failed to close the MongoDB client')
     expect(() => db.collection('test')).toThrow('MongoDB has not been connected yet')
   })
