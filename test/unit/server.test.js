@@ -5,6 +5,7 @@ vi.mock('../../src/config/index.js', () => ({
     get: vi.fn().mockImplementation((key) => {
       if (key === 'port') return 0
       if (key === 'root') return process.cwd()
+      if (key === 'cdpEnvironment') return 'local'
       if (key === 'log') {
         return {
           isEnabled: true,
@@ -17,7 +18,13 @@ vi.mock('../../src/config/index.js', () => ({
   }
 }))
 
+vi.mock('../../src/data/db.js', () => ({
+  connectDb: vi.fn(),
+  closeDb: vi.fn()
+}))
+
 const { createServer } = await import('../../src/server.js')
+const { connectDb } = await import('../../src/data/db.js')
 
 describe('createServer', () => {
   let server
@@ -36,6 +43,14 @@ describe('createServer', () => {
 
   test('starts a server that registers no routes of its own', () => {
     expect(server.table()).toHaveLength(0)
+  })
+
+  // @defra/hapi-secure-context always decorates server.secureContext. If mongoDb
+  // were registered before it, connectDb would receive undefined and this fails.
+  test('connects to MongoDB with the secure context registered before it', () => {
+    expect(server.secureContext).toBeDefined()
+    expect(connectDb).toHaveBeenCalledTimes(1)
+    expect(connectDb).toHaveBeenCalledWith(server.secureContext)
   })
 
   test('applies the platform security headers to every response', async () => {

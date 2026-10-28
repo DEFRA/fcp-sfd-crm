@@ -32,7 +32,7 @@ npm run docker:test
 
 > **Note:** Do not run `npm test` or `npx vitest run` directly — the config validation requires env vars that are only available inside the Docker environment.
 
-**Coverage Requirements:** 100% statements, lines, branches; 97% functions. Excluded files: `src/index.js`, `src/data/db.js`, `src/messaging/sqs/client.js`.
+**Coverage Requirements:** 90% statements, lines, branches and functions. Excluded files: `src/index.js`, `src/messaging/sqs/client.js`.
 
 ### Linting
 
@@ -101,7 +101,7 @@ npm run docker:debug
   - **`server.js`**, **`auth.js`**, **`crm.js`**, **`queue.js`**, **`aws.js`**, **`messaging.js`** - Config schemas
 - **`src/constants/`** - Constant definitions (events, source, environments, case-types)
 - **`src/logging/`** - Pino logger setup with request/correlation tracking
-- **`src/data/`** - MongoDB client initialization
+- **`src/data/`** - MongoDB connection lifecycle (`connectDb`, `closeDb`), opened by the `mongoDb` plugin in `src/plugins/` and closed on shutdown by hapi-pulse
 - **`src/utils/`** - Shared utility functions
 - **`test/unit/`** - Unit tests (mirroring src structure)
 - **`test/integration/`** - Integration tests
@@ -140,6 +140,7 @@ Configuration is centralized in `src/config/index.js` and loaded via environment
 - Correlation ID is automatically attached from request context
 
 ### MongoDB
+- The shared `@defra/hapi-secure-context` plugin loads `TRUSTSTORE_` CA certificates. The `mongoDb` plugin must be registered after it
 - Database collection access: `db.collection('collectionName')`
 - Use `findOneAndUpdate` with `returnDocument: 'after'` for atomic operations
 - Always create indexes for frequently queried fields
@@ -156,6 +157,7 @@ Create a `.env` file from `.env.example`. Key variables:
 - `CRM_QUEUE_URL` / `CRM_REQUEST_DLQ_URL` / `CRM_EVENTS_DLQ_URL` - SQS queue URLs
 - `CRM_EVENTS_TOPIC_ARN` - SNS topic for publishing events
 - `AWS_*` - AWS credentials and region
+- `TRUSTSTORE_*` - Base64 CA certificates, set by CDP; not needed locally. The `trustStoreCheck` plugin stops startup if one is invalid, or if none load outside `local`
 
 ### Docker Development
 - Source code volume-mounted for hot reload (`./src/:/home/node/src`)

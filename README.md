@@ -94,6 +94,7 @@ src/http/         → Outbound HTTP clients with retry policy
 src/config/       → Convict configuration, split by concern
 src/logging/      → Pino/ECS logger, correlation ID store, tenant message redaction
 src/data/         → MongoDB client and index creation
+src/plugins/      → Hapi plugins (opens the MongoDB connection at server start)
 src/constants/    → Shared enums and literals
 ```
 
@@ -106,6 +107,14 @@ The message this service consumes is defined in [`docs/asyncapi/v1.yml`](docs/as
 ### Environment variables
 
 Create a `.env` file in the root of the project based on `.env.example`.
+
+Custom CA certificates for outbound TLS connections, including MongoDB, are
+loaded from `TRUSTSTORE_` environment variables by the shared
+`@defra/hapi-secure-context` plugin. None are needed for local development.
+The service will not start if a `TRUSTSTORE_` value is not a valid
+certificate, or if none are loaded when `ENVIRONMENT` is not `local`.
+The plugin sets the CA list for every outbound TLS connection, so
+`NODE_EXTRA_CA_CERTS` has no effect.
 
 CRM uses federated credentials when `CRM_AUTH_FEDERATED_AUDIENCE` is configured.
 Set `CRM_AUTH_FEDERATED_DISABLED=true` to opt out and use the client-credentials

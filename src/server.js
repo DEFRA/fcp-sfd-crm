@@ -1,9 +1,11 @@
 import path from 'node:path'
 import hapi from '@hapi/hapi'
+import { secureContext } from '@defra/hapi-secure-context'
 import { config } from './config/index.js'
 import { requestLogger } from './logging/request-logger.js'
-import { secureContext } from './api/common/helpers/secure-context/secure-context.js'
 import { pulse } from './api/common/helpers/pulse.js'
+import { mongoDb } from './plugins/mongodb.js'
+import { trustStoreCheck } from './plugins/trust-store-check.js'
 import { requestTracing } from './api/common/helpers/request-tracing.js'
 import { setupProxy } from './api/common/helpers/proxy/setup-proxy.js'
 
@@ -41,6 +43,10 @@ const createServer = async () => {
     requestLogger,
     requestTracing,
     secureContext,
+    // trustStoreCheck reads what secureContext loaded and stops startup if a certificate is invalid or missing.
+    trustStoreCheck,
+    // mongoDb must follow secureContext so the connection trusts the CDP CA certificates.
+    mongoDb,
     pulse
   ])
 
