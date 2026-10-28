@@ -78,6 +78,9 @@
     "@defra/hapi-auth-oidc": {
       "joi": "18.2.9"
     },
+    "@azure/identity": {
+      "@azure/msal-node": "7.1.0"
+    },
     "@hapi/jwt": {
       "joi": "17.13.8"
     },

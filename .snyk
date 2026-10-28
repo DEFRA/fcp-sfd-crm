@@ -32,4 +32,20 @@ ignore:
           is fixed upstream. Re-review when either package publishes a fix.
         expires: 2026-12-17T00:00:00.000Z
         created: 2026-10-28T00:00:00.000Z
+  SNYK-JS-HAPICONTENT-21691242:
+    - '*':
+        reason: >-
+          ReDoS in @hapi/content@6.0.2, pulled in via @hapi/hapi > @hapi/subtext and
+          pinned by the @hapi/content override in package.json. The fixed release,
+          6.0.3 (published 2026-10-21T16:25Z), falls inside the 7-day supply-chain
+          cooldown enforced by min-release-age=7 in .npmrc, so `npm install` rejects
+          it with ETARGET until 2026-10-28T16:25Z.
+
+          @hapi/content parses request Content-Type and Content-Disposition headers,
+          which clients control, so exposure is not nil; the ignore is kept short.
+
+          Remove this ignore and change the override to 6.0.3 once the cooldown
+          window clears.
+        expires: 2026-11-04T00:00:00.000Z
+        created: 2026-10-28T00:00:00.000Z
 patch: {}
