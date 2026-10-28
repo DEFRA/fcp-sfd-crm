@@ -14,6 +14,10 @@ updates:
     interval: weekly
   commit-message:
     prefix: chore
+  ignore:
+  # global-agent is pinned to 3.0.0. Version 4.x breaks TLS hostname checks on
+  # outbound HTTPS through the CDP proxy; see .snyk.
+  - dependency-name: global-agent
   groups:
     npm-production:
       applies-to: version-updates
