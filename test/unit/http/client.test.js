@@ -878,7 +878,7 @@ describe('connection failures are classified from the error cause chain', () => 
 
   test('still classifies an unrelated failure as unknown', async () => {
     const fetchHandler = async () => {
-      throw Object.assign(new TypeError('fetch failed'), { cause: new Error('something else entirely') })
+      throw Object.assign(new Error('unrelated failure'), { cause: new Error('something else entirely') })
     }
 
     let thrown
@@ -892,9 +892,9 @@ describe('connection failures are classified from the error cause chain', () => 
   })
 
   test('stops walking a cause chain that is too deep to be genuine', async () => {
-    // Six links: deeper than the walk is willing to follow.
+    // Eight links: deeper than either this walk or ffetch's own transport check will follow.
     let deepest = Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' })
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 7; i++) {
       deepest = Object.assign(new Error('wrapper'), { cause: deepest })
     }
     const fetchHandler = async () => { throw deepest }
