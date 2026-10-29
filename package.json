@@ -95,9 +95,6 @@
     "shell-quote": "1.12.0",
     "eslint": {
       "find-up": "5.0.0"
-    },
-    "neostandard": {
-      "find-up": "5.0.0"
     }
   }
 }
