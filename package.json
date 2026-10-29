@@ -68,8 +68,8 @@
     "@vitest/coverage-v8": "4.1.12",
     "autoprefixer": "10.6.1",
     "dotenv": "18.0.8",
-    "eslint": "9.39.0",
-    "neostandard": "0.13.0",
+    "eslint": "10.13.0",
+    "neostandard": "0.14.1",
     "vitest": "4.1.12"
   },
   "overrides": {
