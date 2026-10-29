@@ -98,7 +98,7 @@ npm run docker:debug
   - **`get-crm-auth-token.js`** - Token retrieval/caching
 - **`src/config/`** - Configuration management using Convict (validates against schema):
   - **`index.js`** - Main config aggregator
-  - **`server.js`**, **`auth.js`**, **`crm.js`**, **`queue.js`**, **`aws.js`**, **`messaging.js`** - Config schemas
+  - **`server.js`**, **`auth.js`**, **`crm.js`**, **`aws.js`**, **`messaging.js`**, **`retry.js`**, **`cases.js`** - Config schemas
 - **`src/constants/`** - Constant definitions (events, source, environments, case-types)
 - **`src/logging/`** - Pino logger setup with request/correlation tracking
 - **`src/data/`** - MongoDB connection lifecycle (`connectDb`, `closeDb`), opened by the `mongoDb` plugin in `src/plugins/` and closed on shutdown by hapi-pulse
@@ -115,7 +115,7 @@ npm run docker:debug
 
 ### Configuration
 
-Configuration is centralized in `src/config/index.js` and loaded via environment variables. Config schemas are defined in separate files (`server.js`, `auth.js`, `crm.js`, `queue.js`, `aws.js`, `messaging.js`). Validation is strict—all env vars must be declared in the schema.
+Configuration is centralized in `src/config/index.js` and loaded via environment variables. Config schemas are defined in separate files (`server.js`, `auth.js`, `crm.js`, `aws.js`, `messaging.js`, `retry.js`, `cases.js`). Validation is strict—all env vars must be declared in the schema. Named formats (`ipaddress`, `url`) come from `convict-format-with-validator` and are registered by `convict.addFormats` in `src/config/index.js`. A test that calls `convict()` on a schema directly must register them first, or convict throws `uses an unknown format type`.
 
 ## Key Conventions
 
@@ -154,7 +154,9 @@ Create a `.env` file from `.env.example`. Key variables:
 - `PORT` - HTTP port (default: 3009)
 - `MONGO_URI` - MongoDB connection string
 - `CRM_*` - CRM authentication and API endpoints
-- `CRM_QUEUE_URL` / `CRM_REQUEST_DLQ_URL` / `CRM_EVENTS_DLQ_URL` - SQS queue URLs
+- `CRM_QUEUE_URL` - SQS queue URL for inbound CRM requests
+- `CRM_REQUEST_DLQ_URL` - URL of `fcp_sfd_crm_requests-deadletter`, for discarded inbound messages. Required: the service will not start if it is unset or empty
+- `CRM_EVENTS_DLQ_URL` - URL of `fcp_sfd_crm_events_publish_failures`, for envelopes from failed SNS publishes. Required: the service will not start if it is unset or empty
 - `CRM_EVENTS_TOPIC_ARN` - SNS topic for publishing events
 - `AWS_*` - AWS credentials and region
 - `TRUSTSTORE_*` - Base64 CA certificates, set by CDP; not needed locally. The `trustStoreCheck` plugin stops startup if one is invalid, or if none load outside `local`

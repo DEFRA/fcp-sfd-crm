@@ -26,7 +26,7 @@ sequenceDiagram
     participant DB as MongoDB (cases)
     participant CRM as Dataverse Web API
     participant SNS as AWS SNS
-    participant DLQ as Dead letter queue
+    participant DLQ as SQS fcp_sfd_crm_requests-deadletter
 
     OP->>Q: uk.gov.fcp.sfd.document.uploaded
     C->>Q: Poll (batch of 10)
@@ -47,7 +47,7 @@ sequenceDiagram
             C-->>Q: Leave on queue, retry on redelivery
         end
     end
-    Note over C,DLQ: Retryable failures stay on the queue.<br/>Terminal failures are routed to the DLQ.
+    Note over C,DLQ: Retryable failures stay on the queue.<br/>Terminal failures are routed to fcp_sfd_crm_requests-deadletter.
 ```
 
 ### Multi-file convergence
@@ -358,7 +358,7 @@ See [`src/config/retry.js`](src/config/retry.js) and [`src/http/client.js`](src/
 
 ## Message failure handling
 
-HTTP retry governs a single outbound call. A second, independent layer decides what becomes of the inbound SQS message once processing has failed. Every failure ends one of two ways in [`src/messaging/inbound/consumer.js`](src/messaging/inbound/consumer.js): the message is left on the queue for another delivery, or it is copied to the dead letter queue and deleted from the main queue.
+HTTP retry governs a single outbound call. A second, independent layer decides what becomes of the inbound SQS message once processing has failed. Every failure ends one of two ways in [`src/messaging/inbound/consumer.js`](src/messaging/inbound/consumer.js): the message is left on `fcp_sfd_crm_requests` for another delivery, or it is copied to the inbound dead letter queue, `fcp_sfd_crm_requests-deadletter`, and deleted from `fcp_sfd_crm_requests`.
 
 ### Retryable versus terminal
 
@@ -368,30 +368,32 @@ Services set the flag deliberately. A CRM call whose HTTP classification came ba
 
 | Failure | Action | Log `event.type` |
 |---|---|---|
-| Body is not valid JSON | Dead letter queue | `crm.dlq.message_received` (`error.type: invalid_json`) |
-| Payload fails the inbound CloudEvent schema | Dead letter queue | `crm.dlq.message_received` (`error.type: schema_invalid`) |
-| Error with `retryable = true` | Left on queue for redelivery | `crm_case_creation_retryable`, `event.action: leave_on_queue` |
-| Any other processing error | Dead letter queue | `crm_case_creation_failed` or `crm_metadata_attachment_failed`, `event.action: discard_message` |
+| Body is not valid JSON | `fcp_sfd_crm_requests-deadletter` | `crm.dlq.message_received` (`error.type: invalid_json`) |
+| Payload fails the inbound CloudEvent schema | `fcp_sfd_crm_requests-deadletter` | `crm.dlq.message_received` (`error.type: schema_invalid`) |
+| Error with `retryable = true` | Left on `fcp_sfd_crm_requests` for redelivery | `crm_case_creation_retryable`, `event.action: leave_on_queue` |
+| Any other processing error | `fcp_sfd_crm_requests-deadletter` | `crm_case_creation_failed` or `crm_metadata_attachment_failed`, `event.action: discard_message` |
 
-Schema validation failures are always terminal. The payload is validated against [`inboundCloudEventSchema`](src/api/schemas/inbound.js) with `convert: false` and `abortEarly: false`, the full set of field errors is logged, and the message goes straight to the dead letter queue. A malformed message cannot become well formed on redelivery, so retrying it would only consume the redelivery budget.
+Schema validation failures are always terminal. The payload is validated against [`inboundCloudEventSchema`](src/api/schemas/inbound.js) with `convert: false` and `abortEarly: false`, the full set of field errors is logged, and the message goes straight to `fcp_sfd_crm_requests-deadletter`. A malformed message cannot become well formed on redelivery, so retrying it would only consume the redelivery budget.
 
-A message replayed from the dead letter queue is recognised by the `replayed_from` message attribute and logged as `crm.dlq.message_replayed` before processing. If the send to the dead letter queue itself fails, `crm.dlq.send_failed` is logged at `fatal` and the message is still deleted from the main queue.
+A message replayed from `fcp_sfd_crm_requests-deadletter` is recognised by the `replayed_from` message attribute and logged as `crm.dlq.message_replayed` before processing. If the send to `fcp_sfd_crm_requests-deadletter` itself fails, `crm.dlq.send_failed` is logged at `fatal` and the message is still deleted from `fcp_sfd_crm_requests`.
 
 ### Redelivery budget
 
-Retryable failures are bounded by the queue rather than by application configuration. SQS redelivers the message when the visibility timeout expires and moves it to the dead letter queue once the receive count is exhausted. That budget, its current value, and its interaction with `CASE_CREATION_DEADLINE_MS` are described under [Multi-file case creation](#multi-file-case-creation).
+Retryable failures are bounded by the queue rather than by application configuration. SQS redelivers the message when the visibility timeout expires and moves it to `fcp_sfd_crm_requests-deadletter` once the receive count is exhausted. That budget, its current value, and its interaction with `CASE_CREATION_DEADLINE_MS` are described under [Multi-file case creation](#multi-file-case-creation).
 
 ### Outbound publish failures
 
-Publishing the CRM event to SNS has its own safety net. [`publishWithDurability`](src/messaging/outbound/durable-publish.js) wraps the publish and, on failure, sends an envelope to `fcp_sfd_crm_events_publish_failures` (a dead letter queue) containing the original payload plus metadata: `caseId`, `correlationId`, `topicArn`, `failedAt`, `errorMessage`, `errorName` and `source`. The envelope carries `eventType`, `source` and `failureReason` message attributes (see [`src/messaging/sqs/send-to-dlq.js`](src/messaging/sqs/send-to-dlq.js)) so failures can be filtered without opening each body. There is no in-process retry loop here. The publish either succeeds or is captured for later replay. Failure to reach the dead letter queue is logged as a critical error, and the event may then be lost.
+Publishing the CRM event to SNS has its own safety net. [`publishWithDurability`](src/messaging/outbound/durable-publish.js) wraps the publish and, on failure, sends an envelope to `fcp_sfd_crm_events_publish_failures` (a dead letter queue) containing the original payload plus metadata: `caseId`, `correlationId`, `topicArn`, `failedAt`, `errorMessage`, `errorName` and `source`. The envelope carries `eventType`, `source` and `failureReason` message attributes (see [`src/messaging/sqs/send-to-dlq.js`](src/messaging/sqs/send-to-dlq.js)) so failures can be filtered without opening each body. There is no in-process retry loop here. The publish either succeeds or is captured for later replay. Failure to reach `fcp_sfd_crm_events_publish_failures` is logged as a critical error, and the event may then be lost.
+
+CDP creates a queue with a `-deadletter` suffix for every queue declared in `cdp-tenant-config`, so `fcp_sfd_crm_events_publish_failures` has its own dead letter queue, `fcp_sfd_crm_events_publish_failures-deadletter`. `fcp_sfd_crm_events_publish_failures` has `dlq_max_receive_count: 10` in every environment, so an envelope moves to `fcp_sfd_crm_events_publish_failures-deadletter` after its tenth receive. Reading a message from `fcp_sfd_crm_events_publish_failures` without deleting it counts as a receive, so inspecting envelopes uses up that count. Neither `fcp_sfd_crm_events_publish_failures-deadletter` nor `fcp_sfd_crm_requests-deadletter` has a redrive policy of its own.
 
 ### Configuration
 
 | Variable | Default | Description |
 |---|---|---|
 | `CRM_QUEUE_URL` | none — **required** | URL of the inbound CRM request queue |
-| `CRM_REQUEST_DLQ_URL` | none — **required** | URL of `fcp_sfd_crm_requests-deadletter`, for discarded inbound CRM request messages |
-| `CRM_EVENTS_DLQ_URL` | none — **required** | URL of `fcp_sfd_crm_events_publish_failures`, for envelopes from failed outbound SNS publishes |
+| `CRM_REQUEST_DLQ_URL` | none — **required** | URL of `fcp_sfd_crm_requests-deadletter`, for discarded inbound CRM request messages. The service will not start without it |
+| `CRM_EVENTS_DLQ_URL` | none — **required** | URL of `fcp_sfd_crm_events_publish_failures`, for envelopes from failed outbound SNS publishes. The service will not start without it |
 | `CRM_EVENTS_TOPIC_ARN` | none — **required** | ARN of the CRM events SNS topic |
 | `SQS_CONSUMER_BATCH_SIZE` | `10` | Maximum messages returned per receive call |
 | `SQS_CONSUMER_WAIT_TIME_SECONDS` | `10` | Long-poll wait for a message to arrive |
@@ -409,7 +411,7 @@ A submission uploaded as several files shares one `correlationId` and produces o
 
 The creator can fail to create the case — a non-retryable CRM error, or its process being lost entirely — without losing the rest of the submission:
 
-- **Non-retryable failure.** `createNewCase` releases the creator role before its message reaches the dead letter queue, so the next file to be processed finds no live creator and creates the case itself.
+- **Non-retryable failure.** `createNewCase` releases the creator role before its message reaches `fcp_sfd_crm_requests-deadletter`, so the next file to be processed finds no live creator and creates the case itself.
 - **Lost creator.** Each submission records a `creationDeadline`, set when it is first seen. If no case has been created by the time the deadline passes, a waiting file may claim the creator role and create the case instead of continuing to wait.
 
 Both paths go through `claimCreatorRole`, a single conditional MongoDB update that matches at most one document, so two files can never simultaneously win the creator role for the same submission. Case creation itself is additionally idempotent — see [`src/repos/crm.js`](src/repos/crm.js) — so even if two files did both attempt to create a case for the same `correlationId`, only one incident would ever be committed in Dataverse.
@@ -420,13 +422,13 @@ Both paths go through `claimCreatorRole`, a single conditional MongoDB update th
 |---|---|---|
 | `CASE_CREATION_DEADLINE_MS` | `30000` | How long a submission waits for its creator to create the case before another file may take over |
 
-`CASE_CREATION_DEADLINE_MS` must stay well inside the CRM request queue's redelivery budget (`visibility_timeout_seconds` × `dlq_max_receive_count`, set per environment in `cdp-tenant-config`), or a submission can be sent to the dead letter queue before the deadline ever has a chance to fire. A waiting file's own retries are its only recovery path in the meantime.
+`CASE_CREATION_DEADLINE_MS` must stay well inside the CRM request queue's redelivery budget (`visibility_timeout_seconds` × `dlq_max_receive_count`, set per environment in `cdp-tenant-config`), or a submission can be sent to `fcp_sfd_crm_requests-deadletter` before the deadline ever has a chance to fire. A waiting file's own retries are its only recovery path in the meantime.
 
-That budget is currently 60 × 3 = 180 s in every environment. A waiting file is redelivered every 60 s and has three deliveries before the dead letter queue, so the default of 30000 expires comfortably before the second delivery rather than on the boundary of it. Recompute this if either queue setting changes.
+That budget is currently 60 × 3 = 180 s in every environment. A waiting file is redelivered every 60 s and has three deliveries before `fcp_sfd_crm_requests-deadletter`, so the default of 30000 expires comfortably before the second delivery rather than on the boundary of it. Recompute this if either queue setting changes.
 
 ### Observability
 
-A submission stuck waiting for its case is visible without checking the dead letter queue: `crm.case.waiting_for_case`, `crm.case.creator_role_claimed`, `crm.case.creator_role_released` and `crm.case.creator_release_failed` are emitted as metrics (see [`src/api/common/helpers/metrics.js`](src/api/common/helpers/metrics.js)). Every name except `crm.case.waiting_for_case` is also written as `event.type` on an ECS-shaped log line from `src/services/case.js`, so the same string finds the event in either place.
+A submission stuck waiting for its case is visible without checking `fcp_sfd_crm_requests-deadletter`: `crm.case.waiting_for_case`, `crm.case.creator_role_claimed`, `crm.case.creator_role_released` and `crm.case.creator_release_failed` are emitted as metrics (see [`src/api/common/helpers/metrics.js`](src/api/common/helpers/metrics.js)). Every name except `crm.case.waiting_for_case` is also written as `event.type` on an ECS-shaped log line from `src/services/case.js`, so the same string finds the event in either place.
 
 ## Audit events
 
