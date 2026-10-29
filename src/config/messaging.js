@@ -31,9 +31,14 @@ export const messagingConfig = {
         default: null,
         env: 'CRM_QUEUE_URL'
       },
+      // Not nullable: without it a terminal failure has nowhere to go, and the
+      // gap would only surface when the first message is dead-lettered. Leaving
+      // `nullable` unset makes convict reject the null default, and the `url`
+      // format rejects an empty value, so an unset or blank CRM_REQUEST_DLQ_URL
+      // stops the service at startup instead.
       deadLetterUrl: {
-        doc: 'URL for the CRM ingest dead letter queue',
-        format: String,
+        doc: 'URL for the CRM ingest dead letter queue (fcp_sfd_crm_requests-deadletter)',
+        format: 'url',
         default: null,
         env: 'CRM_REQUEST_DLQ_URL'
       }
@@ -45,18 +50,24 @@ export const messagingConfig = {
         default: null,
         env: 'CRM_EVENTS_TOPIC_ARN'
       },
+      // Not nullable: without it a failed publish cannot be captured for replay,
+      // and the gap would only surface on the first failed publish. Leaving
+      // `nullable` unset makes convict reject the null default, and the `url`
+      // format rejects an empty value, so an unset or blank CRM_EVENTS_DLQ_URL
+      // stops the service at startup instead.
       publishDlqUrl: {
-        doc: 'URL for the outbound SNS publish dead letter queue',
-        format: String,
+        doc: 'URL for the outbound SNS publish dead letter queue (fcp_sfd_crm_events_publish_failures)',
+        format: 'url',
         default: null,
         env: 'CRM_EVENTS_DLQ_URL'
       }
     },
     audit: {
-      // Not nullable: an unset ARN would be accepted by convict but rejected
-      // by the publisher's own config schema on every single event, silently
-      // discarding the entire audit stream. Failing at startup instead makes
-      // a misconfiguration impossible to mistake for transport noise.
+      // Not nullable: an unset ARN would be rejected by the publisher's own
+      // config schema on every single event, silently discarding the entire
+      // audit stream. Leaving `nullable` unset makes convict reject the null
+      // default, so the misconfiguration fails at startup instead and cannot
+      // be mistaken for transport noise.
       topicArn: {
         doc: 'ARN for the audit SNS topic',
         format: String,
