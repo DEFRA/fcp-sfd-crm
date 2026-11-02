@@ -26,6 +26,13 @@ const makeRetryableError = () => {
   return err
 }
 
+const makeUnknownError = () => {
+  const err = new Error('fetch failed', { cause: new Error('proxy connection failed') })
+  err.name = 'RetryLimitError'
+  err.retryMetadata = { category: 'unknown', terminalReason: 'fetch failed', attempts: 2 }
+  return err
+}
+
 const makeNonRetryableError = () => {
   const err = new Error('Bad request')
   err.retryMetadata = { category: 'non-retryable', terminalReason: 'http_400', status: 400 }
@@ -118,6 +125,30 @@ describe('ensureContactAndAccount', () => {
     expect(thrown.message).toContain('Retryable error looking up contact')
     // Verify that no lookup_failed event log was emitted (retryable errors don't log the event)
     expect(mockLogger.error).not.toHaveBeenCalled()
+    expect(mockEmitAuditEvent).not.toHaveBeenCalled()
+  })
+
+  test('retries and reports a CRM reachability failure when contact lookup is unknown', async () => {
+    const err = makeUnknownError()
+    getContactIdFromCrn.mockResolvedValue({ contactId: null, error: err })
+
+    const thrown = await ensureContactAndAccount('token', 'crn1', 'sbi1', { correlationId: 'corr-1' }).catch(e => e)
+
+    expect(thrown.retryable).toBe(true)
+    expect(thrown.retryMetadata).toEqual(err.retryMetadata)
+    expect(thrown.triageFailureReason).toBeUndefined()
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: expect.objectContaining({
+          type: 'crm.lookup.failed',
+          action: 'lookup_contact',
+          reason: 'proxy connection failed'
+        }),
+        error: expect.objectContaining({ type: 'RetryLimitError', cause: 'proxy connection failed' })
+      }),
+      'Failed to reach CRM during contact lookup'
+    )
+    expect(mockLogger.warn).not.toHaveBeenCalledWith(expect.anything(), expect.stringContaining('No contact found'))
     expect(mockEmitAuditEvent).not.toHaveBeenCalled()
   })
 
@@ -245,6 +276,31 @@ describe('ensureContactAndAccount', () => {
     expect(thrown.message).toContain('Retryable error looking up account')
     // Verify that no lookup_failed event log was emitted (retryable errors don't log the event)
     expect(mockLogger.error).not.toHaveBeenCalled()
+  })
+
+  test('retries and reports a CRM reachability failure when account lookup is unknown', async () => {
+    const err = makeUnknownError()
+    getContactIdFromCrn.mockResolvedValue({ contactId: 'c1' })
+    getAccountIdFromSbi.mockResolvedValue({ accountId: null, error: err })
+
+    const thrown = await ensureContactAndAccount('token', 'crn1', 'sbi1', { correlationId: 'corr-1' }).catch(e => e)
+
+    expect(thrown.retryable).toBe(true)
+    expect(thrown.retryMetadata).toEqual(err.retryMetadata)
+    expect(thrown.triageFailureReason).toBeUndefined()
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: expect.objectContaining({
+          type: 'crm.lookup.failed',
+          action: 'lookup_account',
+          reason: 'proxy connection failed'
+        }),
+        error: expect.objectContaining({ type: 'RetryLimitError', cause: 'proxy connection failed' })
+      }),
+      'Failed to reach CRM during account lookup'
+    )
+    expect(mockLogger.warn).not.toHaveBeenCalledWith(expect.anything(), expect.stringContaining('No account found'))
+    expect(mockEmitAuditEvent).toHaveBeenCalledTimes(1)
   })
 
   test('throws 422 when account lookup gets a non-retryable HTTP error, without emitting a not-found event', async () => {
@@ -398,6 +454,18 @@ describe('fetchOnlineSubmissionActivityIdOrThrow', () => {
     expect(thrown.retryable).toBe(true)
     expect(thrown.retryMetadata).toEqual(err.retryMetadata)
     expect(thrown.message).toBe('Failed to retrieve online submission id')
+  })
+
+  test('retries when the submission activity lookup error is unknown', async () => {
+    const err = makeUnknownError()
+    getOnlineSubmissionActivityId.mockResolvedValue({ onlineSubmissionActivityId: null, error: err })
+
+    const thrown = await fetchOnlineSubmissionActivityIdOrThrow('token', 'case-1', { correlationId: 'corr-1' }).catch(e => e)
+
+    expect(thrown.retryable).toBe(true)
+    expect(thrown.retryMetadata).toEqual(err.retryMetadata)
+    expect(thrown.cause).toBe(err)
+    expect(mockLogger.error).not.toHaveBeenCalled()
   })
 
   test('throws with retryable=false when repo returns a non-retryable HTTP error', async () => {

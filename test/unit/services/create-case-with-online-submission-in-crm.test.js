@@ -252,6 +252,71 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
     )
   })
 
+  test('emits an unknown case-creation outcome when the CRM write times out', async () => {
+    getContactIdFromCrn.mockResolvedValue({ contactId: 'mock-contact-id' })
+    getAccountIdFromSbi.mockResolvedValue({ accountId: 'mock-account-id' })
+    getDocumentTypeMetadata.mockResolvedValue({ documentTypeMetadata: { schemeValue: 's', subjectValue: 'sub', documentTypesId: 'd' }, error: null })
+    const timeoutError = new Error('The operation was aborted due to timeout')
+    timeoutError.retryMetadata = {
+      category: 'retryable',
+      terminalReason: 'The operation was aborted due to timeout',
+      attempts: 1
+    }
+    createCaseWithOnlineSubmission.mockResolvedValue({ caseId: null, error: timeoutError })
+
+    await expect(createCaseWithOnlineSubmissionInCrm({
+      authToken: 'mock-bearer-token',
+      correlationId: 'mock-correlation-id',
+      fileId: FILE_ID,
+      caseType: 'CS_Agreement_Evidence',
+      crn: 'mock-crn',
+      sbi: 'mock-sbi',
+      caseData: {},
+      onlineSubmissionActivity: {}
+    })).rejects.toMatchObject({ retryable: true, retryMetadata: timeoutError.retryMetadata })
+
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: expect.objectContaining({
+          type: 'crm.case.create_outcome_unknown',
+          reason: 'The operation was aborted due to timeout'
+        }),
+        tenant: { message: expect.stringContaining('attempts=1') }
+      }),
+      'Case creation outcome could not be confirmed — Dataverse may have committed it'
+    )
+  })
+
+  test('emits an unknown case-creation outcome when the CRM write error is unclassified', async () => {
+    getContactIdFromCrn.mockResolvedValue({ contactId: 'mock-contact-id' })
+    getAccountIdFromSbi.mockResolvedValue({ accountId: 'mock-account-id' })
+    getDocumentTypeMetadata.mockResolvedValue({ documentTypeMetadata: { schemeValue: 's', subjectValue: 'sub', documentTypesId: 'd' }, error: null })
+    const unknownError = new Error('fetch failed')
+    unknownError.retryMetadata = { category: 'unknown', terminalReason: 'fetch failed', attempts: 2 }
+    createCaseWithOnlineSubmission.mockResolvedValue({ caseId: null, error: unknownError })
+
+    await expect(createCaseWithOnlineSubmissionInCrm({
+      authToken: 'mock-bearer-token',
+      correlationId: 'mock-correlation-id',
+      fileId: FILE_ID,
+      caseType: 'CS_Agreement_Evidence',
+      crn: 'mock-crn',
+      sbi: 'mock-sbi',
+      caseData: {},
+      onlineSubmissionActivity: {}
+    })).rejects.toMatchObject({ retryable: true, retryMetadata: unknownError.retryMetadata })
+
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: expect.objectContaining({
+          type: 'crm.case.create_outcome_unknown',
+          reason: 'fetch failed'
+        })
+      }),
+      'Case creation outcome could not be confirmed — Dataverse may have committed it'
+    )
+  })
+
   test('throws retryable error when document type lookup returns HTTP error', async () => {
     const lookupErr = new Error('CRM unavailable')
     lookupErr.retryMetadata = { category: 'retryable', status: 503 }
@@ -278,6 +343,25 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
       }),
       'Error looking up document type metadata'
     )
+  })
+
+  test('throws retryable error when document type lookup returns an unknown CRM error', async () => {
+    const lookupErr = new Error('fetch failed')
+    lookupErr.retryMetadata = { category: 'unknown', terminalReason: 'fetch failed', attempts: 2 }
+    getContactIdFromCrn.mockResolvedValue({ contactId: 'mock-contact-id' })
+    getAccountIdFromSbi.mockResolvedValue({ accountId: 'mock-account-id' })
+    getDocumentTypeMetadata.mockResolvedValue({ documentTypeMetadata: null, error: lookupErr })
+
+    await expect(createCaseWithOnlineSubmissionInCrm({
+      authToken: 'mock-bearer-token',
+      correlationId: 'mock-correlation-id',
+      fileId: FILE_ID,
+      caseType: 'CS_Agreement_Evidence',
+      crn: 'mock-crn',
+      sbi: 'mock-sbi',
+      caseData: {},
+      onlineSubmissionActivity: {}
+    })).rejects.toMatchObject({ message: 'fetch failed', retryable: true, retryMetadata: lookupErr.retryMetadata })
   })
 
   test('throws non-retryable error when document type lookup returns non-retryable error', async () => {

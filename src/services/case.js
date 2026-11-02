@@ -14,6 +14,7 @@ import { config } from '../config/index.js'
 import { triageEventTypes, triageSkipReasons } from '../constants/integration-inbound-triage.js'
 import { emitAuditEvent } from '../messaging/outbound/audit/send-audit-event.js'
 import { buildDocumentCreatedEvent } from '../messaging/outbound/audit/build-audit-event.js'
+import { isRetryableCrmError } from '../utils/is-retryable-crm-error.js'
 
 const logger = createLogger()
 
@@ -377,7 +378,7 @@ async function addMetadataToExistingCase ({ authToken, caseId, correlationId, fi
   })
 
   if (metadataError) {
-    if (metadataError.retryMetadata?.category === 'retryable') {
+    if (isRetryableCrmError(metadataError)) {
       const retryableErr = new Error(messages.METADATA_FAILURE, { cause: metadataError })
       retryableErr.retryable = true
       retryableErr.retryMetadata = metadataError.retryMetadata
