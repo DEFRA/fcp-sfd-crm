@@ -24,7 +24,9 @@
     "start:watch": "node --watch-path=src --experimental-vm-modules --inspect=0.0.0.0:9232 src/index.js",
     "start:debug": "node --watch-path=src --experimental-vm-modules --inspect-brk=0.0.0.0:9232 src/index.js",
     "start": "node --experimental-vm-modules src/index.js",
-    "sonar": "node scripts/local-sonar-scan.js"
+    "sonar": "node scripts/local-sonar-scan.js",
+    "check:synthetic-ids": "sfd-id-check --staged",
+    "setup:husky": "node -e \"try { (await import('husky')).default() } catch (e) { if (e.code !== 'ERR_MODULE_NOT_FOUND') throw e }\" --input-type module"
   },
   "author": "Defra DDTS",
   "contributors": [
@@ -69,6 +71,8 @@
     "autoprefixer": "10.6.1",
     "dotenv": "18.0.8",
     "eslint": "10.13.0",
+    "fcp-sfd-core": "github:DEFRA/fcp-sfd-core#95f58ade56b2d0dd0f15bdcba6a5f37a54bcc939",
+    "husky": "9.1.7",
     "neostandard": "0.14.1",
     "vitest": "4.1.12"
   },

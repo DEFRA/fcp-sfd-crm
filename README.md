@@ -130,25 +130,26 @@ Terminal inbound failures can be written to CRM triage records in
 these triage writes and bind that value to `rpa_processingentity` on the
 triage record. Leave the value empty to opt out of triaging.
 
-### Pre-commit hooks
+### Pre-commit hook
 
-This repo includes pre-commit hooks:
-- **detect-secrets** — scans for accidentally committed secrets
-- **eslint-fix** — runs ESLint with neostandard and `--fix`
+A [Husky](https://typicode.github.io/husky/) pre-commit hook runs:
 
-Committing via the command line shows full hook output.
+- [`sfd-id-check`](https://github.com/DEFRA/fcp-sfd-core/tree/main/scripts/check-synthetic-ids): blocks commits that add real-looking CRNs or SBIs. Pull requests run the same check.
+- [`detect-secrets`](https://github.com/Yelp/detect-secrets): scans staged files for secrets against [`.secrets.baseline`](.secrets.baseline). If it isn't installed, the hook warns and skips it. Install it with `pip3 install detect-secrets`.
+- `npm run lint:fix`: runs ESLint with neostandard and `--fix`.
 
-To install the pre-commit framework, you need Python and pip:
+Commit from the command line to see the full hook output.
 
-```bash
-pip3 install pre-commit
-```
-
-Then activate the hooks:
+Enable the hook once per clone:
 
 ```bash
-pre-commit install
+npm install
+npm run setup:husky
 ```
+
+This replaces the previous `pre-commit` framework hooks. If you installed them, run `pre-commit uninstall` first.
+
+Use synthetic identifiers only: CRNs from `9000000000` to `9999999999` and SBIs from `800000000` to `899999999`. If a flagged number isn't a CRN or SBI, such as a timestamp, add `sfd-id-check: allow` in a comment on the same line, or list it in `.sfd-id-check-allow`. See the [`sfd-id-check` README](https://github.com/DEFRA/fcp-sfd-core/tree/main/scripts/check-synthetic-ids) for details.
 
 ## Local development
 
