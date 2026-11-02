@@ -161,6 +161,42 @@ describe('httpClient — network errors (retryable)', () => {
     expect(calls).toBe(3)
   })
 
+  test('retries when a native fetch timeout is wrapped in a RetryLimitError', async () => {
+    let calls = 0
+    const fetchHandler = async () => {
+      calls++
+      throw new TypeError('fetch failed', {
+        cause: new DOMException('The operation was aborted due to timeout', 'TimeoutError')
+      })
+    }
+
+    await expect(httpClient(url, { fetchHandler })).rejects.toMatchObject({
+      retryMetadata: {
+        category: 'retryable',
+        terminalReason: 'fetch failed'
+      }
+    })
+    expect(calls).toBe(3)
+  })
+
+  test('retries on a fetch failure with a recognized proxy connection cause', async () => {
+    let calls = 0
+    const fetchHandler = async () => {
+      calls++
+      throw new TypeError('fetch failed', {
+        cause: Object.assign(new Error('proxy connection refused'), { code: 'ECONNREFUSED' })
+      })
+    }
+
+    await expect(httpClient(url, { fetchHandler })).rejects.toMatchObject({
+      retryMetadata: {
+        category: 'retryable',
+        terminalReason: 'fetch failed'
+      }
+    })
+    expect(calls).toBe(3)
+  })
+
   test('retries on ECONNREFUSED', async () => {
     let calls = 0
     const fetchHandler = async () => {
