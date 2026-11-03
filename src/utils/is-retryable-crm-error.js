@@ -1,4 +1,4 @@
-const RETRYABLE_CATEGORIES = ['retryable', 'unknown']
+const RETRYABLE_CATEGORIES = new Set(['retryable', 'unknown'])
 
 export const isRetryableCrmError = (error) =>
-  RETRYABLE_CATEGORIES.includes(error?.retryMetadata?.category)
+  RETRYABLE_CATEGORIES.has(error?.retryMetadata?.category)
