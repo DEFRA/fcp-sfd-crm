@@ -1,0 +1,10 @@
+npm run check:synthetic-ids
+
+if command -v detect-secrets-hook >/dev/null 2>&1; then
+  git diff --cached --name-only --diff-filter=d -z | xargs -0 detect-secrets-hook --baseline .secrets.baseline
+else
+  echo "Warning: detect-secrets is not installed, so staged files were not scanned for secrets." >&2
+  echo "Install it with: pip3 install detect-secrets" >&2
+fi
+
+npm run lint:fix
