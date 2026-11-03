@@ -2,5 +2,4 @@ node_modules
 Dockerfile
 coverage
 .secrets.baseline
-.pre-commit-config.yml
 .git
