@@ -4,9 +4,10 @@ import { config } from '../../../../../src/config/index.js'
 
 // Deliberately not mocking @defra/cdp-metrics here: this proves the "never throws to the
 // caller" guarantee against the actual dependency, not a fabricated mock of it. Whether the
-// flush itself succeeds or fails depends on AWS_EMF_ENVIRONMENT (e.g. compose.yaml sets
-// Local, where it writes straight to stdout and never fails) so only the non-throwing
-// contract is asserted, not whether a failure happened.
+// flush itself succeeds or fails depends on AWS_EMF_ENVIRONMENT, which compose.yaml sets to
+// Local so the library writes straight to stdout instead of probing the EC2 metadata endpoint
+// and waiting for it to time out. Only the non-throwing contract is asserted here, not
+// whether a failure happened.
 vi.mock('../../../../../src/logging/logger.js', () => ({
   createLogger: vi.fn().mockReturnValue({
     info: vi.fn(),
