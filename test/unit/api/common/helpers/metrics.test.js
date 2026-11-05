@@ -97,5 +97,24 @@ describe('#metrics', () => {
       expect(mockLogger.warn).toHaveBeenCalledWith('Dropping unsupported metric dimension key: fileId')
       expect(mockLogger.warn).not.toHaveBeenCalledWith(expect.stringContaining('secret-file-id'))
     })
+
+    test('Should drop route, which is no longer within the dimension budget', () => {
+      metricsCounter(mockMetricsName, mockValue, { route: '/cases/case-id' })
+
+      expect(mockCounter).toHaveBeenCalledWith(mockMetricsName, mockValue, {})
+      expect(mockLogger.warn).toHaveBeenCalledWith('Dropping unsupported metric dimension key: route')
+    })
+
+    test('Should treat null dimensions as empty rather than throwing', () => {
+      expect(() => metricsCounter(mockMetricsName, mockValue, null)).not.toThrow()
+      expect(mockCounter).toHaveBeenCalledWith(mockMetricsName, mockValue, {})
+    })
+
+    test('Should treat null dimensions as empty for gauge and millis', () => {
+      expect(() => metricsGauge(mockMetricsName, mockValue, null)).not.toThrow()
+      expect(() => metricsMillis(mockMetricsName, mockValue, null)).not.toThrow()
+      expect(mockGauge).toHaveBeenCalledWith(mockMetricsName, mockValue, {})
+      expect(mockMillis).toHaveBeenCalledWith(mockMetricsName, mockValue, {})
+    })
   })
 })
