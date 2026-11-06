@@ -122,9 +122,21 @@ describe('ensureContactAndAccount', () => {
 
     expect(thrown.retryable).toBe(true)
     expect(thrown.retryMetadata).toEqual(err.retryMetadata)
-    expect(thrown.message).toContain('Retryable error looking up contact')
-    // Verify that no lookup_failed event log was emitted (retryable errors don't log the event)
-    expect(mockLogger.error).not.toHaveBeenCalled()
+    expect(thrown.message).toBe('CRM contact lookup could not be completed')
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: expect.objectContaining({
+          type: 'crm.lookup.failed',
+          action: 'lookup_contact',
+          category: 'crm',
+          outcome: 'failure',
+          reason: 'Service unavailable'
+        }),
+        error: expect.objectContaining({ type: 'Error', cause: 'Service unavailable', status: 503 }),
+        tenant: { message: 'crn=crn1' }
+      }),
+      'Failed to reach CRM during contact lookup'
+    )
     expect(mockEmitAuditEvent).not.toHaveBeenCalled()
   })
 
@@ -142,9 +154,16 @@ describe('ensureContactAndAccount', () => {
         event: expect.objectContaining({
           type: 'crm.lookup.failed',
           action: 'lookup_contact',
+          category: 'crm',
+          outcome: 'failure',
           reason: 'proxy connection failed'
         }),
-        error: expect.objectContaining({ type: 'RetryLimitError', cause: 'proxy connection failed' })
+        error: expect.objectContaining({
+          type: 'RetryLimitError',
+          cause: 'proxy connection failed',
+          status: null
+        }),
+        tenant: { message: 'crn=crn1' }
       }),
       'Failed to reach CRM during contact lookup'
     )
@@ -273,9 +292,21 @@ describe('ensureContactAndAccount', () => {
 
     expect(thrown.retryable).toBe(true)
     expect(thrown.retryMetadata).toEqual(err.retryMetadata)
-    expect(thrown.message).toContain('Retryable error looking up account')
-    // Verify that no lookup_failed event log was emitted (retryable errors don't log the event)
-    expect(mockLogger.error).not.toHaveBeenCalled()
+    expect(thrown.message).toBe('CRM account lookup could not be completed')
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: expect.objectContaining({
+          type: 'crm.lookup.failed',
+          action: 'lookup_account',
+          category: 'crm',
+          outcome: 'failure',
+          reason: 'Service unavailable'
+        }),
+        error: expect.objectContaining({ type: 'Error', cause: 'Service unavailable', status: 503 }),
+        tenant: { message: 'sbi=sbi1' }
+      }),
+      'Failed to reach CRM during account lookup'
+    )
   })
 
   test('retries and reports a CRM reachability failure when account lookup is unknown', async () => {
@@ -293,9 +324,16 @@ describe('ensureContactAndAccount', () => {
         event: expect.objectContaining({
           type: 'crm.lookup.failed',
           action: 'lookup_account',
+          category: 'crm',
+          outcome: 'failure',
           reason: 'proxy connection failed'
         }),
-        error: expect.objectContaining({ type: 'RetryLimitError', cause: 'proxy connection failed' })
+        error: expect.objectContaining({
+          type: 'RetryLimitError',
+          cause: 'proxy connection failed',
+          status: null
+        }),
+        tenant: { message: 'sbi=sbi1' }
       }),
       'Failed to reach CRM during account lookup'
     )
@@ -383,21 +421,22 @@ describe('ensureContactAndAccount', () => {
     )
   })
 
-  test('includes the SBI in full in the retryable account lookup error message', async () => {
+  test('does not include the SBI in the retryable account lookup error message', async () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: 'c1' })
     getAccountIdFromSbi.mockResolvedValue({ accountId: null, error: makeRetryableError() })
 
     const thrown = await ensureContactAndAccount('token', 'crn1', '106000001').catch(e => e)
 
-    expect(thrown.message).toBe('Retryable error looking up account for SBI: 106000001')
+    expect(thrown.message).toBe('CRM account lookup could not be completed')
+    expect(thrown.message).not.toContain('106000001')
   })
 
-  test('still masks the CRN in the retryable contact lookup error message', async () => {
+  test('does not include the CRN in the retryable contact lookup error message', async () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: null, error: makeRetryableError() })
 
     const thrown = await ensureContactAndAccount('token', '1050000001', '106000001').catch(e => e)
 
-    expect(thrown.message).toBe('Retryable error looking up contact for CRN: ******0001')
+    expect(thrown.message).toBe('CRM contact lookup could not be completed')
     expect(thrown.message).not.toContain('1050000001')
   })
 

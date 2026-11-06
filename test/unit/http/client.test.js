@@ -161,42 +161,6 @@ describe('httpClient — network errors (retryable)', () => {
     expect(calls).toBe(3)
   })
 
-  test('retries when a native fetch timeout is wrapped in a RetryLimitError', async () => {
-    let calls = 0
-    const fetchHandler = async () => {
-      calls++
-      throw new TypeError('fetch failed', {
-        cause: new DOMException('The operation was aborted due to timeout', 'TimeoutError')
-      })
-    }
-
-    await expect(httpClient(url, { fetchHandler })).rejects.toMatchObject({
-      retryMetadata: {
-        category: 'retryable',
-        terminalReason: 'fetch failed'
-      }
-    })
-    expect(calls).toBe(3)
-  })
-
-  test('retries on a fetch failure with a recognized proxy connection cause', async () => {
-    let calls = 0
-    const fetchHandler = async () => {
-      calls++
-      throw new TypeError('fetch failed', {
-        cause: Object.assign(new Error('proxy connection refused'), { code: 'ECONNREFUSED' })
-      })
-    }
-
-    await expect(httpClient(url, { fetchHandler })).rejects.toMatchObject({
-      retryMetadata: {
-        category: 'retryable',
-        terminalReason: 'fetch failed'
-      }
-    })
-    expect(calls).toBe(3)
-  })
-
   test('retries on ECONNREFUSED', async () => {
     let calls = 0
     const fetchHandler = async () => {
@@ -229,6 +193,25 @@ describe('httpClient — network errors (retryable)', () => {
       expect.any(String)
     )
     expect(calls).toBe(3)
+  })
+})
+
+describe('httpClient — fetch timeout classification', () => {
+  afterEach(() => {
+    mockConfigGet.mockImplementation(configWith())
+  })
+
+  test('classifies a fetch timeout as retryable when fetchHandler never resolves', async () => {
+    mockConfigGet.mockImplementation(configWith({ 'retry.http.timeoutMs': 20 }))
+    vi.resetModules()
+    const { httpClient: shortTimeoutHttpClient } = await import('../../../src/http/client.js')
+    const fetchHandler = (request) => new Promise((_resolve, reject) => {
+      request.signal.addEventListener('abort', () => reject(request.signal.reason), { once: true })
+    })
+
+    await expect(shortTimeoutHttpClient(url, { fetchHandler })).rejects.toMatchObject({
+      retryMetadata: { category: 'retryable' }
+    })
   })
 })
 
