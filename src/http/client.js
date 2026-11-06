@@ -37,19 +37,6 @@ const hasRetryableNetworkCause = (error) => {
   return false
 }
 
-const hasTimeoutCause = (error) => {
-  let current = error
-
-  for (let depth = 0; current && depth < ERROR_CAUSE_MAX_DEPTH; depth++) {
-    if (current.name === 'TimeoutError') {
-      return true
-    }
-    current = current.cause
-  }
-
-  return false
-}
-
 const HTTP_TOO_MANY_REQUESTS = 429
 const HTTP_SERVER_ERROR_MIN = 500
 const HTTP_CLIENT_ERROR_MIN = 400
@@ -74,7 +61,7 @@ const classifyError = (ctx) => {
   if (error instanceof TimeoutError || error instanceof NetworkError) {
     return 'retryable'
   }
-  if (hasTimeoutCause(error) || hasRetryableNetworkCause(error)) {
+  if (hasRetryableNetworkCause(error)) {
     return 'retryable'
   }
 

@@ -101,26 +101,18 @@ const lookupErrorCause = (error) => {
  */
 const throwLookupFailure = ({ error, subject, identifierLabel, loggedIdentifier }) => {
   if (isRetryableCrmError(error)) {
-    const isUnknown = error.retryMetadata?.category === 'unknown'
-    if (isUnknown) {
-      const cause = lookupErrorCause(error)
-      logger.error({
-        event: lookupEvent({ type: crmLookupEventTypes.FAILED, subject, reason: cause }),
-        error: {
-          type: error.name ?? 'CrmLookupError',
-          cause,
-          status: error.retryMetadata?.status ?? null
-        },
-        tenant: { message: toTenantMessage({ [identifierLabel.toLowerCase()]: loggedIdentifier }) }
-      }, `Failed to reach CRM during ${subject} lookup`)
-    }
+    const cause = lookupErrorCause(error)
+    logger.error({
+      event: lookupEvent({ type: crmLookupEventTypes.FAILED, subject, reason: cause }),
+      error: {
+        type: error.name ?? 'CrmLookupError',
+        cause,
+        status: error.retryMetadata?.status ?? null
+      },
+      tenant: { message: toTenantMessage({ [identifierLabel.toLowerCase()]: loggedIdentifier }) }
+    }, `Failed to reach CRM during ${subject} lookup`)
 
-    const retryableErr = new Error(
-      isUnknown
-        ? `CRM ${subject} lookup could not be completed`
-        : `Retryable error looking up ${subject} for ${identifierLabel}: ${loggedIdentifier}`,
-      { cause: error }
-    )
+    const retryableErr = new Error(`CRM ${subject} lookup could not be completed`, { cause: error })
     retryableErr.retryable = true
     retryableErr.retryMetadata = error.retryMetadata
     throw retryableErr
