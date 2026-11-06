@@ -377,9 +377,10 @@ describe('case service', () => {
       expect(releaseCreator).toHaveBeenCalledWith('corr-1', 'file-1')
     })
 
-    test('should not triage a retryable failure even if it carries a mapped triage reason', async () => {
+    test('should not triage an unknown CRM failure', async () => {
       const retryableErr = new Error('CRM unavailable, will retry')
       retryableErr.retryable = true
+      retryableErr.retryMetadata = { category: 'unknown', terminalReason: 'fetch failed' }
       retryableErr.triageFailureReason = 'document_type_not_found'
       createCaseWithOnlineSubmissionInCrm.mockRejectedValue(retryableErr)
       mockConfigGet.mockReturnValue('927350008')
@@ -782,6 +783,22 @@ describe('case service', () => {
       expect(thrown.retryMetadata).toEqual(retryErr.retryMetadata)
       expect(thrown.message).toBe('Failed to add metadata for additional file')
       expect(thrown.dlqReason).toBe('metadata_attachment_failed')
+      expect(markFileProcessed).not.toHaveBeenCalled()
+    })
+
+    test('should throw retryable when metadata creation fails with an unknown CRM error', async () => {
+      const unknownErr = new Error('fetch failed')
+      unknownErr.retryMetadata = { category: 'unknown', terminalReason: 'fetch failed', attempts: 2 }
+      upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: 'existing-case-id', isCreator: false })
+      getOnlineSubmissionActivityId.mockResolvedValue({ onlineSubmissionActivityId: '84c190b8-5d96-f111-8076-000d3ada3978', error: null })
+      createMetadataForOnlineSubmission.mockResolvedValue({ metadataId: null, error: unknownErr })
+
+      const thrown = await createCase(validPayload).catch(e => e)
+
+      expect(thrown.retryable).toBe(true)
+      expect(thrown.retryMetadata).toEqual(unknownErr.retryMetadata)
+      expect(thrown.dlqReason).toBe('metadata_attachment_failed')
+      expect(createIntegrationInboundQueueRecord).not.toHaveBeenCalled()
       expect(markFileProcessed).not.toHaveBeenCalled()
     })
 

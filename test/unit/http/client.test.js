@@ -196,6 +196,25 @@ describe('httpClient — network errors (retryable)', () => {
   })
 })
 
+describe('httpClient — fetch timeout classification', () => {
+  afterEach(() => {
+    mockConfigGet.mockImplementation(configWith())
+  })
+
+  test('classifies a fetch timeout as retryable when fetchHandler never resolves', async () => {
+    mockConfigGet.mockImplementation(configWith({ 'retry.http.timeoutMs': 20 }))
+    vi.resetModules()
+    const { httpClient: shortTimeoutHttpClient } = await import('../../../src/http/client.js')
+    const fetchHandler = (request) => new Promise((_resolve, reject) => {
+      request.signal.addEventListener('abort', () => reject(request.signal.reason), { once: true })
+    })
+
+    await expect(shortTimeoutHttpClient(url, { fetchHandler })).rejects.toMatchObject({
+      retryMetadata: { category: 'retryable' }
+    })
+  })
+})
+
 describe('httpClient — unknown errors', () => {
   test('handles thrown string errors and keeps metadata attach safe', async () => {
     // eslint-disable-next-line no-throw-literal
