@@ -68,7 +68,7 @@
   "devDependencies": {
     "@fetchkit/chaos-fetch": "1.3.0",
     "@vitest/coverage-v8": "4.1.12",
-    "autoprefixer": "10.6.1",
+    "autoprefixer": "10.6.2",
     "dotenv": "18.0.8",
     "eslint": "10.13.0",
     "fcp-sfd-core": "github:DEFRA/fcp-sfd-core#95f58ade56b2d0dd0f15bdcba6a5f37a54bcc939",
