@@ -20,6 +20,9 @@ vi.mock('../../../src/messaging/outbound/audit/send-audit-event.js', () => ({
 const { ensureContactAndAccount, fetchOnlineSubmissionActivityIdOrThrow } = await import('../../../src/services/crm-helpers.js')
 const { getOnlineSubmissionActivityId, getContactIdFromCrn, getAccountIdFromSbi } = await import('../../../src/repos/crm.js')
 
+const CRN = '9000000001'
+const SBI = '800000001'
+
 const makeRetryableError = () => {
   const err = new Error('Service unavailable')
   err.retryMetadata = { category: 'retryable', terminalReason: 'http_503', status: 503 }
@@ -238,7 +241,7 @@ describe('ensureContactAndAccount', () => {
   test('masks the CRN when logging a not-found', async () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: null })
 
-    await ensureContactAndAccount('token', '1050000001', 'sbi1', { correlationId: 'corr-1' }).catch(() => {})
+    await ensureContactAndAccount('token', CRN, 'sbi1', { correlationId: 'corr-1' }).catch(() => {})
 
     // The correlation id is not passed here: the pino mixin in logger-options.js
     // injects transaction.id into every record from the AsyncLocalStorage store.
@@ -257,15 +260,15 @@ describe('ensureContactAndAccount', () => {
     )
 
     const [logged, message] = mockLogger.warn.mock.calls[0]
-    expect(JSON.stringify([logged, message])).not.toContain('1050000001')
+    expect(JSON.stringify([logged, message])).not.toContain(CRN)
   })
 
   test('logs only the error classification, never the repo error, when the contact lookup fails', async () => {
     const err = makeNonRetryableError()
-    err.responseBody = { name: 'A Farmer', crn: '1050000001' }
+    err.responseBody = { name: 'A Farmer', crn: CRN }
     getContactIdFromCrn.mockResolvedValue({ contactId: null, error: err })
 
-    await ensureContactAndAccount('token', '1050000001', 'sbi1', { correlationId: 'corr-1' }).catch(() => {})
+    await ensureContactAndAccount('token', CRN, 'sbi1', { correlationId: 'corr-1' }).catch(() => {})
 
     const [logged, message] = mockLogger.error.mock.calls[0]
     expect(logged).toEqual({
@@ -404,7 +407,7 @@ describe('ensureContactAndAccount', () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: 'c1' })
     getAccountIdFromSbi.mockResolvedValue({ accountId: null })
 
-    await ensureContactAndAccount('token', 'crn1', '106000001', { correlationId: 'corr-1' }).catch(() => {})
+    await ensureContactAndAccount('token', 'crn1', SBI, { correlationId: 'corr-1' }).catch(() => {})
 
     expect(mockLogger.warn).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -415,9 +418,9 @@ describe('ensureContactAndAccount', () => {
           outcome: 'failure',
           reason: 'account_not_found_for_sbi'
         },
-        tenant: { message: 'sbi=106000001' }
+        tenant: { message: `sbi=${SBI}` }
       }),
-      'No account found for SBI: 106000001'
+      `No account found for SBI: ${SBI}`
     )
   })
 
@@ -425,28 +428,28 @@ describe('ensureContactAndAccount', () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: 'c1' })
     getAccountIdFromSbi.mockResolvedValue({ accountId: null, error: makeRetryableError() })
 
-    const thrown = await ensureContactAndAccount('token', 'crn1', '106000001').catch(e => e)
+    const thrown = await ensureContactAndAccount('token', 'crn1', SBI).catch(e => e)
 
     expect(thrown.message).toBe('CRM account lookup could not be completed')
-    expect(thrown.message).not.toContain('106000001')
+    expect(thrown.message).not.toContain(SBI)
   })
 
   test('does not include the CRN in the retryable contact lookup error message', async () => {
     getContactIdFromCrn.mockResolvedValue({ contactId: null, error: makeRetryableError() })
 
-    const thrown = await ensureContactAndAccount('token', '1050000001', '106000001').catch(e => e)
+    const thrown = await ensureContactAndAccount('token', CRN, SBI).catch(e => e)
 
     expect(thrown.message).toBe('CRM contact lookup could not be completed')
-    expect(thrown.message).not.toContain('1050000001')
+    expect(thrown.message).not.toContain(CRN)
   })
 
   test('logs only the error classification, never the repo error, when the account lookup fails', async () => {
     const err = makeNonRetryableError()
-    err.responseBody = { businessName: 'A Farm Ltd', sbi: '106000001' }
+    err.responseBody = { businessName: 'A Farm Ltd', sbi: SBI }
     getContactIdFromCrn.mockResolvedValue({ contactId: 'c1' })
     getAccountIdFromSbi.mockResolvedValue({ accountId: null, error: err })
 
-    await ensureContactAndAccount('token', 'crn1', '106000001', { correlationId: 'corr-1' }).catch(() => {})
+    await ensureContactAndAccount('token', 'crn1', SBI, { correlationId: 'corr-1' }).catch(() => {})
 
     const [logged, message] = mockLogger.error.mock.calls[0]
     expect(logged).toEqual({
@@ -458,9 +461,9 @@ describe('ensureContactAndAccount', () => {
         reason: 'http_400'
       },
       error: { type: 'Error', status: 400 },
-      tenant: { message: 'sbi=106000001' }
+      tenant: { message: `sbi=${SBI}` }
     })
-    expect(message).toBe('CRM account lookup failed for SBI: 106000001')
+    expect(message).toBe(`CRM account lookup failed for SBI: ${SBI}`)
     expect(JSON.stringify(logged)).not.toContain('A Farm Ltd')
   })
 
