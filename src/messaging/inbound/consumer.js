@@ -26,7 +26,7 @@ const setLogger = (customLogger) => {
   logger = customLogger
 }
 
-const sendToDlq = async (sqsClient, dlqUrl, message, { error, tenant, reason }) => {
+const routeInboundMessageToDlq = async (sqsClient, dlqUrl, message, { error, tenant, reason }) => {
   try {
     await sqsClient.send(new SendMessageCommand({
       QueueUrl: dlqUrl,
@@ -46,6 +46,11 @@ const sendToDlq = async (sqsClient, dlqUrl, message, { error, tenant, reason }) 
     return
   }
 
+  // Defence in depth only. @defra/cdp-metrics swallows its own emit failures and
+  // never rejects, so a genuine failure to reach CloudWatch surfaces as a warning
+  // from that library rather than as the error below — do not treat the absence of
+  // this line as proof the metric was emitted. The catch stays so that a future
+  // change in the library cannot fail a message that is already safely on the DLQ.
   try {
     await metricsCounter(dlqRoutingMetric, 1, { reason })
   } catch (metricError) {
@@ -114,7 +119,7 @@ const discardFailedMessage = async (sqsClient, dlqUrl, payload, message, err) =>
   }
   const tenantContext = toTenantMessage({ fileId, attempts, cause: err.cause?.message })
 
-  await sendToDlq(sqsClient, dlqUrl, message, {
+  await routeInboundMessageToDlq(sqsClient, dlqUrl, message, {
     reason: isMetadataFailure
       ? dlqRoutingReasons.METADATA_ATTACHMENT_FAILED
       : dlqRoutingReasons.CASE_CREATION_FAILED,
@@ -186,7 +191,7 @@ const handleCRMMessage = async (sqsClient, dlqUrl, message) => {
     payload = JSON.parse(message.Body)
   } catch (err) {
     return runWithCorrelationId(message.MessageId, async () => {
-      await sendToDlq(sqsClient, dlqUrl, message, {
+      await routeInboundMessageToDlq(sqsClient, dlqUrl, message, {
         reason: dlqRoutingReasons.INVALID_JSON,
         error: {
           message: err.message,
@@ -214,7 +219,7 @@ const handleCRMMessage = async (sqsClient, dlqUrl, message) => {
     const { error } = inboundCloudEventSchema.validate(payload, validationOptions)
     if (error) {
       logInboundValidationFailure(logger, error, payload)
-      await sendToDlq(sqsClient, dlqUrl, message, {
+      await routeInboundMessageToDlq(sqsClient, dlqUrl, message, {
         reason: dlqRoutingReasons.SCHEMA_INVALID,
         error: {
           message: error.message,
