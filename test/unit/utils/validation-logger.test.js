@@ -53,6 +53,86 @@ describe('logInboundValidationFailure', () => {
     expect(err.validationErrors[0].value).toHaveLength(100)
   })
 
+  test('should keep the rejected value for a non-CRN path', () => {
+    const joiError = {
+      details: [
+        { path: ['data', 'time'], type: 'date.format', context: { value: 'not-a-date' }, message: '"data.time" must be in ISO 8601 date format' }
+      ]
+    }
+
+    logInboundValidationFailure(mockLogger, joiError, { id: 'evt-3', source: 'test-source' })
+
+    const [err] = mockLogger.error.mock.calls[0]
+    expect(err.message).toContain('(received: "not-a-date")')
+    expect(err.validationErrors[0].value).toBe('not-a-date')
+  })
+
+  test.each([
+    ['number', 9000000001],
+    ['string', '9000000001'],
+    ['object', { value: 9000000001 }],
+    ['array', [9000000001]]
+  ])('should omit a rejected data.crn %s from the message and validationErrors', (_label, value) => {
+    const joiError = {
+      details: [
+        { path: ['data', 'crn'], type: 'alternatives.match', context: { value }, message: '"data.crn" does not match any of the allowed types' }
+      ]
+    }
+
+    logInboundValidationFailure(mockLogger, joiError, { id: 'evt-4', source: 'test-source' })
+
+    const [err] = mockLogger.error.mock.calls[0]
+    expect(err.message).toContain('data.crn')
+    expect(err.message).not.toContain('received')
+    expect(err.message).not.toContain('9000000001')
+    expect(err.validationErrors[0]).not.toHaveProperty('value')
+    expect(JSON.stringify(err.validationErrors)).not.toContain('9000000001')
+  })
+
+  test('should omit the rejected value when the failing path is inside data.crn', () => {
+    const joiError = {
+      details: [
+        { path: ['data', 'crn', 'value'], type: 'object.unknown', context: { value: 9000000001 }, message: '"data.crn.value" is not allowed' }
+      ]
+    }
+
+    logInboundValidationFailure(mockLogger, joiError, { id: 'evt-5', source: 'test-source' })
+
+    const [err] = mockLogger.error.mock.calls[0]
+    expect(err.message).not.toContain('9000000001')
+    expect(err.validationErrors[0]).not.toHaveProperty('value')
+  })
+
+  test.each([
+    ['object', { crn: 9000000001 }],
+    ['array', [9000000001]]
+  ])('should omit a rejected %s value on a non-CRN path', (_label, value) => {
+    const joiError = {
+      details: [
+        { path: ['data'], type: 'object.unknown', context: { value }, message: '"data" contains an unexpected value' }
+      ]
+    }
+
+    logInboundValidationFailure(mockLogger, joiError, { id: 'evt-6', source: 'test-source' })
+
+    const [err] = mockLogger.error.mock.calls[0]
+    expect(err.message).not.toContain('9000000001')
+    expect(err.validationErrors[0]).not.toHaveProperty('value')
+  })
+
+  test('should keep a missing value on a non-CRN path as before', () => {
+    const joiError = {
+      details: [
+        { path: ['id'], type: 'any.required', context: { value: undefined }, message: '"id" is required' }
+      ]
+    }
+
+    logInboundValidationFailure(mockLogger, joiError, {})
+
+    const [err] = mockLogger.error.mock.calls[0]
+    expect(err.validationErrors[0]).toHaveProperty('value', undefined)
+  })
+
   test('should handle missing payload fields gracefully', () => {
     const joiError = {
       details: [
@@ -110,5 +190,21 @@ describe('logOutboundValidationFailure', () => {
     expect(err.message).toContain('evt-out-1')
     expect(err.validationErrors).toHaveLength(1)
     expect(message).toBe('Outbound SNS event failed validation')
+  })
+
+  test('should omit a rejected data.crn from the outbound message and validationErrors', () => {
+    const joiError = {
+      details: [
+        { path: ['data', 'crn'], type: 'number.min', context: { value: 9000000001 }, message: '"data.crn" must be greater than or equal to 9000000002' },
+        { path: ['data', 'time'], type: 'date.format', context: { value: 'not-a-date' }, message: '"data.time" must be in ISO 8601 date format' }
+      ]
+    }
+
+    logOutboundValidationFailure(mockLogger, joiError, { id: 'evt-out-2', source: 'fcp-sfd-crm' })
+
+    const [err] = mockLogger.error.mock.calls[0]
+    expect(err.message).not.toContain('(received: 9000000001)')
+    expect(err.validationErrors[0]).not.toHaveProperty('value')
+    expect(err.validationErrors[1].value).toBe('not-a-date')
   })
 })
