@@ -37,11 +37,11 @@ jobs:
 
       - name: SonarQube Cloud Scan
         if: github.actor != 'dependabot[bot]'
-        uses: SonarSource/sonarqube-scan-action@ba9859eae8dd6bd29e412f25ddbbef3d032000f4 # v8
+        uses: SonarSource/sonarqube-scan-action@4d1dc0c91ee400dcf8a6dddf2f705ac36542e304 # v8
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
       - name: Build and Publish
-        uses: DEFRA/cdp-build-action/build@3bc79a86e8226a0e3159380bad680ec466c16dcc # main
+        uses: DEFRA/cdp-build-action/build@3761ef22decf8615b8fd275cd9b7142f8d356a11 # main
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
