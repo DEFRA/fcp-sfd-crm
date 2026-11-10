@@ -70,8 +70,8 @@ const { ensureContactAndAccount } = await import('../../../../src/services/crm-h
 const sqsClient = { config: { endpoint: 'mock-endpoint' }, send: vi.fn().mockResolvedValue({}) }
 
 const CORRELATION_ID = '550e8400-e29b-41d4-a716-446655440000'
-const CRN = '1050000001'
-const SBI = '106000001'
+const CRN = '9000200001'
+const SBI = '800020001'
 
 const message = (fileId) => ({
   MessageId: `msg-${fileId}`,

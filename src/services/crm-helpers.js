@@ -14,6 +14,7 @@ import { triageFailureReasons } from '../constants/integration-inbound-triage.js
 import { crmLookupEventTypes, crmLookupActions, crmLookupCategories, crmLookupOutcomes } from '../constants/crm-lookup-events.js'
 import { maskIdentifier } from '../utils/mask-identifier.js'
 import { toTenantMessage } from '../logging/tenant-message.js'
+import { isRetryableCrmError } from '../utils/is-retryable-crm-error.js'
 
 const logger = createLogger()
 const { constants: httpConstants } = http2
@@ -36,6 +37,7 @@ export function assertRequiredParams (requiredParams) {
 
 const CONTACT_NOT_FOUND = 'Contact ID not found'
 const ACCOUNT_NOT_FOUND = 'Account ID not found'
+const MAX_CRM_ERROR_CAUSE_DEPTH = 5
 
 /**
  * Map subject identifier to lookup action event field
@@ -71,16 +73,25 @@ const lookupEvent = ({ type, subject, reason }) => ({
  */
 const lookupFailureReason = (error) => {
   const status = error.retryMetadata?.status
-  return status ? `http_${status}` : (error.name ?? 'unknown_error')
+  return error.retryMetadata?.terminalReason ??
+    (status ? `http_${status}` : (error.name ?? 'unknown_error'))
+}
+
+const lookupErrorCause = (error) => {
+  let cause = error
+
+  for (let depth = 0; cause?.cause && depth < MAX_CRM_ERROR_CAUSE_DEPTH; depth++) {
+    cause = cause.cause
+  }
+
+  return cause?.message ?? cause?.name ?? 'unknown_error'
 }
 
 /**
- * Handle a failed CRM identity lookup. A retryable CRM failure is rethrown as
- * retryable so the message stays on the queue; anything else is terminal and
- * becomes a 422. Shared by the contact and account lookups, which differ only
- * in the nouns they use. This is a lookup fault (the CRM call itself failed),
- * distinct from a genuine not-found, so it is reported to triage under its
- * own reason rather than the subject's not-found reason.
+ * Handle a failed CRM identity lookup. Retryable and unclassified CRM errors
+ * are rethrown so the message stays on the queue; known terminal errors become
+ * a 422. Shared by the contact and account lookups, which differ only in the
+ * nouns they use. A lookup fault is distinct from a genuine not-found.
  * @param {object} params
  * @param {object} params.error - error returned by the repo
  * @param {string} params.subject - "contact" or "account"
@@ -89,8 +100,19 @@ const lookupFailureReason = (error) => {
  * @throws always
  */
 const throwLookupFailure = ({ error, subject, identifierLabel, loggedIdentifier }) => {
-  if (error.retryMetadata?.category === 'retryable') {
-    const retryableErr = new Error(`Retryable error looking up ${subject} for ${identifierLabel}: ${loggedIdentifier}`)
+  if (isRetryableCrmError(error)) {
+    const cause = lookupErrorCause(error)
+    logger.error({
+      event: lookupEvent({ type: crmLookupEventTypes.FAILED, subject, reason: cause }),
+      error: {
+        type: error.name ?? 'CrmLookupError',
+        cause,
+        status: error.retryMetadata?.status ?? null
+      },
+      tenant: { message: toTenantMessage({ [identifierLabel.toLowerCase()]: loggedIdentifier }) }
+    }, `Failed to reach CRM during ${subject} lookup`)
+
+    const retryableErr = new Error(`CRM ${subject} lookup could not be completed`, { cause: error })
     retryableErr.retryable = true
     retryableErr.retryMetadata = error.retryMetadata
     throw retryableErr
@@ -226,8 +248,8 @@ export async function fetchOnlineSubmissionActivityIdOrThrow (authToken, caseId,
   const { onlineSubmissionActivityId, error } = await getOnlineSubmissionActivityId(authToken, caseId)
 
   if (error) {
-    if (error.retryMetadata?.category === 'retryable') {
-      const retryableErr = new Error(messages.SUBMISSION_ID_FAILURE)
+    if (isRetryableCrmError(error)) {
+      const retryableErr = new Error(messages.SUBMISSION_ID_FAILURE, { cause: error })
       retryableErr.retryable = true
       retryableErr.retryMetadata = error.retryMetadata
       throw retryableErr

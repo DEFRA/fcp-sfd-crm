@@ -9,6 +9,7 @@ import { assertRequiredParams, ensureContactAndAccount } from './crm-helpers.js'
 import { crmEvents } from '../constants/events.js'
 import { publishReceivedEvent } from '../messaging/outbound/received-event/publish-received-event.js'
 import { triageFailureReasons } from '../constants/integration-inbound-triage.js'
+import { isRetryableCrmError } from '../utils/is-retryable-crm-error.js'
 
 const { internal } = Boom
 const logger = createLogger()
@@ -42,7 +43,7 @@ export async function resolveDocumentTypeOrThrow (authToken, caseType) {
       },
       caseType
     }, 'Error looking up document type metadata')
-    if (docTypeError?.retryMetadata?.category === 'retryable') {
+    if (isRetryableCrmError(docTypeError)) {
       docTypeError.retryable = true
       throw docTypeError
     }
@@ -99,7 +100,7 @@ function logCaseCreationOutcomeUnknown (caseError, { correlationId, fileId }) {
 }
 
 function throwCaseCreationError (caseError, { correlationId, fileId }) {
-  const isRetryable = caseError?.retryMetadata?.category === 'retryable'
+  const isRetryable = isRetryableCrmError(caseError)
 
   logger.error({
     error: caseError,
