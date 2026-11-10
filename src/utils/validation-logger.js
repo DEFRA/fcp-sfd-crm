@@ -25,6 +25,15 @@ const formatFieldPath = (pathArray) => {
   return pathArray.join('.')
 }
 
+const CRN_FIELD = 'data.crn'
+
+const isCrnField = (field) => field === CRN_FIELD || field.startsWith(`${CRN_FIELD}.`)
+
+const isObjectOrArray = (value) => typeof value === 'object' && value !== null
+
+// A rejected CRN can't be masked reliably (any type, may be nested), so it is omitted, as is any object or array.
+const shouldOmitValue = (field, value) => isCrnField(field) || isObjectOrArray(value)
+
 /**
  * Logs a message validation failure with structured error information.
  * Uses an Error object so that Pino serialises the details into the
@@ -38,11 +47,12 @@ const formatFieldPath = (pathArray) => {
 export const logValidationFailure = (logger, joiError, payload, direction = 'inbound') => {
   const validationErrors = joiError.details.map((detail) => {
     const field = formatFieldPath(detail.path)
+    const rejectedValue = detail.context?.value
 
     return {
       field,
       type: detail.type,
-      value: sanitizeValue(detail.context?.value),
+      ...(shouldOmitValue(field, rejectedValue) ? {} : { value: sanitizeValue(rejectedValue) }),
       message: detail.message
     }
   })
@@ -51,7 +61,9 @@ export const logValidationFailure = (logger, joiError, payload, direction = 'inb
   const label = direction === 'outbound' ? 'Outbound SNS event failed validation' : 'Inbound message failed validation'
 
   const errorDetails = validationErrors
-    .map(e => `${e.field}: ${e.message} (received: ${JSON.stringify(e.value)})`)
+    .map(e => 'value' in e
+      ? `${e.field}: ${e.message} (received: ${JSON.stringify(e.value)})`
+      : `${e.field}: ${e.message}`)
     .join('; ')
 
   const err = new Error(
