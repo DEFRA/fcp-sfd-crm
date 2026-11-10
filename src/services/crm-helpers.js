@@ -80,11 +80,11 @@ const lookupFailureReason = (error) => {
 const lookupErrorCause = (error) => {
   let cause = error
 
-  for (let depth = 0; cause?.cause && depth < MAX_CRM_ERROR_CAUSE_DEPTH; depth++) {
+  for (let depth = 0; cause?.cause instanceof Error && depth < MAX_CRM_ERROR_CAUSE_DEPTH; depth++) {
     cause = cause.cause
   }
 
-  return cause?.message ?? cause?.name ?? 'unknown_error'
+  return cause?.message || lookupFailureReason(error)
 }
 
 /**
@@ -106,8 +106,8 @@ const throwLookupFailure = ({ error, subject, identifierLabel, loggedIdentifier 
       event: lookupEvent({ type: crmLookupEventTypes.FAILED, subject, reason: cause }),
       error: {
         type: error.name ?? 'CrmLookupError',
-        cause,
-        status: error.retryMetadata?.status ?? null
+        message: cause,
+        code: error.retryMetadata?.status ?? null
       },
       tenant: { message: toTenantMessage({ [identifierLabel.toLowerCase()]: loggedIdentifier }) }
     }, `Failed to reach CRM during ${subject} lookup`)
