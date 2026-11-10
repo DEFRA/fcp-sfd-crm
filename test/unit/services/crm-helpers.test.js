@@ -24,7 +24,8 @@ const CRN = '9000000001'
 const SBI = '800000001'
 
 const makeRetryableError = () => {
-  const err = new Error('Service unavailable')
+  const err = new Error('HTTP error: 503 Service Unavailable', { cause: new Response(null, { status: 503 }) })
+  err.name = 'HttpError'
   err.retryMetadata = { category: 'retryable', terminalReason: 'http_503', status: 503 }
   return err
 }
@@ -133,9 +134,13 @@ describe('ensureContactAndAccount', () => {
           action: 'lookup_contact',
           category: 'crm',
           outcome: 'failure',
-          reason: 'Service unavailable'
+          reason: 'HTTP error: 503 Service Unavailable'
         }),
-        error: expect.objectContaining({ type: 'Error', cause: 'Service unavailable', status: 503 }),
+        error: {
+          type: 'HttpError',
+          message: 'HTTP error: 503 Service Unavailable',
+          code: 503
+        },
         tenant: { message: 'crn=crn1' }
       }),
       'Failed to reach CRM during contact lookup'
@@ -161,11 +166,11 @@ describe('ensureContactAndAccount', () => {
           outcome: 'failure',
           reason: 'proxy connection failed'
         }),
-        error: expect.objectContaining({
+        error: {
           type: 'RetryLimitError',
-          cause: 'proxy connection failed',
-          status: null
-        }),
+          message: 'proxy connection failed',
+          code: null
+        },
         tenant: { message: 'crn=crn1' }
       }),
       'Failed to reach CRM during contact lookup'
@@ -286,6 +291,41 @@ describe('ensureContactAndAccount', () => {
     expect(JSON.stringify(logged)).not.toContain('A Farmer')
   })
 
+  test('keeps the low-level message of a connection failure in the reason', async () => {
+    const err = new Error('fetch failed', { cause: new Error('getaddrinfo ENOTFOUND crm.example.test') })
+    err.name = 'RetryLimitError'
+    err.retryMetadata = { category: 'unknown', terminalReason: 'fetch failed', attempts: 2 }
+    getContactIdFromCrn.mockResolvedValue({ contactId: null, error: err })
+
+    const thrown = await ensureContactAndAccount('token', 'crn1', 'sbi1').catch(e => e)
+
+    expect(thrown.retryable).toBe(true)
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: expect.objectContaining({ reason: 'getaddrinfo ENOTFOUND crm.example.test' }),
+        error: { type: 'RetryLimitError', message: 'getaddrinfo ENOTFOUND crm.example.test', code: null }
+      }),
+      'Failed to reach CRM during contact lookup'
+    )
+  })
+
+  test('falls back to the classified reason when no error in the chain has a message', async () => {
+    const err = new Error('', { cause: new Response(null, { status: 429 }) })
+    err.name = 'HttpError'
+    err.retryMetadata = { category: 'retryable', terminalReason: 'http_429', status: 429 }
+    getContactIdFromCrn.mockResolvedValue({ contactId: null, error: err })
+
+    await ensureContactAndAccount('token', 'crn1', 'sbi1').catch(e => e)
+
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: expect.objectContaining({ reason: 'http_429' }),
+        error: { type: 'HttpError', message: 'http_429', code: 429 }
+      }),
+      'Failed to reach CRM during contact lookup'
+    )
+  })
+
   test('throws with retryable=true when account lookup gets a retryable HTTP error', async () => {
     const err = makeRetryableError()
     getContactIdFromCrn.mockResolvedValue({ contactId: 'c1' })
@@ -303,9 +343,13 @@ describe('ensureContactAndAccount', () => {
           action: 'lookup_account',
           category: 'crm',
           outcome: 'failure',
-          reason: 'Service unavailable'
+          reason: 'HTTP error: 503 Service Unavailable'
         }),
-        error: expect.objectContaining({ type: 'Error', cause: 'Service unavailable', status: 503 }),
+        error: {
+          type: 'HttpError',
+          message: 'HTTP error: 503 Service Unavailable',
+          code: 503
+        },
         tenant: { message: 'sbi=sbi1' }
       }),
       'Failed to reach CRM during account lookup'
@@ -331,11 +375,11 @@ describe('ensureContactAndAccount', () => {
           outcome: 'failure',
           reason: 'proxy connection failed'
         }),
-        error: expect.objectContaining({
+        error: {
           type: 'RetryLimitError',
-          cause: 'proxy connection failed',
-          status: null
-        }),
+          message: 'proxy connection failed',
+          code: null
+        },
         tenant: { message: 'sbi=sbi1' }
       }),
       'Failed to reach CRM during account lookup'
