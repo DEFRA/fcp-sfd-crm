@@ -841,4 +841,129 @@ describe('case service', () => {
       expect(markFileProcessed).toHaveBeenCalledWith('corr-2', undefined)
     })
   })
+
+  describe('source system in tenant.message', () => {
+    const payloadWithSourceSystem = {
+      data: { ...validPayload.data, sourceSystem: 'fcp-sfd-frontend' }
+    }
+
+    test('includes sourceSystem on the "Case created" log line when present', async () => {
+      await createCase(payloadWithSourceSystem)
+
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        {
+          event: { action: 'case-created', outcome: 'success', reference: 'mock-case-id' },
+          tenant: { message: 'fileId=file-1 sourceSystem=fcp-sfd-frontend rpaOnlinesubmissionid=mock-ols-id contactId=c1 accountId=a1' }
+        },
+        'Case created'
+      )
+    })
+
+    test('omits sourceSystem on the "Case created" log line when absent from the payload', async () => {
+      await createCase(validPayload)
+
+      const [[context]] = mockLogger.info.mock.calls.filter(([, msg]) => msg === 'Case created')
+      expect(context.tenant.message).not.toContain('sourceSystem')
+    })
+
+    test('omits sourceSystem when it is not a string', async () => {
+      const payloadWithInvalidSourceSystem = {
+        data: { ...validPayload.data, sourceSystem: 123 }
+      }
+
+      await createCase(payloadWithInvalidSourceSystem)
+
+      const [[context]] = mockLogger.info.mock.calls.filter(([, msg]) => msg === 'Case created')
+      expect(context.tenant.message).not.toContain('sourceSystem')
+    })
+
+    test('includes sourceSystem on the duplicate-skip log line', async () => {
+      upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: true, caseId: 'existing-case-id', isCreator: true })
+
+      await createCase(payloadWithSourceSystem)
+
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        { tenant: { message: 'fileId=file-1 sourceSystem=fcp-sfd-frontend' } },
+        'Skipped: duplicate message'
+      )
+    })
+
+    test('includes sourceSystem on the "Case creation in progress, will retry" log line', async () => {
+      upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: null, isCreator: false })
+      claimCreatorRole.mockResolvedValue(false)
+
+      await createCase(payloadWithSourceSystem).catch(() => {})
+
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        { tenant: { message: 'fileId=file-1 sourceSystem=fcp-sfd-frontend' } },
+        'Case creation in progress, will retry'
+      )
+    })
+
+    test('includes sourceSystem on the creator-role-claimed log line', async () => {
+      upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: null, isCreator: false })
+      claimCreatorRole.mockResolvedValue(true)
+
+      await createCase(payloadWithSourceSystem)
+
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        expect.objectContaining({ tenant: { message: 'fileId=file-1 sourceSystem=fcp-sfd-frontend' } }),
+        'Creator role reassigned to this file'
+      )
+    })
+
+    test('includes sourceSystem on the creator-role-released log line', async () => {
+      const nonRetryableErr = new Error('Unable to create case with online submission activity in CRM')
+      nonRetryableErr.retryable = false
+      createCaseWithOnlineSubmissionInCrm.mockRejectedValue(nonRetryableErr)
+
+      await createCase(payloadWithSourceSystem).catch(e => e)
+
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        expect.objectContaining({ tenant: { message: 'fileId=file-1 sourceSystem=fcp-sfd-frontend' } }),
+        'Creator role released after non-retryable failure'
+      )
+    })
+
+    test('includes sourceSystem on the "Metadata added to existing case" log line', async () => {
+      upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: 'existing-case-id', isCreator: false })
+      getOnlineSubmissionActivityId.mockResolvedValue({ onlineSubmissionActivityId: '84c190b8-5d96-f111-8076-000d3ada3978', error: null })
+      createMetadataForOnlineSubmission.mockResolvedValue({ metadataId: 'meta-1', error: null })
+
+      await createCase(payloadWithSourceSystem)
+
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        {
+          event: { reference: 'meta-1' },
+          tenant: { message: 'fileId=file-1 caseId=existing-case-id sourceSystem=fcp-sfd-frontend' }
+        },
+        'Metadata added to existing case'
+      )
+    })
+
+    test('includes sourceSystem on the metadata-attachment-failure log line', async () => {
+      const nonRetryErr = new Error('Bad request')
+      nonRetryErr.retryMetadata = { category: 'non-retryable', terminalReason: 'http_400', status: 400 }
+      upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: 'existing-case-id', isCreator: false })
+      getOnlineSubmissionActivityId.mockResolvedValue({ onlineSubmissionActivityId: '84c190b8-5d96-f111-8076-000d3ada3978', error: null })
+      createMetadataForOnlineSubmission.mockResolvedValue({ metadataId: null, error: nonRetryErr })
+
+      await createCase(payloadWithSourceSystem).catch(() => {})
+
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tenant: { message: 'fileId=file-1 onlineSubmissionActivityId=84c190b8-5d96-f111-8076-000d3ada3978 sourceSystem=fcp-sfd-frontend' }
+        }),
+        expect.any(String)
+      )
+    })
+
+    test('passes sourceSystem through to createCaseWithOnlineSubmissionInCrm', async () => {
+      await createCase(payloadWithSourceSystem)
+
+      expect(createCaseWithOnlineSubmissionInCrm).toHaveBeenCalledWith(
+        expect.objectContaining({ sourceSystem: 'fcp-sfd-frontend' })
+      )
+    })
+  })
 })

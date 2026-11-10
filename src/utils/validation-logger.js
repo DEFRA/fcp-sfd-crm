@@ -1,3 +1,5 @@
+import { toTenantMessage, sanitizeSourceSystem } from '../logging/tenant-message.js'
+
 /**
  * Sanitizes a validation error value for logging.
  * - Truncates strings longer than 100 characters
@@ -76,7 +78,10 @@ export const logValidationFailure = (logger, joiError, payload, direction = 'inb
   err.eventId = payload?.id
   err.eventType = payload?.type
 
-  logger.error(err, label)
+  logger.error({
+    err,
+    tenant: { message: toTenantMessage({ sourceSystem: sanitizeSourceSystem(payload?.data?.sourceSystem) }) }
+  }, label)
 }
 
 export const logInboundValidationFailure = (logger, joiError, payload) => {
