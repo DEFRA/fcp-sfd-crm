@@ -965,5 +965,83 @@ describe('case service', () => {
         expect.objectContaining({ sourceSystem: 'fcp-sfd-frontend' })
       )
     })
+
+    test('includes sourceSystem on the triage write skipped log line', async () => {
+      const err = new Error('No document type metadata found for caseType: Document Upload')
+      err.retryable = false
+      err.triageFailureReason = 'document_type_not_found'
+      createCaseWithOnlineSubmissionInCrm.mockRejectedValue(err)
+
+      await createCase(payloadWithSourceSystem).catch(() => {})
+
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tenant: { message: 'fileId=file-1 caseType=Document Upload failureReason=document_type_not_found sourceSystem=fcp-sfd-frontend' }
+        }),
+        'Skipping CRM triage record write because processing entity config is missing or empty'
+      )
+    })
+
+    test('omits sourceSystem on the triage write skipped log line when absent from the payload', async () => {
+      const err = new Error('No document type metadata found for caseType: Document Upload')
+      err.retryable = false
+      err.triageFailureReason = 'document_type_not_found'
+      createCaseWithOnlineSubmissionInCrm.mockRejectedValue(err)
+
+      await createCase(validPayload).catch(() => {})
+
+      const [[context]] = mockLogger.warn.mock.calls.filter(([, msg]) => msg === 'Skipping CRM triage record write because processing entity config is missing or empty')
+      expect(context.tenant.message).not.toContain('sourceSystem')
+    })
+
+    test('includes sourceSystem and omits correlationId on the triage write succeeded log line', async () => {
+      const err = new Error('No document type metadata found for caseType: Document Upload')
+      err.retryable = false
+      err.triageFailureReason = 'document_type_not_found'
+      createCaseWithOnlineSubmissionInCrm.mockRejectedValue(err)
+      mockConfigGet.mockReturnValue('927350008') // sfd-id-check: allow (Dataverse rpa_processingentity option-set value, not an SBI)
+      createIntegrationInboundQueueRecord.mockResolvedValue({
+        triageRecordId: 'e5f31d07-a1c6-4067-a8ce-7695e1453d96',
+        created: true,
+        error: null
+      })
+
+      await createCase(payloadWithSourceSystem).catch(() => {})
+
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tenant: {
+            message: 'fileId=file-1 caseType=Document Upload failureReason=document_type_not_found triageRecordId=e5f31d07-a1c6-4067-a8ce-7695e1453d96 sourceSystem=fcp-sfd-frontend'
+          }
+        }),
+        'CRM triage record write completed'
+      )
+    })
+
+    test('includes sourceSystem on the triage write failed log line', async () => {
+      const err = new Error('No document type metadata found for caseType: Document Upload')
+      err.retryable = false
+      err.triageFailureReason = 'document_type_not_found'
+      createCaseWithOnlineSubmissionInCrm.mockRejectedValue(err)
+      mockConfigGet.mockReturnValue('927350008') // sfd-id-check: allow (Dataverse rpa_processingentity option-set value, not an SBI)
+
+      const triageWriteError = new Error('Bad Request')
+      triageWriteError.name = 'HttpError'
+      triageWriteError.retryMetadata = { status: 400 }
+      createIntegrationInboundQueueRecord.mockResolvedValue({
+        triageRecordId: null,
+        created: false,
+        error: triageWriteError
+      })
+
+      await createCase(payloadWithSourceSystem).catch(() => {})
+
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tenant: { message: 'fileId=file-1 caseType=Document Upload failureReason=document_type_not_found sourceSystem=fcp-sfd-frontend' }
+        }),
+        'CRM triage record write failed'
+      )
+    })
   })
 })
