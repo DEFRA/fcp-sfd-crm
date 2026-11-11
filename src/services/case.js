@@ -45,7 +45,7 @@ const buildTriageErrorDetails = ({ correlationId, fileId, caseType, failureReaso
   errorMessage
 })
 
-const logTriageWriteSkipped = ({ correlationId, fileId, caseType, failureReason }) => {
+const logTriageWriteSkipped = ({ correlationId, fileId, caseType, failureReason, sourceSystem }) => {
   logger.warn({
     event: {
       type: triageEventTypes.WRITE_SKIPPED,
@@ -55,13 +55,15 @@ const logTriageWriteSkipped = ({ correlationId, fileId, caseType, failureReason 
       reason: triageSkipReasons.CONFIG_MISSING_OR_EMPTY,
       reference: correlationId
     },
+    // correlationId is already carried as transaction.id by the logger mixin, so
+    // it is omitted here to avoid duplicating it in tenant.message.
     tenant: {
-      message: toTenantMessage({ correlationId, fileId, caseType, failureReason })
+      message: toTenantMessage({ fileId, caseType, failureReason, sourceSystem })
     }
   }, 'Skipping CRM triage record write because processing entity config is missing or empty')
 }
 
-const logTriageWriteSuccess = ({ correlationId, fileId, caseType, failureReason, triageRecordId, created }) => {
+const logTriageWriteSuccess = ({ correlationId, fileId, caseType, failureReason, triageRecordId, created, sourceSystem }) => {
   logger.info({
     event: {
       type: triageEventTypes.WRITE_SUCCEEDED,
@@ -72,12 +74,12 @@ const logTriageWriteSuccess = ({ correlationId, fileId, caseType, failureReason,
       reference: triageRecordId ?? correlationId
     },
     tenant: {
-      message: toTenantMessage({ correlationId, fileId, caseType, failureReason, triageRecordId })
+      message: toTenantMessage({ fileId, caseType, failureReason, triageRecordId, sourceSystem })
     }
   }, 'CRM triage record write completed')
 }
 
-const logTriageWriteFailed = ({ correlationId, fileId, caseType, failureReason, triageRecordId, triageError }) => {
+const logTriageWriteFailed = ({ correlationId, fileId, caseType, failureReason, triageRecordId, triageError, sourceSystem }) => {
   logger.error({
     event: {
       type: triageEventTypes.WRITE_FAILED,
@@ -94,12 +96,12 @@ const logTriageWriteFailed = ({ correlationId, fileId, caseType, failureReason, 
       code: triageError?.retryMetadata?.status ?? null
     },
     tenant: {
-      message: toTenantMessage({ correlationId, fileId, caseType, failureReason, triageRecordId })
+      message: toTenantMessage({ fileId, caseType, failureReason, triageRecordId, sourceSystem })
     }
   }, 'CRM triage record write failed')
 }
 
-const reportInboundFailureForTriage = async ({ authToken, correlationId, fileId, caseType, err }) => {
+const reportInboundFailureForTriage = async ({ authToken, correlationId, fileId, caseType, err, sourceSystem }) => {
   if (!isTerminalFailure(err)) {
     return
   }
@@ -111,7 +113,7 @@ const reportInboundFailureForTriage = async ({ authToken, correlationId, fileId,
 
   const processingEntity = getConfiguredTriageProcessingEntity()
   if (processingEntity === null || processingEntity === undefined) {
-    logTriageWriteSkipped({ correlationId, fileId, caseType, failureReason })
+    logTriageWriteSkipped({ correlationId, fileId, caseType, failureReason, sourceSystem })
     return
   }
 
@@ -131,11 +133,11 @@ const reportInboundFailureForTriage = async ({ authToken, correlationId, fileId,
   })
 
   if (triageError) {
-    logTriageWriteFailed({ correlationId, fileId, caseType, failureReason, triageRecordId, triageError })
+    logTriageWriteFailed({ correlationId, fileId, caseType, failureReason, triageRecordId, triageError, sourceSystem })
     return
   }
 
-  logTriageWriteSuccess({ correlationId, fileId, caseType, failureReason, triageRecordId, created })
+  logTriageWriteSuccess({ correlationId, fileId, caseType, failureReason, triageRecordId, created, sourceSystem })
 }
 
 function buildCaseData (crm, file) {
@@ -231,7 +233,7 @@ export async function createCase (payload) {
       sourceSystem
     })
   } catch (err) {
-    await reportInboundFailureForTriage({ authToken, correlationId, fileId, caseType, err })
+    await reportInboundFailureForTriage({ authToken, correlationId, fileId, caseType, err, sourceSystem })
     throw err
   }
 }

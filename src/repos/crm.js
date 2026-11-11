@@ -429,7 +429,7 @@ const createIntegrationInboundQueueRecord = async (request) => {
  * intent. This is the single most valuable line the fix produces: it turns
  * a silent duplicate into an observable, countable event.
  */
-const logCaseCreationSuppressed = ({ caseId, correlationId, fileId }) => {
+const logCaseCreationSuppressed = ({ caseId, fileId }) => {
   logger.info({
     event: {
       type: 'crm.case.create_suppressed',
@@ -439,7 +439,7 @@ const logCaseCreationSuppressed = ({ caseId, correlationId, fileId }) => {
       reason: 'case_already_exists',
       reference: caseId
     },
-    tenant: { message: toTenantMessage({ correlationId, fileId }) }
+    tenant: { message: toTenantMessage({ fileId }) }
   }, 'Case already exists, duplicate creation suppressed')
 }
 
@@ -593,7 +593,7 @@ const writeCaseChangesetOrSuppress = async ({ authToken, correlationId, fileId, 
     }
   }
 
-  logCaseCreationSuppressed({ caseId, correlationId, fileId })
+  logCaseCreationSuppressed({ caseId, fileId })
   const { error: metadataError } = await createMetadataForOnlineSubmission({
     authToken,
     onlineSubmissionActivityId: onlineSubmissionId,
