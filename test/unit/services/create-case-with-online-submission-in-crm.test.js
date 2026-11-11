@@ -243,7 +243,7 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
           reason: '{"error":{"code":"0x80040265","message":"Cannot find record to be updated"}}',
           reference: null
         },
-        tenant: { message: `correlationId=mock-correlation-id fileId=${FILE_ID}` }
+        tenant: { message: `fileId=${FILE_ID}` }
       },
       'Error creating case with online submission activity'
     )
@@ -572,7 +572,7 @@ test('re-throws original retryable CRM error when createCaseWithOnlineSubmission
       reason: '{"error":{"code":"0x80060891"}}',
       reference: null
     },
-    tenant: { message: `correlationId=cid fileId=${FILE_ID}` }
+    tenant: { message: `fileId=${FILE_ID}` }
   }, 'Error creating case with online submission activity')
 
   expect(mockLogger.warn).toHaveBeenCalledWith(
@@ -585,7 +585,7 @@ test('re-throws original retryable CRM error when createCaseWithOnlineSubmission
         reason: 'http_503',
         reference: null
       },
-      tenant: { message: `correlationId=cid fileId=${FILE_ID} attempts=2` }
+      tenant: { message: `fileId=${FILE_ID} attempts=2` }
     },
     'Case creation outcome could not be confirmed — Dataverse may have committed it'
   )
@@ -627,7 +627,7 @@ describe('source system in tenant.message on CRM API failure lines', () => {
 
     expect(mockLogger.error).toHaveBeenCalledWith(
       expect.objectContaining({
-        tenant: { message: `correlationId=cid fileId=${FILE_ID_WITH_SOURCE} sourceSystem=fcp-sfd-frontend` }
+        tenant: { message: `fileId=${FILE_ID_WITH_SOURCE} sourceSystem=fcp-sfd-frontend` }
       }),
       'Error creating case with online submission activity'
     )

@@ -429,7 +429,8 @@ describe('CRM repository', () => {
             type: 'crm.case.create_suppressed',
             outcome: 'success',
             reference: deriveCaseRecordId(CASE_CORRELATION_ID)
-          })
+          }),
+          tenant: { message: `fileId=${CASE_FILE_ID}` }
         }),
         'Case already exists, duplicate creation suppressed'
       )

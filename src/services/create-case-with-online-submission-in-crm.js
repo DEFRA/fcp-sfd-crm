@@ -85,7 +85,7 @@ export async function resolveDocumentTypeOrThrow (authToken, caseType) {
 // and countable, rather than indistinguishable from an ordinary retry, so it
 // can be watched for the duplicate-case condition ahead
 // of any given submission actually producing one.
-function logCaseCreationOutcomeUnknown (caseError, { correlationId, fileId, sourceSystem }) {
+function logCaseCreationOutcomeUnknown (caseError, { fileId, sourceSystem }) {
   logger.warn({
     event: {
       type: 'crm.case.create_outcome_unknown',
@@ -95,11 +95,11 @@ function logCaseCreationOutcomeUnknown (caseError, { correlationId, fileId, sour
       reason: caseError?.retryMetadata?.terminalReason ?? caseError?.message,
       reference: caseError?.derivedCaseId ?? null
     },
-    tenant: { message: toTenantMessage({ correlationId, fileId, sourceSystem, attempts: caseError?.retryMetadata?.attempts }) }
+    tenant: { message: toTenantMessage({ fileId, sourceSystem, attempts: caseError?.retryMetadata?.attempts }) }
   }, 'Case creation outcome could not be confirmed — Dataverse may have committed it')
 }
 
-function throwCaseCreationError (caseError, { correlationId, fileId, sourceSystem }) {
+function throwCaseCreationError (caseError, { fileId, sourceSystem }) {
   const isRetryable = isRetryableCrmError(caseError)
 
   logger.error({
@@ -112,11 +112,11 @@ function throwCaseCreationError (caseError, { correlationId, fileId, sourceSyste
       reason: caseError?.crmError ?? caseError?.message,
       reference: caseError?.derivedCaseId ?? null
     },
-    tenant: { message: toTenantMessage({ correlationId, fileId, sourceSystem }) }
+    tenant: { message: toTenantMessage({ fileId, sourceSystem }) }
   }, 'Error creating case with online submission activity')
 
   if (isRetryable) {
-    logCaseCreationOutcomeUnknown(caseError, { correlationId, fileId, sourceSystem })
+    logCaseCreationOutcomeUnknown(caseError, { fileId, sourceSystem })
     caseError.retryable = true
     throw caseError
   }
@@ -139,7 +139,7 @@ async function createCrmCaseOrThrow ({ authToken, correlationId, fileId, sourceS
   })
 
   if (caseError) {
-    throwCaseCreationError(caseError, { correlationId, fileId, sourceSystem })
+    throwCaseCreationError(caseError, { fileId, sourceSystem })
   }
 
   return { caseId, rpaOnlinesubmissionid }
