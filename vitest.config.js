@@ -4,6 +4,9 @@ export default defineConfig({
   test: {
     include: ['**/test/**/*.test.js'],
     setupFiles: ['test/setup/env.js'],
+    // Vitest 5 clears mock call history before every test by default. Several suites
+    // assert on calls made while a module is imported, so keep the previous behaviour.
+    clearMocks: false,
     coverage: {
       reportOnFailure: true,
       clean: false,
