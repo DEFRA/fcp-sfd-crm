@@ -2,6 +2,7 @@ import { vi, describe, test, expect, beforeEach } from 'vitest'
 
 import { config } from '../../../../../src/config/index.js'
 import { createLogger } from '../../../../../src/logging/logger.js'
+import { dlqRoutingReasons } from '../../../../../src/constants/dlq-routing.js'
 
 const mockCounter = vi.fn()
 const mockGauge = vi.fn()
@@ -32,10 +33,10 @@ const { metricsCounter, metricsGauge, metricsMillis } = await import('../../../.
 const mockMetricsName = 'mock-metrics-name'
 const defaultMetricsValue = 1
 const mockValue = 200
-const permittedDimensions = { reason: 'validation_failure' }
+const permittedDimensions = { reason: 'invalid_json' }
 const forbiddenKeyDimensions = { fileId: 'secret-file-id' }
 const forbiddenValueDimensions = { reason: 'secret-correlation-id-12345' }
-const mixedDimensions = { reason: 'validation_failure', fileId: 'secret-file-id' }
+const mixedDimensions = { reason: 'invalid_json', fileId: 'secret-file-id' }
 
 describe('#metrics', () => {
   describe('When metrics is not enabled', () => {
@@ -110,7 +111,7 @@ describe('#metrics', () => {
 
     test('Should keep a permitted key and drop a forbidden key from the same call', async () => {
       await metricsCounter(mockMetricsName, mockValue, mixedDimensions)
-      expect(mockCounter).toHaveBeenCalledWith(mockMetricsName, mockValue, { reason: 'validation_failure' })
+      expect(mockCounter).toHaveBeenCalledWith(mockMetricsName, mockValue, { reason: 'invalid_json' })
     })
 
     test('Should treat null dimensions as empty rather than throwing', async () => {
@@ -124,6 +125,23 @@ describe('#metrics', () => {
 
       await expect(metricsCounter(mockMetricsName, mockValue)).resolves.toBeUndefined()
       expect(mockLogger.warn).toHaveBeenCalledWith(mockError, mockError.message)
+    })
+
+    test('Should not reject when the library rejects with a non Error value', async () => {
+      mockCounter.mockRejectedValueOnce(null)
+
+      await expect(metricsCounter(mockMetricsName, mockValue)).resolves.toBeUndefined()
+      expect(mockLogger.warn).toHaveBeenCalledWith(null, 'null')
+    })
+
+    test.each(Object.values(dlqRoutingReasons))('Should pass through the DLQ routing reason %s', async (reason) => {
+      await metricsCounter(mockMetricsName, mockValue, { reason })
+      expect(mockCounter).toHaveBeenCalledWith(mockMetricsName, mockValue, { reason })
+    })
+
+    test.each(['success', 'retried', 'routed_to_dlq', 'dlq_send_failed', 'error'])('Should pass through the message processed outcome %s', async (outcome) => {
+      await metricsCounter(mockMetricsName, mockValue, { outcome })
+      expect(mockCounter).toHaveBeenCalledWith(mockMetricsName, mockValue, { outcome })
     })
 
     test('Should drop route, which is not within the dimension budget', async () => {

@@ -60,6 +60,8 @@ describe('#metrics with the real @defra/cdp-metrics library', () => {
 
   test('Should resolve without throwing, and log the real flush failure against an unreachable sink', async () => {
     await expect(metricsCounter('real-library-check')).resolves.toBeUndefined()
-    expect(mockLogger.warn).toHaveBeenCalled()
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.stringContaining('127.0.0.1:1') })
+    )
   })
 })
