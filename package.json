@@ -41,9 +41,9 @@
     "@azure/identity": "4.14.1",
     "@defra/cdp-metrics": "0.6.1",
     "@defra/fcp-audit-publisher": "1.0.14",
-    "@defra/hapi-auth-oidc": "0.6.0",
-    "@defra/hapi-secure-context": "0.4.1",
-    "@defra/hapi-tracing": "1.30.1",
+    "@defra/hapi-auth-oidc": "0.6.1",
+    "@defra/hapi-secure-context": "0.4.2",
+    "@defra/hapi-tracing": "1.30.2",
     "@elastic/ecs-pino-format": "1.5.0",
     "@fetchkit/ffetch": "5.7.1",
     "@hapi/boom": "10.0.1",
@@ -67,14 +67,14 @@
   },
   "devDependencies": {
     "@fetchkit/chaos-fetch": "1.3.0",
-    "@vitest/coverage-v8": "4.1.12",
+    "@vitest/coverage-v8": "5.1.0",
     "autoprefixer": "10.6.2",
     "dotenv": "18.0.9",
     "eslint": "10.14.0",
     "fcp-sfd-core": "github:DEFRA/fcp-sfd-core#95f58ade56b2d0dd0f15bdcba6a5f37a54bcc939",
     "husky": "9.1.7",
     "neostandard": "0.14.1",
-    "vitest": "4.1.12"
+    "vitest": "5.1.0"
   },
   "overrides": {
     "@defra/fcp-audit-publisher": {
