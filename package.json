@@ -78,16 +78,19 @@
   },
   "overrides": {
     "@defra/fcp-audit-publisher": {
-      "joi": "18.3.0"
+      "joi": "18.3.1"
     },
     "@defra/hapi-auth-oidc": {
-      "joi": "18.3.0"
+      "joi": "18.3.1"
     },
     "@azure/identity": {
       "@azure/msal-node": "7.1.0"
     },
     "@hapi/jwt": {
-      "joi": "18.3.0"
+      "joi": "18.3.1"
+    },
+    "hapi-pulse": {
+      "joi": "18.3.1"
     },
     "fast-xml-parser": "5.7.1",
     "fast-xml-builder": "1.2.0",
