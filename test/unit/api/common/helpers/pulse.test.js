@@ -26,9 +26,12 @@ vi.mock('../../../../../src/messaging/inbound/index.js', () => ({
 }))
 
 describe('pulse plugin', () => {
-  test('Should export expected plugin object', () => {
-    expect(pulse.plugin).toBe(hapiPulse)
+  test('Should export expected plugin object', async () => {
+    vi.mocked(createLogger).mockClear()
+    vi.resetModules()
+    const { pulse: freshPulse } = await import('../../../../../src/api/common/helpers/pulse.js')
 
+    expect(freshPulse.plugin).toBe(hapiPulse)
     expect(createLogger).toHaveBeenCalled()
     expect(pulse.options.logger).toBeDefined()
     expect(pulse.options.timeout).toBe(10000)

@@ -18,6 +18,20 @@ vi.mock('../../../../src/data/db.js', () => ({
   }
 }))
 
+vi.mock('../../../../src/config/index.js', () => ({
+  config: {
+    get: vi.fn((key) => {
+      if (key === 'messaging.crmRequest.queueUrl') return 'mock-queue-url'
+      if (key === 'messaging.crmRequest.deadLetterUrl') return 'mock-dlq-url'
+      if (key === 'messaging.batchSize') return 1
+      if (key === 'messaging.waitTimeSeconds') return 1
+      if (key === 'messaging.pollingWaitTime') return 1
+      if (key === 'messaging.pollingCompleteWaitTimeMs') return 15000
+      return undefined
+    })
+  }
+}))
+
 vi.mock('../../../../src/services/case.js', () => ({
   createCase: vi.fn()
 }))
@@ -163,20 +177,6 @@ describe('CRM request sqs consumer', () => {
       const logger = { info: vi.fn(), error: vi.fn(), fatal: vi.fn() }
       const sqsClient = { config: { endpoint: 'mock-endpoint' }, send: vi.fn().mockResolvedValue({}) }
       mockLoggerRef = logger
-      vi.mock('../../../../src/config/index.js', () => ({
-        config: {
-          get: vi.fn((key) => {
-            if (key === 'messaging.crmRequest.queueUrl') return 'mock-queue-url'
-            if (key === 'messaging.crmRequest.deadLetterUrl') return 'mock-dlq-url'
-            if (key === 'messaging.batchSize') return 1
-            if (key === 'messaging.waitTimeSeconds') return 1
-            if (key === 'messaging.pollingWaitTime') return 1
-            if (key === 'messaging.pollingCompleteWaitTimeMs') return 15000
-            return undefined
-          })
-        }
-      }))
-
       const consumerModule = await import('../../../../src/messaging/inbound/consumer.js')
       consumerModule.setLogger(logger)
       const { createCase } = await import('../../../../src/services/case.js')
@@ -868,10 +868,9 @@ test('when schema.validate throws, handleMessage rejects with that error', async
   const mockSqsClient = { config: { endpoint: 'mock-endpoint' } }
   consumerModule.startCRMListener(mockSqsClient)
   const sqs = await import('sqs-consumer')
-  const handler = sqs.Consumer.create.mock.calls[0][0].handleMessage
+  const handler = sqs.Consumer.create.mock.lastCall[0].handleMessage
   const message = { Body: JSON.stringify({ id: 'evt-throw' }) }
-  const result = await handler(message)
-  expect(result).toEqual(message)
+  await expect(handler(message)).rejects.toThrow('validate exploded')
   // reset modules so subsequent tests are unaffected by the doMock
   vi.resetModules()
 })

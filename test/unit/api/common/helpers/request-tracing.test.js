@@ -23,8 +23,12 @@ describe('requestTracing plugin', () => {
     expect(requestTracing.plugin).toBe(tracing.plugin)
   })
 
-  test('Should pass tracing header from config', () => {
-    expect(requestTracing.options.tracingHeader).toBe(mockHeaderValue)
+  test('Should pass tracing header from config', async () => {
+    vi.mocked(config.get).mockClear()
+    vi.resetModules()
+    const { requestTracing: freshTracing } = await import('../../../../../src/api/common/helpers/request-tracing.js')
+
+    expect(freshTracing.options.tracingHeader).toBe(mockHeaderValue)
     expect(config.get).toHaveBeenCalledWith('tracing.header')
   })
 })
