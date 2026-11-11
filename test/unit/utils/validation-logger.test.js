@@ -22,7 +22,7 @@ describe('logInboundValidationFailure', () => {
 
     expect(mockLogger.error).toHaveBeenCalledTimes(1)
 
-    const [err, message] = mockLogger.error.mock.calls[0]
+    const [{ err }, message] = mockLogger.error.mock.calls[0]
     expect(err).toBeInstanceOf(Error)
     expect(err.message).toContain('2 error(s)')
     expect(err.message).toContain('data.sourceSystem')
@@ -49,7 +49,7 @@ describe('logInboundValidationFailure', () => {
 
     logInboundValidationFailure(mockLogger, joiError, payload)
 
-    const [err] = mockLogger.error.mock.calls[0]
+    const [{ err }] = mockLogger.error.mock.calls[0]
     expect(err.validationErrors[0].value).toHaveLength(100)
   })
 
@@ -62,7 +62,7 @@ describe('logInboundValidationFailure', () => {
 
     logInboundValidationFailure(mockLogger, joiError, { id: 'evt-3', source: 'test-source' })
 
-    const [err] = mockLogger.error.mock.calls[0]
+    const [{ err }] = mockLogger.error.mock.calls[0]
     expect(err.message).toContain('(received: "not-a-date")')
     expect(err.validationErrors[0].value).toBe('not-a-date')
   })
@@ -81,7 +81,7 @@ describe('logInboundValidationFailure', () => {
 
     logInboundValidationFailure(mockLogger, joiError, { id: 'evt-4', source: 'test-source' })
 
-    const [err] = mockLogger.error.mock.calls[0]
+    const [{ err }] = mockLogger.error.mock.calls[0]
     expect(err.message).toContain('data.crn')
     expect(err.message).not.toContain('received')
     expect(err.message).not.toContain('9000000001')
@@ -98,7 +98,7 @@ describe('logInboundValidationFailure', () => {
 
     logInboundValidationFailure(mockLogger, joiError, { id: 'evt-5', source: 'test-source' })
 
-    const [err] = mockLogger.error.mock.calls[0]
+    const [{ err }] = mockLogger.error.mock.calls[0]
     expect(err.message).not.toContain('9000000001')
     expect(err.validationErrors[0]).not.toHaveProperty('value')
   })
@@ -115,7 +115,7 @@ describe('logInboundValidationFailure', () => {
 
     logInboundValidationFailure(mockLogger, joiError, { id: 'evt-6', source: 'test-source' })
 
-    const [err] = mockLogger.error.mock.calls[0]
+    const [{ err }] = mockLogger.error.mock.calls[0]
     expect(err.message).not.toContain('9000000001')
     expect(err.validationErrors[0]).not.toHaveProperty('value')
   })
@@ -129,7 +129,7 @@ describe('logInboundValidationFailure', () => {
 
     logInboundValidationFailure(mockLogger, joiError, {})
 
-    const [err] = mockLogger.error.mock.calls[0]
+    const [{ err }] = mockLogger.error.mock.calls[0]
     expect(err.validationErrors[0]).toHaveProperty('value', undefined)
   })
 
@@ -142,7 +142,7 @@ describe('logInboundValidationFailure', () => {
 
     logInboundValidationFailure(mockLogger, joiError, {})
 
-    const [err] = mockLogger.error.mock.calls[0]
+    const [{ err }] = mockLogger.error.mock.calls[0]
     expect(err.message).toContain("'unknown'")
     expect(err.source).toBeUndefined()
     expect(err.eventId).toBeUndefined()
@@ -157,8 +157,47 @@ describe('logInboundValidationFailure', () => {
 
     logInboundValidationFailure(mockLogger, joiError, null)
 
-    const [err] = mockLogger.error.mock.calls[0]
+    const [{ err }] = mockLogger.error.mock.calls[0]
     expect(err.message).toContain("'unknown'")
+  })
+
+  test('should include sourceSystem in tenant.message when the payload carries one', () => {
+    const joiError = {
+      details: [
+        { path: ['data', 'file', 'url'], type: 'any.required', context: { value: undefined }, message: '"data.file.url" is required' }
+      ]
+    }
+
+    logInboundValidationFailure(mockLogger, joiError, { id: 'evt-3', data: { sourceSystem: 'rps-portal' } })
+
+    const [{ tenant }] = mockLogger.error.mock.calls[0]
+    expect(tenant).toEqual({ message: 'sourceSystem=rps-portal' })
+  })
+
+  test('should omit sourceSystem from tenant.message when the payload has none', () => {
+    const joiError = {
+      details: [
+        { path: ['data', 'sourceSystem'], type: 'any.required', context: { value: undefined }, message: '"data.sourceSystem" is required' }
+      ]
+    }
+
+    logInboundValidationFailure(mockLogger, joiError, { id: 'evt-4', data: {} })
+
+    const [{ tenant }] = mockLogger.error.mock.calls[0]
+    expect(tenant).toEqual({ message: null })
+  })
+
+  test('should omit a sourceSystem that would forge a second tenant.message pair', () => {
+    const joiError = {
+      details: [
+        { path: ['data', 'file', 'url'], type: 'any.required', context: { value: undefined }, message: '"data.file.url" is required' }
+      ]
+    }
+
+    logInboundValidationFailure(mockLogger, joiError, { id: 'evt-5', data: { sourceSystem: 'evil sourceSystem=fcp-sfd-frontend' } })
+
+    const [{ tenant }] = mockLogger.error.mock.calls[0]
+    expect(tenant).toEqual({ message: null })
   })
 })
 
@@ -182,7 +221,7 @@ describe('logOutboundValidationFailure', () => {
 
     expect(mockLogger.error).toHaveBeenCalledTimes(1)
 
-    const [err, message] = mockLogger.error.mock.calls[0]
+    const [{ err }, message] = mockLogger.error.mock.calls[0]
     expect(err).toBeInstanceOf(Error)
     expect(err.message).toContain('Outbound SNS event failed validation')
     expect(err.message).toContain('data.caseId')
@@ -202,7 +241,7 @@ describe('logOutboundValidationFailure', () => {
 
     logOutboundValidationFailure(mockLogger, joiError, { id: 'evt-out-2', source: 'fcp-sfd-crm' })
 
-    const [err] = mockLogger.error.mock.calls[0]
+    const [{ err }] = mockLogger.error.mock.calls[0]
     expect(err.message).not.toContain('(received: 9000000001)')
     expect(err.validationErrors[0]).not.toHaveProperty('value')
     expect(err.validationErrors[1].value).toBe('not-a-date')

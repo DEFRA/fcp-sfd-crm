@@ -85,7 +85,7 @@ export async function resolveDocumentTypeOrThrow (authToken, caseType) {
 // and countable, rather than indistinguishable from an ordinary retry, so it
 // can be watched for the duplicate-case condition ahead
 // of any given submission actually producing one.
-function logCaseCreationOutcomeUnknown (caseError, { correlationId, fileId }) {
+function logCaseCreationOutcomeUnknown (caseError, { correlationId, fileId, sourceSystem }) {
   logger.warn({
     event: {
       type: 'crm.case.create_outcome_unknown',
@@ -95,11 +95,11 @@ function logCaseCreationOutcomeUnknown (caseError, { correlationId, fileId }) {
       reason: caseError?.retryMetadata?.terminalReason ?? caseError?.message,
       reference: caseError?.derivedCaseId ?? null
     },
-    tenant: { message: toTenantMessage({ correlationId, fileId, attempts: caseError?.retryMetadata?.attempts }) }
+    tenant: { message: toTenantMessage({ correlationId, fileId, sourceSystem, attempts: caseError?.retryMetadata?.attempts }) }
   }, 'Case creation outcome could not be confirmed — Dataverse may have committed it')
 }
 
-function throwCaseCreationError (caseError, { correlationId, fileId }) {
+function throwCaseCreationError (caseError, { correlationId, fileId, sourceSystem }) {
   const isRetryable = isRetryableCrmError(caseError)
 
   logger.error({
@@ -111,11 +111,12 @@ function throwCaseCreationError (caseError, { correlationId, fileId }) {
       outcome: 'failure',
       reason: caseError?.crmError ?? caseError?.message,
       reference: caseError?.derivedCaseId ?? null
-    }
+    },
+    tenant: { message: toTenantMessage({ correlationId, fileId, sourceSystem }) }
   }, 'Error creating case with online submission activity')
 
   if (isRetryable) {
-    logCaseCreationOutcomeUnknown(caseError, { correlationId, fileId })
+    logCaseCreationOutcomeUnknown(caseError, { correlationId, fileId, sourceSystem })
     caseError.retryable = true
     throw caseError
   }
@@ -127,7 +128,7 @@ function throwCaseCreationError (caseError, { correlationId, fileId }) {
   throw err
 }
 
-async function createCrmCaseOrThrow ({ authToken, correlationId, fileId, contactId, accountId, caseData, onlineSubmissionActivity, documentTypeMetadata, filesInBatch }) {
+async function createCrmCaseOrThrow ({ authToken, correlationId, fileId, sourceSystem, contactId, accountId, caseData, onlineSubmissionActivity, documentTypeMetadata, filesInBatch }) {
   const { caseId, rpaOnlinesubmissionid, error: caseError } = await createCaseWithOnlineSubmission({
     authToken,
     correlationId,
@@ -138,18 +139,18 @@ async function createCrmCaseOrThrow ({ authToken, correlationId, fileId, contact
   })
 
   if (caseError) {
-    throwCaseCreationError(caseError, { correlationId, fileId })
+    throwCaseCreationError(caseError, { correlationId, fileId, sourceSystem })
   }
 
   return { caseId, rpaOnlinesubmissionid }
 }
 
-export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi, caseType, caseData, onlineSubmissionActivity, correlationId, fileId, filesInBatch }) => {
+export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi, caseType, caseData, onlineSubmissionActivity, correlationId, fileId, sourceSystem, filesInBatch }) => {
   assertRequiredParams({ authToken, crn, sbi, caseType, caseData, onlineSubmissionActivity, correlationId, fileId })
 
   const { contactId, accountId } = await ensureContactAndAccount(authToken, crn, sbi, { correlationId })
   const documentTypeMetadata = await resolveDocumentTypeOrThrow(authToken, caseType)
-  const { caseId, rpaOnlinesubmissionid } = await createCrmCaseOrThrow({ authToken, correlationId, fileId, contactId, accountId, caseData, onlineSubmissionActivity, documentTypeMetadata, filesInBatch })
+  const { caseId, rpaOnlinesubmissionid } = await createCrmCaseOrThrow({ authToken, correlationId, fileId, sourceSystem, contactId, accountId, caseData, onlineSubmissionActivity, documentTypeMetadata, filesInBatch })
 
   const eventData = { correlationId, caseId, crn: Number(crn), sbi: Number(sbi) }
   try {

@@ -8,7 +8,7 @@ import { inboundCloudEventSchema, validationOptions } from '../../api/schemas/in
 import { logInboundValidationFailure } from '../../utils/validation-logger.js'
 import { isTerminalFailure } from '../../utils/is-terminal-failure.js'
 import { runWithCorrelationId } from '../../logging/correlation-id-store.js'
-import { toTenantMessage } from '../../logging/tenant-message.js'
+import { toTenantMessage, sanitizeSourceSystem } from '../../logging/tenant-message.js'
 import { metricsCounter } from '../../api/common/helpers/metrics.js'
 import { dlqRoutingMetric, dlqRoutingReasons } from '../../constants/dlq-routing.js'
 import {
@@ -78,8 +78,9 @@ const getRetryDetails = (err) => ({
   attempts: err.retryMetadata?.attempts ?? null
 })
 
-const logRetryableFailure = (err) => {
+const logRetryableFailure = (payload, err) => {
   const { status, category, attempts } = getRetryDetails(err)
+  const sourceSystem = sanitizeSourceSystem(payload?.data?.sourceSystem)
   logger.info({
     event: {
       type: messagingEventTypes.CASE_CREATION_RETRYABLE,
@@ -94,7 +95,7 @@ const logRetryableFailure = (err) => {
       type: category ?? messagingErrorClassifications.RETRYABLE
     },
     tenant: {
-      message: toTenantMessage({ attempts, cause: err.cause?.message })
+      message: toTenantMessage({ attempts, cause: err.cause?.message, sourceSystem })
     }
   }, messagingLogMessages.RETRYABLE_ERROR)
 }
@@ -103,6 +104,7 @@ const discardFailedMessage = async (sqsClient, dlqUrl, payload, message, err) =>
   const { status, category, attempts } = getRetryDetails(err)
 
   const fileId = payload?.data?.file?.fileId ?? null
+  const sourceSystem = sanitizeSourceSystem(payload?.data?.sourceSystem)
   const isMetadataFailure = err.dlqReason === dlqRoutingReasons.METADATA_ATTACHMENT_FAILED
   const errorType = isMetadataFailure
     ? messagingEventTypes.METADATA_ATTACHMENT_FAILED
@@ -117,7 +119,7 @@ const discardFailedMessage = async (sqsClient, dlqUrl, payload, message, err) =>
     type: category ?? messagingErrorClassifications.NON_RETRYABLE,
     stack_trace: err.stack ?? null
   }
-  const tenantContext = toTenantMessage({ fileId, attempts, cause: err.cause?.message })
+  const tenantContext = toTenantMessage({ fileId, attempts, cause: err.cause?.message, sourceSystem })
 
   await routeInboundMessageToDlq(sqsClient, dlqUrl, message, {
     reason: isMetadataFailure
@@ -153,7 +155,7 @@ const processValidatedMessage = async (sqsClient, dlqUrl, payload, message) => {
       return message
     }
 
-    logRetryableFailure(err)
+    logRetryableFailure(payload, err)
     return undefined
   }
 }
@@ -224,6 +226,9 @@ const handleCRMMessage = async (sqsClient, dlqUrl, message) => {
         error: {
           message: error.message,
           type: messagingErrorClassifications.SCHEMA_INVALID
+        },
+        tenant: {
+          message: toTenantMessage({ sourceSystem: sanitizeSourceSystem(payload?.data?.sourceSystem) })
         }
       })
       return message

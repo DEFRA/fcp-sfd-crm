@@ -69,6 +69,20 @@ vi.mock('../../../../src/api/common/helpers/metrics.js', () => ({
   metricsCounter: vi.fn()
 }))
 
+vi.mock('../../../../src/config/index.js', () => ({
+  config: {
+    get: vi.fn((key) => {
+      if (key === 'messaging.crmRequest.queueUrl') return 'mock-queue-url'
+      if (key === 'messaging.crmRequest.deadLetterUrl') return 'mock-dlq-url'
+      if (key === 'messaging.batchSize') return 1
+      if (key === 'messaging.waitTimeSeconds') return 1
+      if (key === 'messaging.pollingWaitTime') return 1
+      if (key === 'messaging.pollingCompleteWaitTimeMs') return 15000
+      return undefined
+    })
+  }
+}))
+
 vi.mock('../../../../src/logging/logger.js', () => ({
   createLogger: vi.fn(() => ({ info: vi.fn(), error: vi.fn(), fatal: vi.fn() }))
 }))
@@ -163,20 +177,6 @@ describe('CRM request sqs consumer', () => {
       const logger = { info: vi.fn(), error: vi.fn(), fatal: vi.fn() }
       const sqsClient = { config: { endpoint: 'mock-endpoint' }, send: vi.fn().mockResolvedValue({}) }
       mockLoggerRef = logger
-      vi.mock('../../../../src/config/index.js', () => ({
-        config: {
-          get: vi.fn((key) => {
-            if (key === 'messaging.crmRequest.queueUrl') return 'mock-queue-url'
-            if (key === 'messaging.crmRequest.deadLetterUrl') return 'mock-dlq-url'
-            if (key === 'messaging.batchSize') return 1
-            if (key === 'messaging.waitTimeSeconds') return 1
-            if (key === 'messaging.pollingWaitTime') return 1
-            if (key === 'messaging.pollingCompleteWaitTimeMs') return 15000
-            return undefined
-          })
-        }
-      }))
-
       const consumerModule = await import('../../../../src/messaging/inbound/consumer.js')
       consumerModule.setLogger(logger)
       const { createCase } = await import('../../../../src/services/case.js')
@@ -395,7 +395,7 @@ describe('CRM request sqs consumer', () => {
       const found = calls.some(call => call[1] === 'Retryable error, leaving message on queue' &&
         call[0]?.error?.code === null &&
         call[0]?.error?.type === 'retryable' &&
-        call[0]?.tenant?.message === null)
+        call[0]?.tenant?.message === 'sourceSystem=fcp-sfd-frontend')
       expect(createCase).toHaveBeenCalled()
       // debug output
 
@@ -666,6 +666,42 @@ describe('CRM request sqs consumer', () => {
           expect.objectContaining({ input: expect.objectContaining({ QueueUrl: 'mock-dlq-url' }) })
         )
         expect(mockRunWithCorrelationId).toHaveBeenCalledWith('msg-schema-bad', expect.any(Function))
+        expect(result).toEqual(message)
+      })
+
+      test('includes sourceSystem on the DLQ-routed log line for a schema-invalid but parseable payload', async () => {
+        const { startCRMListener: start, logger, sqsClient } = await setupAndImportConsumer()
+        start(sqsClient)
+        const message = {
+          MessageId: 'msg-schema-bad-source',
+          Body: JSON.stringify({ id: 'evt-bad', source: '/test', specversion: '1.0', type: 'test.type', datacontenttype: 'application/json', time: new Date().toISOString(), data: { crn: '123', sbi: '321', file: {}, sourceSystem: 'fcp-sfd-frontend' } })
+        }
+
+        await capturedHandleMessage(message)
+
+        expect(logger.error).toHaveBeenCalledWith(
+          expect.objectContaining({
+            event: expect.objectContaining({ type: 'crm.dlq.message_received' }),
+            tenant: { message: 'sourceSystem=fcp-sfd-frontend' }
+          }),
+          'Message routed to DLQ'
+        )
+      })
+
+      test('omits sourceSystem on the DLQ-routed log line for invalid JSON (never parsed)', async () => {
+        const { startCRMListener: start, logger, sqsClient } = await setupAndImportConsumer()
+        start(sqsClient)
+        const message = { MessageId: 'msg-bad-json-source', Body: 'not-valid-json{{' }
+
+        const result = await capturedHandleMessage(message)
+
+        expect(logger.error).toHaveBeenCalledWith(
+          expect.objectContaining({
+            event: expect.objectContaining({ type: 'crm.dlq.message_received' }),
+            tenant: undefined
+          }),
+          'Message routed to DLQ'
+        )
         expect(result).toEqual(message)
       })
 

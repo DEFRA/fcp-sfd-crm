@@ -1,5 +1,5 @@
 import { createLogger } from '../logging/logger.js'
-import { toTenantMessage } from '../logging/tenant-message.js'
+import { toTenantMessage, sanitizeSourceSystem } from '../logging/tenant-message.js'
 import { getCrmAuthToken } from '../auth/get-crm-auth-token.js'
 import { createCaseWithOnlineSubmissionInCrm, resolveDocumentTypeOrThrow } from './create-case-with-online-submission-in-crm.js'
 import { upsertCase, updateCaseId, markFileProcessed, claimCreatorRole, releaseCreator } from '../repos/cases.js'
@@ -201,11 +201,12 @@ export function transformPayload (cloudEventPayload) {
 export async function createCase (payload) {
   const { correlationId, file, crn, sbi } = payload.data
   const fileId = file?.fileId
+  const sourceSystem = sanitizeSourceSystem(payload.data.sourceSystem)
 
-  const prep = await prepareCase({ correlationId, fileId })
+  const prep = await prepareCase({ correlationId, fileId, sourceSystem })
 
   if (prep.action === caseActions.SKIP) {
-    logger.info({ tenant: { message: toTenantMessage({ fileId }) } }, 'Skipped: duplicate message')
+    logger.info({ tenant: { message: toTenantMessage({ fileId, sourceSystem }) } }, 'Skipped: duplicate message')
     return { skipped: true, caseId: prep.caseId }
   }
 
@@ -215,7 +216,7 @@ export async function createCase (payload) {
 
   try {
     if (prep.action === caseActions.CREATE) {
-      return await createNewCase({ authToken, transformedPayload, correlationId, fileId, crn, sbi })
+      return await createNewCase({ authToken, transformedPayload, correlationId, fileId, crn, sbi, sourceSystem })
     }
 
     return await addMetadataToExistingCase({
@@ -226,7 +227,8 @@ export async function createCase (payload) {
       fileId,
       caseType,
       crn,
-      sbi
+      sbi,
+      sourceSystem
     })
   } catch (err) {
     await reportInboundFailureForTriage({ authToken, correlationId, fileId, caseType, err })
@@ -234,7 +236,7 @@ export async function createCase (payload) {
   }
 }
 
-async function prepareCase ({ correlationId, fileId }) {
+async function prepareCase ({ correlationId, fileId, sourceSystem }) {
   const { isNew, isDuplicateFile, caseId, isCreator } = await upsertCase(correlationId, fileId)
 
   if (isDuplicateFile) {
@@ -250,13 +252,14 @@ async function prepareCase ({ correlationId, fileId }) {
         metric: caseCreationMetrics.CREATOR_ROLE_CLAIMED,
         action: 'claim_creator_role',
         correlationId,
-        fileId
+        fileId,
+        sourceSystem
       }, 'Creator role reassigned to this file')
       return { action: caseActions.CREATE }
     }
 
     await metricsCounter(caseCreationMetrics.WAITING_FOR_CASE)
-    logger.info({ tenant: { message: toTenantMessage({ fileId }) } }, 'Case creation in progress, will retry')
+    logger.info({ tenant: { message: toTenantMessage({ fileId, sourceSystem }) } }, 'Case creation in progress, will retry')
     const error = new Error('Case creation in progress for this correlationId')
     error.retryable = true
     throw error
@@ -274,11 +277,11 @@ async function prepareCase ({ correlationId, fileId }) {
  * one name. The metric name doubles as the log `event.type` so that a name
  * found in either place refers to the same transition.
  */
-async function recordCreatorRoleTransition ({ metric, action, correlationId, fileId }, message) {
+async function recordCreatorRoleTransition ({ metric, action, correlationId, fileId, sourceSystem }, message) {
   await metricsCounter(metric)
   logger.info({
     event: { type: metric, action, category: 'crm', outcome: 'success', reference: correlationId },
-    tenant: { message: toTenantMessage({ fileId }) }
+    tenant: { message: toTenantMessage({ fileId, sourceSystem }) }
   }, message)
 }
 
@@ -293,7 +296,7 @@ async function recordCreatorRoleTransition ({ metric, action, correlationId, fil
  *
  * @returns {Promise<boolean>} true when the role was actually released.
  */
-async function releaseCreatorRole (correlationId, fileId) {
+async function releaseCreatorRole (correlationId, fileId, sourceSystem) {
   try {
     return await releaseCreator(correlationId, fileId)
   } catch (releaseError) {
@@ -301,25 +304,26 @@ async function releaseCreatorRole (correlationId, fileId) {
     logger.error({
       error: releaseError,
       event: { type: caseCreationMetrics.CREATOR_RELEASE_FAILED, category: 'crm', reason: 'creator_release_failed' },
-      tenant: { message: toTenantMessage({ fileId }) }
+      tenant: { message: toTenantMessage({ fileId, sourceSystem }) }
     }, 'Failed to release creator role; submission will rely on the creation deadline')
     return false
   }
 }
 
-async function createNewCase ({ authToken, transformedPayload, correlationId, fileId, crn, sbi }) {
+async function createNewCase ({ authToken, transformedPayload, correlationId, fileId, crn, sbi, sourceSystem }) {
   let response
   try {
-    response = await createCaseWithOnlineSubmissionInCrm({ authToken, fileId, ...transformedPayload })
+    response = await createCaseWithOnlineSubmissionInCrm({ ...transformedPayload, authToken, fileId, sourceSystem })
   } catch (err) {
     // A message about to dead-letter must not take the creator role with it,
     // or its siblings wait for the deadline instead of proceeding at once.
-    if (isTerminalFailure(err) && await releaseCreatorRole(correlationId, fileId)) {
+    if (isTerminalFailure(err) && await releaseCreatorRole(correlationId, fileId, sourceSystem)) {
       await recordCreatorRoleTransition({
         metric: caseCreationMetrics.CREATOR_ROLE_RELEASED,
         action: 'release_creator_role',
         correlationId,
-        fileId
+        fileId,
+        sourceSystem
       }, 'Creator role released after non-retryable failure')
     }
     throw err
@@ -333,6 +337,7 @@ async function createNewCase ({ authToken, transformedPayload, correlationId, fi
     tenant: {
       message: toTenantMessage({
         fileId,
+        sourceSystem,
         rpaOnlinesubmissionid: response.rpaOnlinesubmissionid,
         contactId: response.contactId,
         accountId: response.accountId
@@ -355,7 +360,7 @@ async function createNewCase ({ authToken, transformedPayload, correlationId, fi
   return response
 }
 
-async function addMetadataToExistingCase ({ authToken, caseId, correlationId, file, fileId, caseType, crn, sbi }) {
+async function addMetadataToExistingCase ({ authToken, caseId, correlationId, file, fileId, caseType, crn, sbi, sourceSystem }) {
   const onlineSubmissionActivityId = await fetchOnlineSubmissionActivityIdOrThrow(authToken, caseId, { fileId, correlationId })
 
   // Additional files must be labelled with the same document type as the first
@@ -392,7 +397,7 @@ async function addMetadataToExistingCase ({ authToken, caseId, correlationId, fi
         category: metadataError.retryMetadata?.category ?? 'crm_metadata_create_failed',
         reason: metadataError.crmError ?? metadataError.message
       },
-      tenant: { message: toTenantMessage({ fileId, onlineSubmissionActivityId }) }
+      tenant: { message: toTenantMessage({ fileId, onlineSubmissionActivityId, sourceSystem }) }
     }, messages.METADATA_FAILURE)
     const error = new Error(messages.METADATA_FAILURE, { cause: metadataError })
     error.retryable = false
@@ -409,7 +414,7 @@ async function addMetadataToExistingCase ({ authToken, caseId, correlationId, fi
   // directly — the check that answers "was this file actually written".
   logger.info({
     event: { reference: metadataId },
-    tenant: { message: toTenantMessage({ fileId, caseId }) }
+    tenant: { message: toTenantMessage({ fileId, caseId, sourceSystem }) }
   }, 'Metadata added to existing case')
 
   await emitAuditEvent(buildDocumentCreatedEvent({

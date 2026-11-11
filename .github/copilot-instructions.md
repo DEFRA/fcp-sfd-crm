@@ -138,6 +138,8 @@ Configuration is centralized in `src/config/index.js` and loaded via environment
 - Create logger: `const logger = createLogger()`
 - Log events with context: `logger.info('message')`, `logger.error(error)`
 - Correlation ID is automatically attached from request context
+- CDP's log ingestion pipeline only indexes a fixed ECS-compatible allow list of fields; any other top-level key is dropped before it reaches OpenSearch. `tenant.message` is the one tenant-definable field on that allow list, so free-form, per-log context belongs there, rendered as space-separated `key=value` pairs via `toTenantMessage()` from `src/logging/tenant-message.js`
+- The source system that originated an upload (e.g. `fcp-sfd-frontend`, `rps-portal`, from `payload.data.sourceSystem`) is logged as `sourceSystem=<value>` inside `tenant.message` on the inbound consumer, case creation and CRM API failure log lines — never as a new top-level `sourceSystem` key, which the ingestion pipeline would silently drop. Use `sanitizeSourceSystem()` to omit the pair (rather than logging `sourceSystem=undefined`) when the value is missing or not a string
 
 ### MongoDB
 - The shared `@defra/hapi-secure-context` plugin loads `TRUSTSTORE_` CA certificates. The `mongoDb` plugin must be registered after it

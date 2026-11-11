@@ -242,7 +242,8 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
           outcome: 'failure',
           reason: '{"error":{"code":"0x80040265","message":"Cannot find record to be updated"}}',
           reference: null
-        }
+        },
+        tenant: { message: `correlationId=mock-correlation-id fileId=${FILE_ID}` }
       },
       'Error creating case with online submission activity'
     )
@@ -570,7 +571,8 @@ test('re-throws original retryable CRM error when createCaseWithOnlineSubmission
       outcome: 'failure',
       reason: '{"error":{"code":"0x80060891"}}',
       reference: null
-    }
+    },
+    tenant: { message: `correlationId=cid fileId=${FILE_ID}` }
   }, 'Error creating case with online submission activity')
 
   expect(mockLogger.warn).toHaveBeenCalledWith(
@@ -587,4 +589,80 @@ test('re-throws original retryable CRM error when createCaseWithOnlineSubmission
     },
     'Case creation outcome could not be confirmed — Dataverse may have committed it'
   )
+})
+
+describe('source system in tenant.message on CRM API failure lines', () => {
+  const FILE_ID_WITH_SOURCE = 'b2b2b2b2-c3c3-4d4d-9e5e-f6f6f6f6f6f6'
+
+  test('includes sourceSystem on the case-creation failure log line when present', async () => {
+    vi.resetModules()
+    const mockLogger = { error: vi.fn(), warn: vi.fn(), debug: vi.fn(), info: vi.fn() }
+    vi.doMock('../../../src/logging/logger.js', () => ({ createLogger: () => mockLogger }))
+
+    const caseErr = new Error('CRM service failed')
+    caseErr.crmError = '{"error":{"code":"0x80040265"}}'
+
+    vi.doMock('../../../src/repos/crm.js', () => ({
+      getContactIdFromCrn: vi.fn().mockResolvedValue({ contactId: 'c1' }),
+      getAccountIdFromSbi: vi.fn().mockResolvedValue({ accountId: 'a1' }),
+      getDocumentTypeMetadata: vi.fn().mockResolvedValue({ documentTypeMetadata: { schemeValue: 's', subjectValue: 'sub', documentTypesId: 'd' }, error: null }),
+      createCaseWithOnlineSubmission: vi.fn().mockResolvedValue({ caseId: null, error: caseErr })
+    }))
+    vi.doMock('../../../src/messaging/outbound/received-event/publish-received-event.js', () => ({ publishReceivedEvent: vi.fn() }))
+    vi.doMock('../../../src/messaging/outbound/audit/send-audit-event.js', () => ({ emitAuditEvent: vi.fn().mockResolvedValue(undefined) }))
+
+    const { createCaseWithOnlineSubmissionInCrm } = await import('../../../src/services/create-case-with-online-submission-in-crm.js')
+
+    await expect(createCaseWithOnlineSubmissionInCrm({
+      authToken: 't',
+      correlationId: 'cid',
+      fileId: FILE_ID_WITH_SOURCE,
+      sourceSystem: 'fcp-sfd-frontend',
+      caseType: 'SomeType',
+      crn: '123',
+      sbi: '456',
+      caseData: {},
+      onlineSubmissionActivity: {}
+    })).rejects.toThrow('Unable to create case with online submission activity in CRM')
+
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenant: { message: `correlationId=cid fileId=${FILE_ID_WITH_SOURCE} sourceSystem=fcp-sfd-frontend` }
+      }),
+      'Error creating case with online submission activity'
+    )
+  })
+
+  test('omits sourceSystem on the case-creation failure log line when it is absent from the request', async () => {
+    vi.resetModules()
+    const mockLogger = { error: vi.fn(), warn: vi.fn(), debug: vi.fn(), info: vi.fn() }
+    vi.doMock('../../../src/logging/logger.js', () => ({ createLogger: () => mockLogger }))
+
+    const caseErr = new Error('CRM service failed')
+
+    vi.doMock('../../../src/repos/crm.js', () => ({
+      getContactIdFromCrn: vi.fn().mockResolvedValue({ contactId: 'c1' }),
+      getAccountIdFromSbi: vi.fn().mockResolvedValue({ accountId: 'a1' }),
+      getDocumentTypeMetadata: vi.fn().mockResolvedValue({ documentTypeMetadata: { schemeValue: 's', subjectValue: 'sub', documentTypesId: 'd' }, error: null }),
+      createCaseWithOnlineSubmission: vi.fn().mockResolvedValue({ caseId: null, error: caseErr })
+    }))
+    vi.doMock('../../../src/messaging/outbound/received-event/publish-received-event.js', () => ({ publishReceivedEvent: vi.fn() }))
+    vi.doMock('../../../src/messaging/outbound/audit/send-audit-event.js', () => ({ emitAuditEvent: vi.fn().mockResolvedValue(undefined) }))
+
+    const { createCaseWithOnlineSubmissionInCrm } = await import('../../../src/services/create-case-with-online-submission-in-crm.js')
+
+    await expect(createCaseWithOnlineSubmissionInCrm({
+      authToken: 't',
+      correlationId: 'cid',
+      fileId: FILE_ID_WITH_SOURCE,
+      caseType: 'SomeType',
+      crn: '123',
+      sbi: '456',
+      caseData: {},
+      onlineSubmissionActivity: {}
+    })).rejects.toThrow('Unable to create case with online submission activity in CRM')
+
+    const [[context]] = mockLogger.error.mock.calls.filter(([, msg]) => msg === 'Error creating case with online submission activity')
+    expect(context.tenant.message).not.toContain('sourceSystem')
+  })
 })
