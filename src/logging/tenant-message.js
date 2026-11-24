@@ -1,3 +1,5 @@
+import { ALLOWED_SOURCE_SYSTEMS } from '../constants/source-systems.js'
+
 // CDP only indexes a fixed subset of ECS fields, so any additional context is
 // carried in tenant.message rather than emitted as bespoke top-level keys.
 // See cdp-documentation/how-to/logging.md for the allow-list.
@@ -6,14 +8,12 @@ const toTenantMessage = (context) => {
   return entries.length ? entries.map(([key, value]) => `${key}=${value}`).join(' ') : null
 }
 
-// A source system that is missing or not a string must be omitted from tenant.message
-// rather than rendered as "sourceSystem=undefined". Some log sites read the value before
-// schema validation has passed, and toTenantMessage does not escape values, so a value
-// containing whitespace or "=" (for example "a sourceSystem=b") is also omitted rather
-// than allowed to forge a second pair. New source systems need no change here.
-const SOURCE_SYSTEM_PATTERN = /^[^\s=]+$/
-
+// Some log sites read data.sourceSystem before schema validation has passed, and the
+// schema accepts any string. toTenantMessage does not escape values, so a free-text value
+// such as "a sourceSystem=b" would forge a second pair. Only values on the allow list are
+// rendered. Anything else, including a missing or non-string value, is omitted rather
+// than rendered as "sourceSystem=undefined". The message itself is still processed.
 const sanitizeSourceSystem = (value) =>
-  typeof value === 'string' && SOURCE_SYSTEM_PATTERN.test(value) ? value : undefined
+  ALLOWED_SOURCE_SYSTEMS.includes(value) ? value : undefined
 
 export { toTenantMessage, sanitizeSourceSystem }

@@ -199,6 +199,19 @@ describe('logInboundValidationFailure', () => {
     const [{ tenant }] = mockLogger.error.mock.calls[0]
     expect(tenant).toEqual({ message: null })
   })
+
+  test('should omit a sourceSystem that is not on the allow list', () => {
+    const joiError = {
+      details: [
+        { path: ['data', 'file', 'url'], type: 'any.required', context: { value: undefined }, message: '"data.file.url" is required' }
+      ]
+    }
+
+    logInboundValidationFailure(mockLogger, joiError, { id: 'evt-6', data: { sourceSystem: 'qa-new-source' } })
+
+    const [{ tenant }] = mockLogger.error.mock.calls[0]
+    expect(tenant).toEqual({ message: null })
+  })
 })
 
 describe('logOutboundValidationFailure', () => {
