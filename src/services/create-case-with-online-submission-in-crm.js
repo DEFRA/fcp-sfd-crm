@@ -16,7 +16,16 @@ const logger = createLogger()
 
 const NON_RETRYABLE = 'non-retryable'
 
-export async function resolveDocumentTypeOrThrow (authToken, caseType) {
+/**
+ * Look up the CRM document type for a case type, or throw an error the consumer can route.
+ *
+ * @param {string} authToken - CRM bearer token
+ * @param {string} caseType - case type to resolve
+ * @param {{ fileId?: string, sourceSystem?: string }} [logContext] - already sanitised values for tenant.message
+ * @returns {Promise<object>} the document type metadata
+ */
+export async function resolveDocumentTypeOrThrow (authToken, caseType, { fileId, sourceSystem } = {}) {
+  const tenant = { message: toTenantMessage({ fileId, sourceSystem }) }
   const { documentTypeMetadata, error: docTypeError } = await getDocumentTypeMetadata(authToken, caseType)
 
   if (docTypeError) {
@@ -27,7 +36,8 @@ export async function resolveDocumentTypeOrThrow (authToken, caseType) {
           category: docTypeError.retryMetadata?.category ?? 'invalid_case_type',
           reason: docTypeError.crmError ?? docTypeError.message
         },
-        caseType
+        caseType,
+        tenant
       }, 'Invalid caseType for document type lookup')
       const badRequestError = Boom.badRequest(docTypeError.message)
       badRequestError.retryable = false
@@ -41,7 +51,8 @@ export async function resolveDocumentTypeOrThrow (authToken, caseType) {
         category: docTypeError.retryMetadata?.category ?? 'document_type_lookup_failed',
         reason: docTypeError.crmError ?? docTypeError.message
       },
-      caseType
+      caseType,
+      tenant
     }, 'Error looking up document type metadata')
     if (isRetryableCrmError(docTypeError)) {
       docTypeError.retryable = true
@@ -65,7 +76,8 @@ export async function resolveDocumentTypeOrThrow (authToken, caseType) {
     // retry. Writing a fallback instead would miscategorise the record in CRM.
     logger.error({
       event: { category: NON_RETRYABLE, reason: 'document_type_not_found' },
-      caseType
+      caseType,
+      tenant
     }, 'Document type metadata not found for caseType')
     const err = internal(`No document type metadata found for caseType: ${caseType}`)
     err.retryable = false
@@ -149,7 +161,7 @@ export const createCaseWithOnlineSubmissionInCrm = async ({ authToken, crn, sbi,
   assertRequiredParams({ authToken, crn, sbi, caseType, caseData, onlineSubmissionActivity, correlationId, fileId })
 
   const { contactId, accountId } = await ensureContactAndAccount(authToken, crn, sbi, { correlationId })
-  const documentTypeMetadata = await resolveDocumentTypeOrThrow(authToken, caseType)
+  const documentTypeMetadata = await resolveDocumentTypeOrThrow(authToken, caseType, { fileId, sourceSystem })
   const { caseId, rpaOnlinesubmissionid } = await createCrmCaseOrThrow({ authToken, correlationId, fileId, sourceSystem, contactId, accountId, caseData, onlineSubmissionActivity, documentTypeMetadata, filesInBatch })
 
   const eventData = { correlationId, caseId, crn: Number(crn), sbi: Number(sbi) }

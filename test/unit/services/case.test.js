@@ -713,7 +713,7 @@ describe('case service', () => {
 
       await createCase(validPayload)
 
-      expect(resolveDocumentTypeOrThrow).toHaveBeenCalledWith('mock-token', 'Document Upload')
+      expect(resolveDocumentTypeOrThrow).toHaveBeenCalledWith('mock-token', 'Document Upload', { fileId: 'file-1', sourceSystem: undefined })
       expect(createMetadataForOnlineSubmission).toHaveBeenCalledWith(
         expect.objectContaining({
           metadata: expect.objectContaining({ documentTypeId: 'doc-type-guid' }),
@@ -955,6 +955,18 @@ describe('case service', () => {
           tenant: { message: 'fileId=file-1 onlineSubmissionActivityId=84c190b8-5d96-f111-8076-000d3ada3978 sourceSystem=fcp-sfd-frontend' }
         }),
         expect.any(String)
+      )
+    })
+
+    test('passes fileId and sourceSystem to the document type lookup for an additional file', async () => {
+      upsertCase.mockResolvedValue({ isNew: false, isDuplicateFile: false, caseId: 'existing-case-id', isCreator: false })
+
+      await createCase(payloadWithSourceSystem)
+
+      expect(resolveDocumentTypeOrThrow).toHaveBeenCalledWith(
+        'mock-token',
+        'Document Upload',
+        { fileId: 'file-1', sourceSystem: 'fcp-sfd-frontend' }
       )
     })
 
