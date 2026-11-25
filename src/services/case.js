@@ -367,7 +367,7 @@ async function addMetadataToExistingCase ({ authToken, caseId, correlationId, fi
 
   // Additional files must be labelled with the same document type as the first
   // file in the submission, which is resolved from the case type at creation.
-  const documentTypeMetadata = await resolveDocumentTypeOrThrow(authToken, caseType)
+  const documentTypeMetadata = await resolveDocumentTypeOrThrow(authToken, caseType, { fileId, sourceSystem })
 
   const metadata = {
     name: file?.fileName || 'unknown',

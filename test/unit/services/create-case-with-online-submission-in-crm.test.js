@@ -27,7 +27,7 @@ vi.mock('../../../src/messaging/outbound/audit/send-audit-event.js', () => ({
   emitAuditEvent: vi.fn().mockResolvedValue(undefined)
 }))
 
-const { createCaseWithOnlineSubmissionInCrm } = await import('../../../src/services/create-case-with-online-submission-in-crm.js')
+const { createCaseWithOnlineSubmissionInCrm, resolveDocumentTypeOrThrow } = await import('../../../src/services/create-case-with-online-submission-in-crm.js')
 const { getContactIdFromCrn, getAccountIdFromSbi, createCaseWithOnlineSubmission, getDocumentTypeMetadata } = await import('../../../src/repos/crm.js')
 const { publishReceivedEvent } = await import('../../../src/messaging/outbound/received-event/publish-received-event.js')
 
@@ -533,6 +533,120 @@ describe('createCaseWithOnlineSubmissionInCrm service', () => {
       }),
       'Error creating case with online submission activity'
     )
+  })
+})
+
+describe('source system in tenant.message on document type lookup lines', () => {
+  const LOOKUP_FILE_ID = 'c3c3c3c3-d4d4-4e5e-8f6f-a7a7a7a7a7a7'
+  const lookupContext = { fileId: LOOKUP_FILE_ID, sourceSystem: 'fcp-sfd-frontend' }
+  const expectedTenantMessage = `fileId=${LOOKUP_FILE_ID} sourceSystem=fcp-sfd-frontend`
+
+  const invalidCaseTypeError = () => new Error('Invalid caseType: NonExistent_Type')
+  const lookupFailedError = () => {
+    const err = new Error('Bad request')
+    err.retryMetadata = { category: 'non-retryable', status: 400 }
+    return err
+  }
+
+  const logContextFor = (level, message) => {
+    const calls = mockLogger[level].mock.calls.filter(([, msg]) => msg === message)
+    expect(calls).toHaveLength(1)
+    return calls[0][0]
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  test('includes fileId and sourceSystem on the invalid caseType line', async () => {
+    getDocumentTypeMetadata.mockResolvedValue({ documentTypeMetadata: null, error: invalidCaseTypeError() })
+
+    await expect(resolveDocumentTypeOrThrow('t', 'NonExistent_Type', lookupContext))
+      .rejects.toMatchObject({ isBoom: true, output: { statusCode: 400 }, retryable: false })
+
+    expect(logContextFor('warn', 'Invalid caseType for document type lookup').tenant)
+      .toEqual({ message: expectedTenantMessage })
+  })
+
+  test('includes fileId and sourceSystem on the document type lookup error line', async () => {
+    getDocumentTypeMetadata.mockResolvedValue({ documentTypeMetadata: null, error: lookupFailedError() })
+
+    await expect(resolveDocumentTypeOrThrow('t', 'CS_Agreement_Evidence', lookupContext))
+      .rejects.toMatchObject({ retryable: false, retryMetadata: expect.objectContaining({ terminalReason: 'document_type_lookup_failed' }) })
+
+    expect(logContextFor('error', 'Error looking up document type metadata').tenant)
+      .toEqual({ message: expectedTenantMessage })
+  })
+
+  test('includes fileId and sourceSystem on the document type not found line', async () => {
+    getDocumentTypeMetadata.mockResolvedValue({ documentTypeMetadata: null, error: null })
+
+    await expect(resolveDocumentTypeOrThrow('t', 'NonExistent_Type', lookupContext))
+      .rejects.toMatchObject({ retryable: false, retryMetadata: { terminalReason: 'document_type_not_found' } })
+
+    expect(logContextFor('error', 'Document type metadata not found for caseType').tenant)
+      .toEqual({ message: expectedTenantMessage })
+  })
+
+  test('throws the same invalid caseType error and logs no sourceSystem pair when no context is given', async () => {
+    getDocumentTypeMetadata.mockResolvedValue({ documentTypeMetadata: null, error: invalidCaseTypeError() })
+
+    await expect(resolveDocumentTypeOrThrow('t', 'NonExistent_Type'))
+      .rejects.toMatchObject({ isBoom: true, output: { statusCode: 400 }, message: 'Invalid caseType: NonExistent_Type' })
+
+    expect(logContextFor('warn', 'Invalid caseType for document type lookup').tenant)
+      .toEqual({ message: null })
+  })
+
+  test('throws the same lookup error and logs no sourceSystem pair when no context is given', async () => {
+    getDocumentTypeMetadata.mockResolvedValue({ documentTypeMetadata: null, error: lookupFailedError() })
+
+    await expect(resolveDocumentTypeOrThrow('t', 'CS_Agreement_Evidence'))
+      .rejects.toThrow('Unable to look up document type metadata from CRM')
+
+    expect(logContextFor('error', 'Error looking up document type metadata').tenant)
+      .toEqual({ message: null })
+  })
+
+  test('throws the same not found error and logs no sourceSystem pair when no context is given', async () => {
+    getDocumentTypeMetadata.mockResolvedValue({ documentTypeMetadata: null, error: null })
+
+    await expect(resolveDocumentTypeOrThrow('t', 'NonExistent_Type'))
+      .rejects.toThrow('No document type metadata found for caseType: NonExistent_Type')
+
+    expect(logContextFor('error', 'Document type metadata not found for caseType').tenant)
+      .toEqual({ message: null })
+  })
+
+  test('omits only the sourceSystem pair when the context has a fileId but no sourceSystem', async () => {
+    getDocumentTypeMetadata.mockResolvedValue({ documentTypeMetadata: null, error: null })
+
+    await expect(resolveDocumentTypeOrThrow('t', 'NonExistent_Type', { fileId: LOOKUP_FILE_ID }))
+      .rejects.toThrow('No document type metadata found for caseType: NonExistent_Type')
+
+    expect(logContextFor('error', 'Document type metadata not found for caseType').tenant)
+      .toEqual({ message: `fileId=${LOOKUP_FILE_ID}` })
+  })
+
+  test('createCaseWithOnlineSubmissionInCrm passes fileId and sourceSystem to the document type lookup', async () => {
+    getContactIdFromCrn.mockResolvedValue({ contactId: 'mock-contact-id' })
+    getAccountIdFromSbi.mockResolvedValue({ accountId: 'mock-account-id' })
+    getDocumentTypeMetadata.mockResolvedValue({ documentTypeMetadata: null, error: null })
+
+    await expect(createCaseWithOnlineSubmissionInCrm({
+      authToken: 'mock-bearer-token',
+      correlationId: 'mock-correlation-id',
+      fileId: LOOKUP_FILE_ID,
+      sourceSystem: 'fcp-sfd-frontend',
+      caseType: 'NonExistent_Type',
+      crn: 'mock-crn',
+      sbi: 'mock-sbi',
+      caseData: {},
+      onlineSubmissionActivity: {}
+    })).rejects.toThrow('No document type metadata found for caseType: NonExistent_Type')
+
+    expect(logContextFor('error', 'Document type metadata not found for caseType').tenant)
+      .toEqual({ message: expectedTenantMessage })
   })
 })
 
