@@ -92,7 +92,7 @@ services:
   mongodb:
     # MongoDB 8.0+ will not start on Linux kernel 6.19 to 7.0.13, which GitHub
     # runners now use; see https://jira.mongodb.org/browse/SERVER-121912
-    image: mongo:7.0.45
+    image: mongo:7.0.48
     networks:
       - fcp-sfd
     volumes:
