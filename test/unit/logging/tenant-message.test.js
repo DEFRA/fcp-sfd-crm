@@ -1,5 +1,6 @@
 import { describe, test, expect } from 'vitest'
 import { toTenantMessage, sanitizeSourceSystem } from '../../../src/logging/tenant-message.js'
+import { ALLOWED_SOURCE_SYSTEMS } from '../../../src/constants/source-systems.js'
 
 describe('toTenantMessage', () => {
   test('joins entries as key=value pairs separated by spaces', () => {
@@ -28,22 +29,44 @@ describe('toTenantMessage', () => {
 })
 
 describe('sanitizeSourceSystem', () => {
-  test('returns the value unchanged when it is a string', () => {
+  test('returns fcp-sfd-frontend unchanged', () => {
     expect(sanitizeSourceSystem('fcp-sfd-frontend')).toBe('fcp-sfd-frontend')
   })
 
-  test('accepts a source system not yet known to this service', () => {
-    expect(sanitizeSourceSystem('new-source-system')).toBe('new-source-system')
+  test('returns rps-portal unchanged', () => {
+    expect(sanitizeSourceSystem('rps-portal')).toBe('rps-portal')
+  })
+
+  test('allows only fcp-sfd-frontend and rps-portal', () => {
+    expect(ALLOWED_SOURCE_SYSTEMS).toEqual(['fcp-sfd-frontend', 'rps-portal'])
+  })
+
+  test('returns undefined for a source system that is not on the allow list', () => {
+    expect(sanitizeSourceSystem('qa-new-source')).toBeUndefined()
+    expect(sanitizeSourceSystem('unknown-service')).toBeUndefined()
+  })
+
+  test('returns undefined for an allow-listed value in a different case', () => {
+    expect(sanitizeSourceSystem('FCP-SFD-FRONTEND')).toBeUndefined()
   })
 
   test('returns undefined when the value contains whitespace', () => {
     expect(sanitizeSourceSystem('rps portal')).toBeUndefined()
     expect(sanitizeSourceSystem('rps-portal\n')).toBeUndefined()
+    expect(sanitizeSourceSystem(' rps-portal')).toBeUndefined()
   })
 
   test('returns undefined when the value contains "=", so it cannot forge a second pair', () => {
     expect(sanitizeSourceSystem('sourceSystem=fcp-sfd-frontend')).toBeUndefined()
     expect(toTenantMessage({ sourceSystem: sanitizeSourceSystem('evil sourceSystem=fcp-sfd-frontend') })).toBeNull()
+  })
+
+  test('returns undefined when an allow-listed value is followed by a forged pair', () => {
+    expect(sanitizeSourceSystem('rps-portal sourceSystem=fcp-sfd-frontend')).toBeUndefined()
+  })
+
+  test('returns undefined when the value is an array holding an allow-listed value', () => {
+    expect(sanitizeSourceSystem(['fcp-sfd-frontend'])).toBeUndefined()
   })
 
   test('returns undefined when the value is an empty string', () => {
@@ -66,6 +89,7 @@ describe('sanitizeSourceSystem', () => {
 
   test('combines with toTenantMessage to omit the pair rather than rendering "sourceSystem=undefined"', () => {
     expect(toTenantMessage({ fileId: 'f1', sourceSystem: sanitizeSourceSystem(42) })).toBe('fileId=f1')
+    expect(toTenantMessage({ fileId: 'f1', sourceSystem: sanitizeSourceSystem('qa-new-source') })).toBe('fileId=f1')
     expect(toTenantMessage({ fileId: 'f1', sourceSystem: sanitizeSourceSystem('rps-portal') })).toBe('fileId=f1 sourceSystem=rps-portal')
   })
 })
