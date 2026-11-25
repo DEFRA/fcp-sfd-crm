@@ -52,7 +52,7 @@ jobs:
       # MongoDB 8.0+ will not start on the runner's Linux kernel; see compose.yaml
       - name: Check MongoDB Image Pin
         env:
-          MONGO_IMAGE: mongo:7.0.45
+          MONGO_IMAGE: mongo:7.0.48
         run: |
           declared=$(docker compose -f compose.yaml -f compose.test.yaml config --images | grep '^mongo:')
           if [ "$declared" != "$MONGO_IMAGE" ]; then
