@@ -2,6 +2,7 @@ import { vi, describe, test, expect, beforeEach } from 'vitest'
 
 import { config } from '../../../../../src/config/index.js'
 import { createLogger } from '../../../../../src/logging/logger.js'
+import { dlqRoutingReasons } from '../../../../../src/constants/dlq-routing.js'
 
 const mockCounter = vi.fn()
 const mockGauge = vi.fn()
@@ -32,8 +33,10 @@ const { metricsCounter, metricsGauge, metricsMillis } = await import('../../../.
 const mockMetricsName = 'mock-metrics-name'
 const defaultMetricsValue = 1
 const mockValue = 200
-const permittedDimensions = { reason: 'validation_failure' }
-const forbiddenDimensions = { fileId: 'secret-file-id' }
+const permittedDimensions = { reason: 'invalid_json' }
+const forbiddenKeyDimensions = { fileId: 'secret-file-id' }
+const forbiddenValueDimensions = { reason: 'secret-correlation-id-12345' }
+const mixedDimensions = { reason: 'invalid_json', fileId: 'secret-file-id' }
 
 describe('#metrics', () => {
   describe('When metrics is not enabled', () => {
@@ -41,18 +44,18 @@ describe('#metrics', () => {
       config.set('isMetricsEnabled', false)
     })
 
-    test('Should not call counter', () => {
-      metricsCounter(mockMetricsName, mockValue)
+    test('Should not call counter', async () => {
+      await metricsCounter(mockMetricsName, mockValue)
       expect(mockCounter).not.toHaveBeenCalled()
     })
 
-    test('Should not call gauge', () => {
-      metricsGauge(mockMetricsName, mockValue)
+    test('Should not call gauge', async () => {
+      await metricsGauge(mockMetricsName, mockValue)
       expect(mockGauge).not.toHaveBeenCalled()
     })
 
-    test('Should not call millis', () => {
-      metricsMillis(mockMetricsName, mockValue)
+    test('Should not call millis', async () => {
+      await metricsMillis(mockMetricsName, mockValue)
       expect(mockMillis).not.toHaveBeenCalled()
     })
   })
@@ -65,54 +68,92 @@ describe('#metrics', () => {
       mockMillis.mockReset()
     })
 
-    test('Should send counter with default value', () => {
-      metricsCounter(mockMetricsName)
+    test('Should send counter with default value', async () => {
+      await metricsCounter(mockMetricsName)
       expect(mockCounter).toHaveBeenCalledWith(mockMetricsName, defaultMetricsValue, {})
     })
 
-    test('Should send counter with explicit value', () => {
-      metricsCounter(mockMetricsName, mockValue)
+    test('Should send counter with explicit value', async () => {
+      await metricsCounter(mockMetricsName, mockValue)
       expect(mockCounter).toHaveBeenCalledWith(mockMetricsName, mockValue, {})
     })
 
-    test('Should send gauge', () => {
-      metricsGauge(mockMetricsName, mockValue)
+    test('Should send gauge', async () => {
+      await metricsGauge(mockMetricsName, mockValue)
       expect(mockGauge).toHaveBeenCalledWith(mockMetricsName, mockValue, {})
     })
 
-    test('Should send millis', () => {
-      metricsMillis(mockMetricsName, mockValue)
+    test('Should send millis', async () => {
+      await metricsMillis(mockMetricsName, mockValue)
       expect(mockMillis).toHaveBeenCalledWith(mockMetricsName, mockValue, {})
     })
 
-    test('Should pass through a permitted dimension', () => {
-      metricsCounter(mockMetricsName, mockValue, permittedDimensions)
+    test('Should pass through a permitted dimension', async () => {
+      await metricsCounter(mockMetricsName, mockValue, permittedDimensions)
       expect(mockCounter).toHaveBeenCalledWith(mockMetricsName, mockValue, permittedDimensions)
     })
 
-    test('Should drop a forbidden dimension key and warn without its value', () => {
-      metricsCounter(mockMetricsName, mockValue, forbiddenDimensions)
+    test('Should drop a forbidden dimension key and warn without its value', async () => {
+      await metricsCounter(mockMetricsName, mockValue, forbiddenKeyDimensions)
 
       expect(mockCounter).toHaveBeenCalledWith(mockMetricsName, mockValue, {})
       expect(mockLogger.warn).toHaveBeenCalledWith('Dropping unsupported metric dimension key: fileId')
       expect(mockLogger.warn).not.toHaveBeenCalledWith(expect.stringContaining('secret-file-id'))
     })
 
-    test('Should drop route, which is no longer within the dimension budget', () => {
-      metricsCounter(mockMetricsName, mockValue, { route: '/cases/case-id' })
+    test('Should drop a value outside the allowed set for a permitted key, without logging it', async () => {
+      await metricsCounter(mockMetricsName, mockValue, forbiddenValueDimensions)
+
+      expect(mockCounter).toHaveBeenCalledWith(mockMetricsName, mockValue, {})
+      expect(mockLogger.warn).toHaveBeenCalledWith('Dropping unsupported metric dimension value for key: reason')
+      expect(mockLogger.warn).not.toHaveBeenCalledWith(expect.stringContaining('secret-correlation-id-12345'))
+    })
+
+    test('Should keep a permitted key and drop a forbidden key from the same call', async () => {
+      await metricsCounter(mockMetricsName, mockValue, mixedDimensions)
+      expect(mockCounter).toHaveBeenCalledWith(mockMetricsName, mockValue, { reason: 'invalid_json' })
+    })
+
+    test('Should treat null dimensions as empty rather than throwing', async () => {
+      await expect(metricsCounter(mockMetricsName, mockValue, null)).resolves.toBeUndefined()
+      expect(mockCounter).toHaveBeenCalledWith(mockMetricsName, mockValue, {})
+    })
+
+    test('Should not throw or reject when the library rejects', async () => {
+      const mockError = new Error('mock-metrics-put-error')
+      mockCounter.mockRejectedValueOnce(mockError)
+
+      await expect(metricsCounter(mockMetricsName, mockValue)).resolves.toBeUndefined()
+      expect(mockLogger.warn).toHaveBeenCalledWith(mockError, mockError.message)
+    })
+
+    test('Should not reject when the library rejects with a non Error value', async () => {
+      mockCounter.mockRejectedValueOnce(null)
+
+      await expect(metricsCounter(mockMetricsName, mockValue)).resolves.toBeUndefined()
+      expect(mockLogger.warn).toHaveBeenCalledWith(null, 'null')
+    })
+
+    test.each(Object.values(dlqRoutingReasons))('Should pass through the DLQ routing reason %s', async (reason) => {
+      await metricsCounter(mockMetricsName, mockValue, { reason })
+      expect(mockCounter).toHaveBeenCalledWith(mockMetricsName, mockValue, { reason })
+    })
+
+    test.each(['success', 'retried', 'routed_to_dlq', 'dlq_send_failed', 'error'])('Should pass through the message processed outcome %s', async (outcome) => {
+      await metricsCounter(mockMetricsName, mockValue, { outcome })
+      expect(mockCounter).toHaveBeenCalledWith(mockMetricsName, mockValue, { outcome })
+    })
+
+    test('Should drop route, which is not within the dimension budget', async () => {
+      await metricsCounter(mockMetricsName, mockValue, { route: '/cases/case-id' })
 
       expect(mockCounter).toHaveBeenCalledWith(mockMetricsName, mockValue, {})
       expect(mockLogger.warn).toHaveBeenCalledWith('Dropping unsupported metric dimension key: route')
     })
 
-    test('Should treat null dimensions as empty rather than throwing', () => {
-      expect(() => metricsCounter(mockMetricsName, mockValue, null)).not.toThrow()
-      expect(mockCounter).toHaveBeenCalledWith(mockMetricsName, mockValue, {})
-    })
-
-    test('Should treat null dimensions as empty for gauge and millis', () => {
-      expect(() => metricsGauge(mockMetricsName, mockValue, null)).not.toThrow()
-      expect(() => metricsMillis(mockMetricsName, mockValue, null)).not.toThrow()
+    test('Should treat null dimensions as empty for gauge and millis', async () => {
+      await expect(metricsGauge(mockMetricsName, mockValue, null)).resolves.toBeUndefined()
+      await expect(metricsMillis(mockMetricsName, mockValue, null)).resolves.toBeUndefined()
       expect(mockGauge).toHaveBeenCalledWith(mockMetricsName, mockValue, {})
       expect(mockMillis).toHaveBeenCalledWith(mockMetricsName, mockValue, {})
     })
